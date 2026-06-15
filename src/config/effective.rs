@@ -107,6 +107,9 @@ pub struct EffectiveConfiguration {
     pub assembly_versioning_scheme: VersioningScheme,
     pub assembly_file_versioning_scheme: VersioningScheme,
     pub assembly_informational_format: String,
+    pub assembly_versioning_format: Option<String>,
+    pub assembly_file_versioning_format: Option<String>,
+    pub merge_message_formats: std::collections::BTreeMap<String, String>,
     pub source_branches: Vec<String>,
 }
 
@@ -203,6 +206,9 @@ impl EffectiveConfiguration {
                 .assembly_informational_format
                 .clone()
                 .unwrap_or_else(|| "{InformationalVersion}".into()),
+            assembly_versioning_format: config.assembly_versioning_format.clone(),
+            assembly_file_versioning_format: config.assembly_file_versioning_format.clone(),
+            merge_message_formats: config.merge_message_formats.clone(),
             source_branches: bc.source_branches.clone(),
             branch_key,
         }

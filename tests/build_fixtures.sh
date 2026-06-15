@@ -175,6 +175,30 @@ newrepo release_plus_commits main
 tagcommit 1.0.0; commit c1; commit c2
 branch release-1.1.0; commit r1; commit r2; record
 
+# 26. semantic-version-format Loose (부분 태그 1.2 수용)
+newrepo semver_loose main
+writeconfig 'semantic-version-format: Loose'
+commit init; git -C "$CUR" tag 1.2; commit a; record
+
+# 27. semantic-version-format Strict (부분 태그 1.2 거부 → fallback)
+newrepo semver_strict main
+writeconfig 'semantic-version-format: Strict'
+commit init; git -C "$CUR" tag 1.2; commit a; record
+
+# 28. assembly 커스텀 포맷
+newrepo assembly_format main
+writeconfig "assembly-versioning-format: '{Major}.{Minor}.{Patch}.{WeightedPreReleaseNumber}'
+assembly-informational-format: '{Major}.{Minor}'"
+tagcommit v1.0.0; commit a; record
+
+# 29. feature off main (develop 없음 → main Patch 상속)
+newrepo feature_off_main main
+tagcommit v1.0.0; branch feature/foo; commit f1; record
+
+# 30. 안정 릴리스의 WeightedPreReleaseNumber = tag-pre-release-weight(60000)
+newrepo stable_weighted main
+commit a; tagcommit v3.0.0; record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"

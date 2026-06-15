@@ -96,16 +96,29 @@ GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
   golden 기대값(`expected.json`)을 기록한 뒤 `testdata/fixtures.tar.gz` 로 압축.
 - `tests/fixtures.rs`: 압축을 임시 디렉터리로 풀어 우리 엔진 출력을 golden 값과
   필드 단위로 비교. 테스트 시점에는 git/gitversion 이 불필요(재현 가능).
-- 현재 **22개 시나리오 × 19개 출력 필드**가 실제 GitVersion 6.7.0 과 일치
+- 현재 **27개 시나리오 × 21개 출력 필드**가 실제 GitVersion 6.7.0 과 일치
   (main/develop/release/feature/hotfix/support, +semver 메시지, GitHubFlow,
   next-version, custom tag-prefix, pre-release 태그, 다중 태그, ignore.sha,
-  custom commit-date-format 등).
+  custom commit-date-format, semantic-version-format Strict/Loose,
+  assembly 커스텀 포맷, feature off main 의 increment 상속, tag-pre-release-weight 등).
 
-## 알려진 단순화
+## 설정 반영 현황
 
-- `Inherit` 증분의 source-branch 해석은 git 조상 추적 대신 설정상 첫 번째 source 를
-  따릅니다(공통 GitFlow 시나리오에서는 동일한 결과).
+다음 설정은 실제 GitVersion 과 동일하게 **반영**됩니다:
+`workflow`, `tag-prefix`, `version-in-branch-pattern`, `next-version`, `increment`,
+`mode`, `label`, `regex`, `strategies`, `commit-message-incrementing`,
+`major/minor/patch/no-bump-version-bump-message`, `source-branches`,
+`tracks-release-branches`, `is-release-branch`, `pre-release-weight`,
+`tag-pre-release-weight`, `prevent-increment.*`, `track-merge-message`,
+`ignore`(sha·commits-before), `commit-date-format`, `semantic-version-format`,
+`assembly-versioning-scheme`/`-format`, `assembly-file-versioning-scheme`/`-format`,
+`assembly-informational-format`, `merge-message-formats`.
+
+`Inherit` 증분은 git 조상을 추적해 실제로 분기한 source 브랜치의 증분을 상속합니다.
+
+## 알려진 단순화 / 미구현
+
 - Mainline 전략은 TaggedCommit 기반의 단순화된 형태입니다(워크플로 `TrunkBased` 미지원).
-- `merge-message-formats`, `semantic-version-format`(Strict/Loose 구분),
-  `assembly-versioning-format`/`assembly-informational-format` 커스텀 포맷은 미반영입니다.
+- `update-build-number`, `track-merge-target` 은 파싱되지만 버전 계산 출력에 영향이
+  없습니다(빌드에이전트 build number 갱신 / 이미 TaggedCommit 으로 포괄).
 - AssemblyInfo/프로젝트 파일 쓰기, 동적(원격) 저장소 clone, 캐싱, 빌드에이전트별 통합은 미구현입니다.

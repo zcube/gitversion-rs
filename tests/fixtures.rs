@@ -32,6 +32,8 @@ const COMPARED_KEYS: &[&str] = &[
     "CommitDate",
     "AssemblySemVer",
     "AssemblySemFileVer",
+    "InformationalVersion",
+    "WeightedPreReleaseNumber",
     "VersionSourceDistance",
     "Sha",
     "ShortSha",

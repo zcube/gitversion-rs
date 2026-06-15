@@ -143,9 +143,15 @@ impl SemanticVersion {
         format!("{}.{}.{}", self.major, self.minor, self.patch)
     }
 
-    /// 버전 문자열 파싱. `tag_prefix` 정규식으로 접두어 제거 후 파싱.
+    /// 버전 문자열 파싱(Loose). `tag_prefix` 정규식으로 접두어 제거 후 파싱.
     /// 예: `v1.2.3-beta.4`, `1.2`, `1`.
     pub fn parse(input: &str, tag_prefix: &str) -> Option<Self> {
+        Self::parse_with(input, tag_prefix, false)
+    }
+
+    /// 버전 문자열 파싱. `strict` 이면 SemVer 2.0 처럼 Major.Minor.Patch 3요소를
+    /// 모두 요구한다(원본 `SemanticVersionFormat.Strict`). Loose 면 부분 버전 허용.
+    pub fn parse_with(input: &str, tag_prefix: &str, strict: bool) -> Option<Self> {
         let trimmed = input.trim();
         // tag prefix 제거
         let body = if tag_prefix.is_empty() {
@@ -159,6 +165,9 @@ impl SemanticVersion {
         )
         .ok()?;
         let c = re.captures(body.trim())?;
+        if strict && (c.name("minor").is_none() || c.name("patch").is_none()) {
+            return None;
+        }
         let major = c.name("major")?.as_str().parse().ok()?;
         let minor = c.name("minor").and_then(|m| m.as_str().parse().ok()).unwrap_or(0);
         let patch = c.name("patch").and_then(|m| m.as_str().parse().ok()).unwrap_or(0);
@@ -294,6 +303,22 @@ mod tests {
         let v = base.increment(VersionField::Minor, Some("alpha"), false);
         // 이미 pre-release 가 있으므로 코어 유지, 번호만 증가.
         assert_eq!(v.to_string(), "1.1.0-alpha.2");
+    }
+
+    #[test]
+    fn strict_rejects_partial_version() {
+        // Strict 는 Major.Minor.Patch 3요소를 모두 요구.
+        assert!(SemanticVersion::parse_with("1.2", "[vV]?", true).is_none());
+        assert!(SemanticVersion::parse_with("1", "[vV]?", true).is_none());
+        assert!(SemanticVersion::parse_with("1.2.3", "[vV]?", true).is_some());
+    }
+
+    #[test]
+    fn loose_accepts_partial_version() {
+        let v = SemanticVersion::parse_with("1.2", "[vV]?", false).unwrap();
+        assert_eq!((v.major, v.minor, v.patch), (1, 2, 0));
+        let v = SemanticVersion::parse_with("v1", "[vV]?", false).unwrap();
+        assert_eq!((v.major, v.minor, v.patch), (1, 0, 0));
     }
 
     #[test]

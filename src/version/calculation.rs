@@ -6,7 +6,8 @@
 
 use crate::config::{
     effective::EffectiveConfiguration, CommitMessageIncrementMode, DeploymentMode,
-    GitVersionConfiguration, IncrementStrategy, VersionStrategy, VersioningScheme,
+    GitVersionConfiguration, IncrementStrategy, SemanticVersionFormat, VersionStrategy,
+    VersioningScheme,
 };
 use crate::git::{CommitInfo, GitRepo};
 use crate::output::variables::VersionVariables;
@@ -204,12 +205,105 @@ fn determine_increment(
     })
 }
 
+/// 설정의 semantic-version-format 에 맞춰 버전 문자열 파싱.
+fn parse_version(input: &str, eff: &EffectiveConfiguration) -> Option<SemanticVersion> {
+    let strict = eff.semantic_version_format == SemanticVersionFormat::Strict;
+    SemanticVersion::parse_with(input, &eff.tag_prefix, strict)
+}
+
 /// 메시지/브랜치명에서 버전 토큰 추출.
 fn extract_version(text: &str, pattern: &str, tag_prefix: &str) -> Option<SemanticVersion> {
     let re = Regex::new(&format!("(?i){pattern}")).ok()?;
     let caps = re.captures(text)?;
     let raw = caps.name("version").map(|m| m.as_str()).unwrap_or_else(|| caps.get(0).unwrap().as_str());
     SemanticVersion::parse(raw, tag_prefix)
+}
+
+/// Inherit 증분을 git 조상 기반으로 해석. 현재 브랜치가 분기된 source 브랜치
+/// (merge-base 가 가장 최신인 것)를 찾아 그 브랜치의 증분을 반환. 상속 대상이
+/// 아니거나 후보가 없으면 None(기존 해석 유지).
+fn resolve_inherit_via_git(
+    repo: &GitRepo,
+    config: &GitVersionConfiguration,
+    branch_name: &str,
+) -> Result<Option<IncrementStrategy>> {
+    let Some((_, bc)) = crate::config::effective::find_branch_config(config, branch_name) else {
+        return Ok(None);
+    };
+    let own = bc.increment.or(config.increment).unwrap_or(IncrementStrategy::Inherit);
+    if own != IncrementStrategy::Inherit {
+        return Ok(None);
+    }
+
+    let repo_branches = repo.branch_names().unwrap_or_default();
+    let mut best: Option<(i64, IncrementStrategy)> = None;
+
+    for src_key in &bc.source_branches {
+        let Some(src_bc) = config.branches.get(src_key) else { continue };
+        let Some(re_src) = &src_bc.regex else { continue };
+        let Ok(re) = Regex::new(&format!("(?i){re_src}")) else { continue };
+
+        // 이 source 설정에 매칭되는 실제 저장소 브랜치들.
+        for rb in &repo_branches {
+            if rb == branch_name {
+                continue;
+            }
+            let short = rb.rsplit('/').next().unwrap_or(rb);
+            if !(re.is_match(rb) || re.is_match(short)) {
+                continue;
+            }
+            let Some(mb) = repo.merge_base(branch_name, rb)? else { continue };
+            // merge-base 가 루트에서 멀수록(=깊을수록) 최근에 분기한 것.
+            let depth = repo.commits_between(None, &mb)?.len() as i64;
+            let inc = src_bc
+                .increment
+                .or(config.increment)
+                .filter(|i| *i != IncrementStrategy::Inherit)
+                .unwrap_or(IncrementStrategy::Patch);
+            if best.map(|(d, _)| depth > d).unwrap_or(true) {
+                best = Some((depth, inc));
+            }
+        }
+    }
+    Ok(best.map(|(_, inc)| inc))
+}
+
+/// merge 커밋 메시지에서 버전 추출. 빌트인 규칙(메시지에 "merge" 포함)과
+/// 사용자 정의 `merge-message-formats`(이름→정규식)를 모두 시도한다.
+fn extract_merge_version(
+    message: &str,
+    eff: &EffectiveConfiguration,
+    builtin_version_pattern: &str,
+) -> Option<SemanticVersion> {
+    // 1) 사용자 정의 포맷 우선.
+    for pattern in eff.merge_message_formats.values() {
+        let Ok(re) = Regex::new(&format!("(?i){pattern}")) else { continue };
+        if let Some(caps) = re.captures(message) {
+            // SourceBranch 그룹이 있으면 그 안에서 version-in-branch 패턴으로 추출.
+            if let Some(sb) = caps.name("SourceBranch") {
+                if let Some(v) =
+                    extract_version(sb.as_str(), &eff.version_in_branch_pattern, &eff.tag_prefix)
+                {
+                    return Some(v);
+                }
+            }
+            // 직접 Version 그룹.
+            if let Some(ver) = caps.name("Version") {
+                if let Some(v) = SemanticVersion::parse(ver.as_str(), &eff.tag_prefix) {
+                    return Some(v);
+                }
+            }
+            // 매치 전체에서 버전 토큰.
+            if let Some(v) = extract_version(message, builtin_version_pattern, &eff.tag_prefix) {
+                return Some(v);
+            }
+        }
+    }
+    // 2) 빌트인: 메시지에 "merge" 가 포함된 경우.
+    if message.to_lowercase().contains("merge") {
+        return extract_version(message, builtin_version_pattern, &eff.tag_prefix);
+    }
+    None
 }
 
 /// 전체 계산 진입점. 최종 출력 변수를 만든다.
@@ -223,8 +317,14 @@ pub fn calculate(
         Some(b) => b,
         None => repo.current_branch_name()?,
     };
-    let eff = EffectiveConfiguration::resolve(config, &branch_name);
+    let mut eff = EffectiveConfiguration::resolve(config, &branch_name);
     let ignore = IgnoreSet::from_config(config);
+
+    // Inherit 증분: 실제 git 조상을 따라 현재 브랜치가 분기된 source 브랜치를
+    // 찾아 그 브랜치의 증분을 상속한다(설정상 첫 source 가 아니라).
+    if let Some(inc) = resolve_inherit_via_git(repo, config, &branch_name)? {
+        eff.increment = inc;
+    }
 
     let mut candidates: Vec<BaseVersion> = Vec::new();
     let strategies = if config.strategies.is_empty() {
@@ -243,7 +343,7 @@ pub fn calculate(
         match strat {
             VersionStrategy::ConfiguredNextVersion => {
                 if let Some(nv) = &eff.next_version {
-                    if let Some(v) = SemanticVersion::parse(nv, &eff.tag_prefix) {
+                    if let Some(v) = parse_version(nv, &eff) {
                         candidates.push(BaseVersion::new(
                             "설정 next-version",
                             v,
@@ -273,7 +373,10 @@ pub fn calculate(
                 }
             }
             VersionStrategy::MergeMessage => {
-                gather_merge_messages(repo, &eff, &head, &ignore, &mut candidates)?;
+                // track-merge-message 가 false 면 merge 메시지를 버전으로 해석하지 않음.
+                if eff.track_merge_message {
+                    gather_merge_messages(repo, &eff, &head, &ignore, &mut candidates)?;
+                }
             }
             VersionStrategy::TrackReleaseBranches => {
                 gather_track_release(repo, config, &eff, &head, &branch_name, &mut candidates)?;
@@ -358,7 +461,7 @@ fn gather_tagged(
         if !repo.is_ancestor_of_head(&tag.target_sha).unwrap_or(false) {
             continue;
         }
-        let Some(version) = SemanticVersion::parse(&tag.name, &eff.tag_prefix) else { continue };
+        let Some(version) = parse_version(&tag.name, &eff) else { continue };
         let is_current = tag.target_sha == head.sha;
         let exact = is_current && eff.prevent_increment_when_current_commit_tagged;
         // pre-release 태그(예: 1.0.0-beta.1)는 아직 "릴리스" 가 아니므로 버전
@@ -400,12 +503,14 @@ fn gather_merge_messages(
         if c.parent_count < 2 {
             continue;
         }
-        let lc = c.message.to_lowercase();
-        if !lc.contains("merge") {
-            continue;
-        }
-        if let Some(v) = extract_version(&c.message, pattern, &eff.tag_prefix) {
-            let field = if eff.prevent_increment_of_merged_branch {
+        // 빌트인(메시지에 "merge" 포함) 또는 사용자 정의 merge-message-formats 로
+        // 버전 추출 시도.
+        let version = extract_merge_version(&c.message, eff, pattern);
+        if let Some(v) = version {
+            // prevent-increment: of-merged-branch 또는 when-branch-merged.
+            let field = if eff.prevent_increment_of_merged_branch
+                || eff.prevent_increment_when_branch_merged
+            {
                 VersionField::None
             } else {
                 determine_increment(repo, Some(&c.sha), &head.sha, false, eff, ignore)?
@@ -548,7 +653,12 @@ fn build_variables(
         None => sem_ver.clone(),
     };
 
-    let weighted = pre_number.map(|n| n + eff.pre_release_weight);
+    // WeightedPreReleaseNumber: 번호가 있으면 번호+pre-release-weight,
+    // 없으면(안정 릴리스) tag-pre-release-weight. 원본 SemanticVersionFormatValues.
+    let weighted = Some(match pre_number {
+        Some(n) => n + eff.pre_release_weight,
+        None => eff.tag_pre_release_weight,
+    });
 
     let assembly_sem_ver = assembly_version(sv, eff.assembly_versioning_scheme);
     let assembly_sem_file_ver = assembly_version(sv, eff.assembly_file_versioning_scheme);
@@ -567,7 +677,7 @@ fn build_variables(
     let date_fmt = dotnet_date_format_to_strftime(&eff.commit_date_format);
     let commit_date = head.when.format(&date_fmt).to_string();
 
-    Ok(VersionVariables {
+    let mut vars = VersionVariables {
         major: sv.major as u32,
         minor: sv.minor as u32,
         patch: sv.patch as u32,
@@ -596,7 +706,36 @@ fn build_variables(
         commits_since_version_source: Some(commits),
         commit_date,
         uncommitted_changes: sv.build_metadata.uncommitted_changes,
+    };
+
+    // assembly-*-format / assembly-informational-format 커스텀 포맷 적용.
+    // 포맷은 위에서 계산된 변수들을 참조하므로 여기서 후처리한다.
+    let ctx = vars.to_map();
+    if let Some(fmt) = &eff.assembly_versioning_format {
+        vars.assembly_sem_ver = render_template(fmt, &ctx);
+    }
+    if let Some(fmt) = &eff.assembly_file_versioning_format {
+        vars.assembly_sem_file_ver = render_template(fmt, &ctx);
+    }
+    // informational-format 의 기본값 `{InformationalVersion}` 은 원래 값을 그대로
+    // 재현하므로 항상 적용해도 안전하다.
+    vars.informational_version = render_template(&eff.assembly_informational_format, &ctx);
+
+    Ok(vars)
+}
+
+/// `{Variable}` 및 `{env:VAR}` 토큰을 변수 맵으로 치환.
+fn render_template(fmt: &str, ctx: &std::collections::BTreeMap<String, String>) -> String {
+    let re = Regex::new(r"\{(?<t>[A-Za-z0-9_:]+)\}").unwrap();
+    re.replace_all(fmt, |c: &regex::Captures| {
+        let t = &c["t"];
+        if let Some(env_var) = t.strip_prefix("env:") {
+            std::env::var(env_var).unwrap_or_default()
+        } else {
+            ctx.get(t).cloned().unwrap_or_default()
+        }
     })
+    .into_owned()
 }
 
 /// AssemblyVersion 스킴 적용.
