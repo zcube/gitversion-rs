@@ -320,6 +320,11 @@ pub fn calculate(
     let mut eff = EffectiveConfiguration::resolve(config, &branch_name);
     let ignore = IgnoreSet::from_config(config);
 
+    // Mainline 전략이 활성화되어 있으면 per-commit 누적 방식으로 계산.
+    if config.strategies.contains(&VersionStrategy::Mainline) {
+        return mainline_calculate(repo, &eff, &branch_name, &head, &ignore);
+    }
+
     // Inherit 증분: 실제 git 조상을 따라 현재 브랜치가 분기된 source 브랜치를
     // 찾아 그 브랜치의 증분을 상속한다(설정상 첫 source 가 아니라).
     if let Some(inc) = resolve_inherit_via_git(repo, config, &branch_name)? {
@@ -441,9 +446,72 @@ pub fn calculate(
 
     let final_semver =
         apply_deployment_mode(repo, &eff, &branch_name, &head, &chosen, base_source.as_deref(), &ignore)?;
-    let variables =
-        build_variables(&eff, &branch_name, &head, &final_semver, &chosen, &source_semver)?;
+    let variables = build_variables(&eff, &branch_name, &head, &final_semver, &source_semver)?;
     Ok(variables)
+}
+
+/// Mainline 전략: base(최고 태그 또는 0.0.0)부터 각 커밋의 증분을 누적한다.
+///
+/// 각 커밋은 메시지 기반 증분(major/minor/patch)이 기본 증분보다 높으면 그것을,
+/// 아니면 기본 증분을 적용한다(`+semver:none` 도 기본 증분으로 처리). 원본
+/// MainlineVersionStrategy 의 핵심 동작을 옮긴 것으로, ContinuousDeployment 처럼
+/// pre-release 없이 단조 증가하는 버전을 만든다.
+fn mainline_calculate(
+    repo: &GitRepo,
+    eff: &EffectiveConfiguration,
+    branch_name: &str,
+    head: &CommitInfo,
+    ignore: &IgnoreSet,
+) -> Result<VersionVariables> {
+    // base: HEAD 에서 도달 가능한 가장 높은 태그(코어 버전). 없으면 0.0.0.
+    let mut base = SemanticVersion::new(0, 0, 0);
+    let mut base_source: Option<String> = None;
+    for tag in repo.tags()? {
+        if ignore.is_ignored(&tag.target_sha, &tag.when) {
+            continue;
+        }
+        if !repo.is_ancestor_of_head(&tag.target_sha).unwrap_or(false) {
+            continue;
+        }
+        if let Some(v) = parse_version(&tag.name, eff) {
+            let higher = (v.major, v.minor, v.patch) > (base.major, base.minor, base.patch);
+            if base_source.is_none() || higher {
+                base = SemanticVersion::new(v.major, v.minor, v.patch);
+                base_source = Some(tag.target_sha.clone());
+            }
+        }
+    }
+
+    // base 이후 커밋들을 오래된 순으로 누적.
+    let mut commits = ignore.filter(repo.commits_between(base_source.as_deref(), &head.sha)?);
+    commits.reverse();
+
+    let default = strategy_to_field(eff.increment);
+    let mut version = base.clone();
+    for c in &commits {
+        let field = increment_from_message(&c.message, eff)
+            .filter(|f| *f > default)
+            .unwrap_or(default);
+        version = version.increment(field, None, true);
+    }
+
+    // ContinuousDeployment: pre-release 없이 코어 버전만.
+    version.pre_release_tag = PreReleaseTag::default();
+    version.build_metadata = BuildMetaData {
+        commits_since_tag: None,
+        branch: Some(branch_name.to_string()),
+        sha: Some(head.sha.clone()),
+        short_sha: Some(head.short_sha.clone()),
+        commit_date: Some(head.when),
+        version_source_sha: base_source.clone(),
+        // Mainline 에서는 각 커밋이 버전 소스이므로 distance 는 1.
+        version_source_distance: 1,
+        uncommitted_changes: repo.uncommitted_changes().unwrap_or(0),
+        version_source_increment: VersionField::None,
+        other_metadata: None,
+    };
+
+    build_variables(eff, branch_name, head, &version, &base)
 }
 
 /// HEAD 에서 도달 가능한 버전 태그를 후보로 수집.
@@ -634,7 +702,6 @@ fn build_variables(
     branch_name: &str,
     head: &CommitInfo,
     sv: &SemanticVersion,
-    _chosen: &NextVersion,
     source_semver: &SemanticVersion,
 ) -> Result<VersionVariables> {
     let pre = &sv.pre_release_tag;

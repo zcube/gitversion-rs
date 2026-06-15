@@ -123,7 +123,10 @@ GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
 
 ## 알려진 단순화 / 미구현
 
-- Mainline 전략은 TaggedCommit 기반의 단순화된 형태입니다(워크플로 `TrunkBased` 미지원).
+- Mainline 전략은 base(최고 태그 또는 0.0.0)부터 각 커밋의 증분을 누적하는 방식으로
+  구현되어 선형 히스토리에서 실제 GitVersion 과 일치합니다(`strategies: [Mainline]` +
+  `mode: ContinuousDeployment`). 복잡한 merge 기반 브랜치 순회(18종 incrementer)는 단순화되어
+  있으며, 워크플로 문자열 `TrunkBased` 는 실제 6.7 도 미지원입니다.
 - `update-build-number`: `--output build-server` 시 빌드에이전트의 build number 설정
   출력을 제어합니다(false 면 생략). 계산되는 버전 변수에는 영향이 없습니다(원본과 동일).
 - `track-merge-target`: 원본에서 `MainlineVersionStrategy` 와

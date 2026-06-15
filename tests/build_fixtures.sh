@@ -199,7 +199,24 @@ tagcommit v1.0.0; branch feature/foo; commit f1; record
 newrepo stable_weighted main
 commit a; tagcommit v3.0.0; record
 
-# 31. 빌드에이전트 golden: 동일 저장소에 대해 각 CI 의 실제 출력을 저장.
+# 31~33. Mainline 전략(per-commit 누적)
+MAINLINE_CFG='strategies:
+- Mainline
+mode: ContinuousDeployment'
+newrepo mainline_3commits main
+writeconfig "$MAINLINE_CFG"
+commit a; commit b; commit c; record
+
+newrepo mainline_tag main
+writeconfig "$MAINLINE_CFG"
+tagcommit v1.0.0; commit a; commit b; record
+
+newrepo mainline_minor main
+writeconfig "$MAINLINE_CFG"
+commit a; commit "feat
++semver: minor"; commit c; record
+
+# 34. 빌드에이전트 golden: 동일 저장소에 대해 각 CI 의 실제 출력을 저장.
 newrepo buildagent_repo main
 tagcommit v1.0.0; commit b
 record   # expected.json (일반 JSON)
