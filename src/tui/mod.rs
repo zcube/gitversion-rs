@@ -4,7 +4,8 @@
 //! 생성, next-version 설정, 캐시 삭제, 동적 clone, 브랜치별 재계산)을 제공한다.
 
 use crate::config::effective::EffectiveConfiguration;
-use crate::config::{loader, GitVersionConfiguration};
+use crate::config::{loader, CommitMessageConvention, GitVersionConfiguration};
+use crate::exec;
 use crate::git::{CommitInfo, GitRepo};
 use crate::output::{generator, VersionVariables};
 use crate::remote::{self, DynamicRepoOptions};
@@ -32,6 +33,7 @@ enum InputAction {
     CreateBranch,
     SetNextVersion,
     DynamicClone,
+    EditExecHook,
 }
 
 impl InputAction {
@@ -41,6 +43,7 @@ impl InputAction {
             InputAction::CreateBranch => "HEAD 에 브랜치 생성 — 이름 입력",
             InputAction::SetNextVersion => "next-version 설정 — 버전 입력(예: 2.0.0)",
             InputAction::DynamicClone => "동적 clone — 'URL 브랜치' 입력",
+            InputAction::EditExecHook => "exec 훅 편집 — '이름=명령' (이름: verify/prepare/publish/success/fail/version, 빈 명령은 삭제)",
         }
     }
 }
@@ -69,6 +72,8 @@ struct App {
     input_buf: String,
     status: String,
     actions: Vec<&'static str>,
+    /// 이벤트 루프가 터미널을 잠시 빠져나가 side-effect 훅을 실행하도록 요청.
+    pending_run_hooks: bool,
 }
 
 /// TUI 실행. 저장소·설정을 받아 대화형으로 동작한다.
@@ -97,11 +102,15 @@ pub fn run(repo: GitRepo, config: GitVersionConfiguration, work_dir: PathBuf) ->
             "태그 생성 (HEAD)",
             "브랜치 생성 (HEAD)",
             "next-version 설정",
+            "Conventional Commits 토글",
+            "exec 훅 편집",
+            "exec 훅 실행 (prepare 등)",
             "캐시 삭제",
             "동적 원격 clone",
             "재계산",
             "기준 브랜치로 초기화",
         ],
+        pending_run_hooks: false,
     };
     app.recompute();
     app.reload_lists();
@@ -157,13 +166,25 @@ impl App {
             cfg.next_version = Some(nv.clone());
         }
         match calculation::calculate(&self.repo, &cfg, self.branch_override.clone()) {
-            Ok(v) => {
+            Ok(mut v) => {
+                // version exec 훅이 있으면 그 출력으로 버전을 수정해 재계산(CLI 와 동일).
+                if let Some(cmd) = cfg.exec.get("version").cloned() {
+                    if let Ok(Some(nv)) = exec::run_version_hook(&cmd, &v, &self.work_dir, false) {
+                        cfg.next_version = Some(nv.clone());
+                        if let Ok(v2) = calculation::calculate(&self.repo, &cfg, self.branch_override.clone()) {
+                            v = v2;
+                            self.status = format!("version 훅 적용: next-version={nv}");
+                        }
+                    }
+                }
                 self.json = generator::to_json(&v).unwrap_or_default();
                 self.vars = v;
-                self.status = format!(
-                    "재계산 완료 ({})",
-                    self.branch_override.as_deref().unwrap_or(&self.base_branch)
-                );
+                if !self.status.starts_with("version 훅") {
+                    self.status = format!(
+                        "재계산 완료 ({})",
+                        self.branch_override.as_deref().unwrap_or(&self.base_branch)
+                    );
+                }
             }
             Err(e) => self.status = format!("계산 오류: {e}"),
         }
@@ -228,6 +249,28 @@ impl App {
                 self.recompute();
             }
             Some(InputAction::DynamicClone) => self.do_dynamic_clone(&buf),
+            Some(InputAction::EditExecHook) => {
+                let Some((name, cmd)) = buf.split_once('=') else {
+                    self.status = "형식: 이름=명령".into();
+                    return;
+                };
+                let (name, cmd) = (name.trim().to_string(), cmd.trim().to_string());
+                const VALID: [&str; 6] =
+                    ["verify", "prepare", "publish", "success", "fail", "version"];
+                if !VALID.contains(&name.as_str()) {
+                    self.status = format!("알 수 없는 훅 이름: {name} (verify/prepare/publish/success/fail/version)");
+                    return;
+                }
+                if cmd.is_empty() {
+                    self.config.exec.remove(&name);
+                    self.status = format!("exec 훅 삭제: {name}");
+                } else {
+                    self.config.exec.insert(name.clone(), cmd);
+                    self.status = format!("exec 훅 설정: {name}");
+                }
+                // version 훅 변경은 버전에 영향 → 재계산.
+                self.recompute();
+            }
             None => {}
         }
     }
@@ -274,13 +317,29 @@ impl App {
             0 => self.start_input(InputAction::CreateTag),
             1 => self.start_input(InputAction::CreateBranch),
             2 => self.start_input(InputAction::SetNextVersion),
-            3 => match self.repo.clear_cache() {
+            3 => {
+                // Conventional Commits 토글 후 재계산.
+                let cur = self
+                    .config
+                    .commit_message_convention
+                    .unwrap_or(CommitMessageConvention::Default);
+                let next = match cur {
+                    CommitMessageConvention::ConventionalCommits => CommitMessageConvention::Default,
+                    CommitMessageConvention::Default => CommitMessageConvention::ConventionalCommits,
+                };
+                self.config.commit_message_convention = Some(next);
+                self.recompute();
+                self.status = format!("commit-message-convention = {next:?}");
+            }
+            4 => self.start_input(InputAction::EditExecHook),
+            5 => self.pending_run_hooks = true, // 이벤트 루프가 터미널을 빠져나가 실행.
+            6 => match self.repo.clear_cache() {
                 Ok(n) => self.status = format!("캐시 삭제: {n}개 파일"),
                 Err(e) => self.status = format!("캐시 삭제 실패: {e}"),
             },
-            4 => self.start_input(InputAction::DynamicClone),
-            5 => self.recompute(),
-            6 => {
+            7 => self.start_input(InputAction::DynamicClone),
+            8 => self.recompute(),
+            9 => {
                 self.branch_override = None;
                 self.next_version_override = None;
                 self.recompute();
@@ -383,7 +442,41 @@ fn event_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<(
             KeyCode::Enter => app.on_enter(),
             _ => {}
         }
+
+        // side-effect 훅 실행 요청: 터미널을 잠시 빠져나가 명령 출력을 그대로 보여준다.
+        if app.pending_run_hooks {
+            app.pending_run_hooks = false;
+            run_hooks_suspended(terminal, app)?;
+        }
     }
+}
+
+/// 터미널을 일시 복구해 exec side-effect 훅을 실행하고 다시 진입한다.
+fn run_hooks_suspended<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
+    if app.config.exec.is_empty() {
+        app.status = "설정된 exec 훅이 없습니다(액션 'exec 훅 편집'으로 추가)".into();
+        return Ok(());
+    }
+    // 일반 화면으로 복귀.
+    let _ = disable_raw_mode();
+    let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+    println!("\n=== exec 훅 실행 ===");
+    let result = exec::run_hooks(&app.config.exec, None, &app.vars, &app.work_dir, false);
+    app.status = match &result {
+        Ok(_) => "exec 훅 실행 완료".into(),
+        Err(e) => format!("exec 훅 실패: {e}"),
+    };
+    if let Err(e) = &result {
+        println!("오류: {e}");
+    }
+    println!("\n[Enter] 를 누르면 TUI 로 돌아갑니다...");
+    let mut line = String::new();
+    let _ = io::stdin().read_line(&mut line);
+    // TUI 재진입.
+    enable_raw_mode()?;
+    execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
+    terminal.clear()?;
+    Ok(())
 }
 
 impl App {
@@ -520,6 +613,11 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
     } else {
         app.config.strategies.iter().map(|s| format!("{s:?}")).collect()
     };
+    let exec_hooks: String = if app.config.exec.is_empty() {
+        "(없음)".into()
+    } else {
+        app.config.exec.keys().cloned().collect::<Vec<_>>().join(", ")
+    };
     let lines = vec![
         kv("매칭 브랜치 키", &eff.branch_key),
         kv("increment", &format!("{:?}", eff.increment)),
@@ -530,6 +628,8 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
         kv("is-main-branch", &eff.is_main_branch.to_string()),
         kv("tracks-release-branches", &eff.tracks_release_branches.to_string()),
         kv("track-merge-message", &eff.track_merge_message.to_string()),
+        kv("commit-message-incrementing", &format!("{:?}", eff.commit_message_incrementing)),
+        kv("commit-message-convention", &format!("{:?}", eff.commit_message_convention)),
         kv("prevent-increment.of-merged", &eff.prevent_increment_of_merged_branch.to_string()),
         kv("prevent-increment.when-tagged", &eff.prevent_increment_when_current_commit_tagged.to_string()),
         kv("pre-release-weight", &eff.pre_release_weight.to_string()),
@@ -538,6 +638,7 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
         kv("semantic-version-format", &format!("{:?}", eff.semantic_version_format)),
         kv("source-branches", &eff.source_branches.join(", ")),
         kv("strategies", &strategies.join(", ")),
+        kv("exec 훅", &exec_hooks),
         kv("next-version", app.next_version_override.as_deref().or(app.config.next_version.as_deref()).unwrap_or("(없음)")),
     ];
     let para = Paragraph::new(lines)
