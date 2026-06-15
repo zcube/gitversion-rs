@@ -2,6 +2,9 @@
 //!
 //! 원본 `GitVersion.Core/Core/GitPreparer.cs` 의 동적 저장소 동작 대응. `/url` 로
 //! 원격 저장소를 임시(또는 지정) 위치에 clone 하고 그 위에서 버전을 계산한다.
+//!
+//! 전송: gix 의 blocking 클라이언트로 https/file 과 SSH(`ssh://` 및 scp-like
+//! `git@host:path`)를 지원한다. SSH 는 시스템 `ssh` 명령(키·에이전트)을 사용한다.
 
 use anyhow::{bail, Context, Result};
 use sha1::{Digest, Sha1};
@@ -66,7 +69,10 @@ pub fn prepare(opts: &DynamicRepoOptions) -> Result<PathBuf> {
     Ok(dest)
 }
 
-/// https URL 에 user:pass 를 주입(다른 스킴은 그대로).
+/// 인증 정보를 URL 에 반영.
+/// - https: `user[:pass]@` 주입
+/// - ssh(`ssh://host`): 사용자가 URL 에 없으면 `user@` 주입(SSH 는 키/에이전트 인증)
+/// - scp-like(`git@host:path`) 등 이미 사용자가 포함된 형태는 그대로.
 fn inject_credentials(url: &str, user: Option<&str>, pass: Option<&str>) -> String {
     let Some(user) = user.filter(|u| !u.is_empty()) else { return url.to_string() };
     if let Some(rest) = url.strip_prefix("https://") {
@@ -75,6 +81,13 @@ fn inject_credentials(url: &str, user: Option<&str>, pass: Option<&str>) -> Stri
             None => user.to_string(),
         };
         return format!("https://{cred}@{rest}");
+    }
+    if let Some(rest) = url.strip_prefix("ssh://") {
+        // 이미 user@ 가 있으면 그대로.
+        let host_part = rest.split('/').next().unwrap_or(rest);
+        if !host_part.contains('@') {
+            return format!("ssh://{user}@{rest}");
+        }
     }
     url.to_string()
 }
@@ -91,4 +104,43 @@ fn detach_head_to_commit(dest: &std::path::Path, commit: &str) -> Result<()> {
         .with_context(|| format!("HEAD 기록 실패: {}", head_path.display()))?;
     log::info!("HEAD 를 커밋 {full_sha} 로 설정");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::inject_credentials;
+
+    #[test]
+    fn https_injects_user_and_pass() {
+        assert_eq!(
+            inject_credentials("https://host/r.git", Some("u"), Some("p")),
+            "https://u:p@host/r.git"
+        );
+        assert_eq!(
+            inject_credentials("https://host/r.git", Some("u"), None),
+            "https://u@host/r.git"
+        );
+    }
+
+    #[test]
+    fn ssh_injects_user_when_absent() {
+        assert_eq!(
+            inject_credentials("ssh://host/r.git", Some("git"), None),
+            "ssh://git@host/r.git"
+        );
+        // 이미 user@ 가 있으면 그대로.
+        assert_eq!(
+            inject_credentials("ssh://git@host/r.git", Some("other"), None),
+            "ssh://git@host/r.git"
+        );
+    }
+
+    #[test]
+    fn scp_like_and_no_user_unchanged() {
+        assert_eq!(
+            inject_credentials("git@host:r.git", Some("u"), None),
+            "git@host:r.git"
+        );
+        assert_eq!(inject_credentials("https://host/r.git", None, None), "https://host/r.git");
+    }
 }

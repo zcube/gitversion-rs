@@ -27,7 +27,8 @@
   refs·HEAD·설정파일·overrideconfig 의 SHA1 해시라 저장소 상태가 바뀌면 자동 무효화.
   `--nocache` 로 비활성화
 - **동적 원격 저장소**: `--url <repo> --branch <b>` 로 원격을 clone 해 계산(`-u`/`-p` 인증,
-  `-c` 커밋 지정, `--dynamicRepoLocation` 위치 지정). gix 순수 Rust clone(https/file)
+  `-c` 커밋 지정, `--dynamicRepoLocation` 위치 지정). gix 순수 Rust clone 으로 https/file 및
+  SSH(`ssh://`·scp-like `git@host:path`, 시스템 ssh 사용) 지원
 
 ## 빌드
 
@@ -150,7 +151,6 @@ GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
   가능한 merge-target 태그는 포괄되며, 도달 불가한 경우(주로 Mainline)는 미반영입니다.
 - 로그 파일 출력(`/l`)은 미구현입니다. `/nofetch /nonormalize /allowshallow` 는 인식하지만
   이 포트의 구조상 무효과인 정직한 no-op 입니다(원격 clone 은 fetch/normalize 를 직접 수행).
-- 동적 clone 의 SSH(`git@`) 전송은 미지원이며 https/file URL 을 지원합니다.
 - `GitVersionInformation` 소스 파일 생성은 원본에서도 CLI 가 아닌 MSBuild 태스크가
   담당하므로 본 CLI 포트의 범위 밖입니다.
 
