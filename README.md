@@ -29,6 +29,11 @@
 - **패키지 매니페스트**: `--updatepackagefiles` 로 `package.json`(Node.js),
   `Cargo.toml`(Rust), `pyproject.toml`(Python, PEP 621/Poetry)의 version 을 각 형식의
   포맷 보존 파서(serde_json/toml_edit)로 갱신
+- **외부 명령 훅(exec)**: semantic-release 의 exec 플러그인처럼 라이프사이클 훅
+  (`verify`/`prepare`/`publish`/`success`/`fail`)에서 쉘 명령 실행. 버전 변수를
+  `GitVersion_*` 환경변수와 `{Variable}`/`{env:VAR}` 템플릿으로 노출. `version` 훅은
+  명령의 표준출력으로 버전을 수정(next-version 적용 후 재계산). `--exec`/`--exec-version`/
+  `--dry-run` 지원
 - **결과 캐싱**: 계산 결과를 `<.git>/gitversion_cache/<키>.json` 에 저장해 재사용. 키는
   refs·HEAD·설정파일·overrideconfig 의 SHA1 해시라 저장소 상태가 바뀌면 자동 무효화.
   `--nocache` 로 비활성화
@@ -69,6 +74,13 @@ gitversion --config GitVersion.yml
 gitversion --overrideconfig next-version=2.0.0
 gitversion --overrideconfig commit-message-convention=ConventionalCommits
 gitversion --showconfig
+
+# 외부 명령 훅(exec) — 버전 변수가 env/템플릿으로 노출
+gitversion --exec 'npm version {SemVer} --no-git-tag-version'
+# 외부 명령 출력으로 버전 수정(재계산)
+gitversion --exec-version './scripts/decide-version.sh'
+# 실행 없이 미리보기
+gitversion --exec 'make release' --dry-run
 
 # 대화형 TUI
 gitversion --tui

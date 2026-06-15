@@ -209,4 +209,9 @@ pub struct GitVersionConfiguration {
     pub merge_message_formats: BTreeMap<String, String>,
     #[serde(default)]
     pub branches: BTreeMap<String, BranchConfiguration>,
+
+    /// 외부 명령 훅(semantic-release exec 유사). 훅 이름 -> 쉘 명령.
+    /// 지원 훅: verify, prepare, publish, success, fail.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub exec: BTreeMap<String, String>,
 }

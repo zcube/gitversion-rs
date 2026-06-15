@@ -147,6 +147,18 @@ pub struct Cli {
     #[arg(long = "dynamicRepoLocation")]
     pub dynamic_repo_location: Option<PathBuf>,
 
+    /// 계산 후 실행할 prepare 명령(버전 변수가 GitVersion_* 환경변수와 {Var} 로 노출).
+    #[arg(long)]
+    pub exec: Option<String>,
+
+    /// 버전 수정 명령. 표준출력을 next-version 으로 적용해 재계산한다.
+    #[arg(long = "exec-version")]
+    pub exec_version: Option<String>,
+
+    /// exec 훅을 실제 실행하지 않고 출력만 한다.
+    #[arg(long = "dry-run")]
+    pub dry_run: bool,
+
     /// 대화형 Ratatui TUI 실행.
     #[arg(long)]
     pub tui: bool,

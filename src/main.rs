@@ -7,7 +7,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use gitversion::{buildagent, cache, cli, config, git, output, remote, tui, version};
+use gitversion::{buildagent, cache, cli, config, exec, git, output, remote, tui, version};
 use cli::{Cli, OutputFormat};
 use std::io::Write;
 use std::path::PathBuf;
@@ -83,7 +83,7 @@ fn run() -> Result<()> {
     };
 
     // 버전 계산(캐시 적중 시 계산 생략).
-    let variables = match cache_key.as_deref().and_then(|k| cache::load(&repo, k)) {
+    let mut variables = match cache_key.as_deref().and_then(|k| cache::load(&repo, k)) {
         Some(v) => v,
         None => {
             let v = version::calculation::calculate(&repo, &configuration, args.branch.clone())
@@ -94,6 +94,20 @@ fn run() -> Result<()> {
             v
         }
     };
+
+    // version 훅: 외부 명령 출력으로 버전 정보를 수정하고 재계산.
+    let version_cmd = args
+        .exec_version
+        .clone()
+        .or_else(|| configuration.exec.get("version").cloned());
+    if let Some(cmd) = version_cmd {
+        if let Some(new_ver) = exec::run_version_hook(&cmd, &variables, &work_dir, args.dry_run)? {
+            log::info!("version 훅이 버전을 '{new_ver}' 로 수정 → 재계산");
+            configuration.next_version = Some(new_ver);
+            variables = version::calculation::calculate(&repo, &configuration, args.branch.clone())
+                .context("version 훅 적용 후 재계산 실패")?;
+        }
+    }
 
     // 파일 출력 작업(AssemblyInfo / 프로젝트 파일 / Wix).
     if let Some(files) = &args.update_assembly_info {
@@ -122,6 +136,17 @@ fn run() -> Result<()> {
         for p in &updated {
             log::info!("패키지 매니페스트 갱신: {}", p.display());
         }
+    }
+
+    // 외부 명령 훅(verify/prepare/publish/success, 실패 시 fail).
+    if !configuration.exec.is_empty() || args.exec.is_some() {
+        exec::run_hooks(
+            &configuration.exec,
+            args.exec.as_deref(),
+            &variables,
+            &work_dir,
+            args.dry_run,
+        )?;
     }
 
     // 단일 변수.

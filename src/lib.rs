@@ -10,6 +10,7 @@ pub mod buildagent;
 pub mod cache;
 pub mod cli;
 pub mod config;
+pub mod exec;
 pub mod git;
 pub mod output;
 pub mod remote;

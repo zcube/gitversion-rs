@@ -162,6 +162,9 @@ pub fn merge(base: &mut GitVersionConfiguration, over: GitVersionConfiguration) 
     if !over.merge_message_formats.is_empty() {
         base.merge_message_formats.extend(over.merge_message_formats);
     }
+    if !over.exec.is_empty() {
+        base.exec.extend(over.exec);
+    }
 
     // 브랜치별 병합.
     for (key, ob) in over.branches {
