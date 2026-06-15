@@ -53,6 +53,11 @@ tagcommit() { # $1 = version (tag), creates a commit then tags it
 
 branch() { git -C "$CUR" checkout -q -b "$1"; }
 checkout() { git -C "$CUR" checkout -q "$1"; }
+merge() { # $1=branch to merge, $2=message
+  TICK=$((TICK + 60))
+  GIT_AUTHOR_DATE="$TICK +0000" GIT_COMMITTER_DATE="$TICK +0000" \
+    git -C "$CUR" merge --no-ff -q "$1" -m "$2"
+}
 writeconfig() { printf '%s\n' "$1" > "$CUR/GitVersion.yml"; }
 
 record() { # 실제 GitVersion 출력을 golden 으로 저장
@@ -198,6 +203,17 @@ tagcommit v1.0.0; branch feature/foo; commit f1; record
 # 30. 안정 릴리스의 WeightedPreReleaseNumber = tag-pre-release-weight(60000)
 newrepo stable_weighted main
 commit a; tagcommit v3.0.0; record
+
+# release/feature 를 main 에 병합(merge 메시지 전략)
+newrepo merge_release main
+git -C "$CUR" config merge.ff false
+tagcommit v1.0.0; branch release/2.0.0; commit r1
+checkout main; merge release/2.0.0 "Merge branch 'release/2.0.0' into main"; record
+
+newrepo merge_pr main
+git -C "$CUR" config merge.ff false
+tagcommit v1.0.0; branch feature/login; commit f1
+checkout main; merge feature/login "Merge pull request #42 from org/feature/login"; record
 
 # 31~33. Mainline 전략(per-commit 누적)
 MAINLINE_CFG='strategies:

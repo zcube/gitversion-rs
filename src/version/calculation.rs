@@ -575,18 +575,26 @@ fn gather_merge_messages(
         // 버전 추출 시도.
         let version = extract_merge_version(&c.message, eff, pattern);
         if let Some(v) = version {
+            // merge 커밋의 base source 는 두 부모의 merge-base(원본
+            // MergeMessageVersionStrategy). 그래야 병합으로 들어온 커밋들이
+            // 버전 소스 이후 커밋 수에 정확히 반영된다.
+            let base_src = if c.parents.len() >= 2 {
+                repo.merge_base(&c.parents[0], &c.parents[1])?.unwrap_or_else(|| c.sha.clone())
+            } else {
+                c.sha.clone()
+            };
             // prevent-increment: of-merged-branch 또는 when-branch-merged.
             let field = if eff.prevent_increment_of_merged_branch
                 || eff.prevent_increment_when_branch_merged
             {
                 VersionField::None
             } else {
-                determine_increment(repo, Some(&c.sha), &head.sha, false, eff, ignore)?
+                determine_increment(repo, Some(&base_src), &head.sha, false, eff, ignore)?
             };
             let mut bv = BaseVersion::new(
                 "merge 메시지",
                 v,
-                Some(c.sha.clone()),
+                Some(base_src),
                 field,
                 Some(eff.label.clone()),
             );

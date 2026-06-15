@@ -17,6 +17,8 @@ pub struct CommitInfo {
     pub message: String,
     pub when: DateTime<FixedOffset>,
     pub parent_count: usize,
+    /// 부모 커밋 SHA 목록.
+    pub parents: Vec<String>,
 }
 
 /// 버전 태그 후보.
@@ -61,12 +63,14 @@ impl GitRepo {
             .message_raw()
             .map(|m| m.to_string())
             .unwrap_or_default();
+        let parents: Vec<String> = commit.parent_ids().map(|id| id.to_string()).collect();
         Ok(CommitInfo {
             short_sha: sha[..7.min(sha.len())].to_string(),
             sha,
             message,
             when,
-            parent_count: commit.parent_ids().count(),
+            parent_count: parents.len(),
+            parents,
         })
     }
 
