@@ -245,6 +245,32 @@ git -C "$CUR" config merge.ff false
 commit m1; branch feature/x; commit f1; commit f2
 checkout main; merge feature/x "Merge branch 'feature/x'"; record
 
+# Mainline 극단: 중간 stable 태그
+newrepo mainline_midtag main
+writeconfig "$MAINLINE_CFG"
+commit a; commit b; git -C "$CUR" tag v2.0.0; commit c; record
+
+# Mainline 극단: pre-release 태그 가진 feature 병합(확정)
+newrepo mainline_pretag_merge main
+writeconfig "$MAINLINE_CFG"
+git -C "$CUR" config merge.ff false
+commit m1; branch feature/y; commit f1; git -C "$CUR" tag v2.0.0-alpha.1
+checkout main; merge feature/y "Merge branch 'feature/y'"; record
+
+# Mainline + ContinuousDelivery 모드: pre-release 번호 = distance
+newrepo mainline_cd main
+writeconfig 'strategies:
+- Mainline
+mode: ContinuousDelivery'
+commit a; commit b; commit c; record
+
+# Mainline + ManualDeployment 모드
+newrepo mainline_manual main
+writeconfig 'strategies:
+- Mainline
+mode: ManualDeployment'
+commit a; git -C "$CUR" tag v1.0.0; commit b; record
+
 # 34. 빌드에이전트 golden: 동일 저장소에 대해 각 CI 의 실제 출력을 저장.
 newrepo buildagent_repo main
 tagcommit v1.0.0; commit b

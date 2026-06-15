@@ -519,40 +519,61 @@ fn mainline_calculate(
     head: &CommitInfo,
     ignore: &IgnoreSet,
 ) -> Result<VersionVariables> {
-    // base: HEAD 에서 도달 가능한 가장 높은 태그(코어 버전). 없으면 0.0.0.
-    let mut base = SemanticVersion::new(0, 0, 0);
-    let mut base_source: Option<String> = None;
+    // 도달 가능한 모든 태그를 sha -> 코어 버전 맵으로(같은 커밋에 여러 태그면 최고).
+    let mut tags_by_sha: std::collections::HashMap<String, SemanticVersion> =
+        std::collections::HashMap::new();
     for tag in repo.tags()? {
         if ignore.is_ignored(&tag.target_sha, &tag.when) {
             continue;
         }
-        if !repo.is_ancestor_of(&tag.target_sha, &head.sha).unwrap_or(false) {
-            continue;
-        }
         if let Some(v) = parse_version(&tag.name, eff) {
-            let higher = (v.major, v.minor, v.patch) > (base.major, base.minor, base.patch);
-            if base_source.is_none() || higher {
-                base = SemanticVersion::new(v.major, v.minor, v.patch);
-                base_source = Some(tag.target_sha.clone());
+            let core = SemanticVersion::new(v.major, v.minor, v.patch);
+            let e = tags_by_sha.entry(tag.target_sha.clone()).or_insert_with(|| core.clone());
+            if core.cmp_core(e) == std::cmp::Ordering::Greater {
+                *e = core;
             }
         }
     }
+    let core_gt = |a: &SemanticVersion, b: &SemanticVersion| a.cmp_core(b) == std::cmp::Ordering::Greater;
 
-    // first-parent 트렁크를 오래된 순으로 순회하며 step 당 증분 1회 적용.
-    let mut trunk = ignore.filter(repo.first_parent_between(base_source.as_deref(), &head.sha)?);
+    // first-parent 트렁크를 루트부터 순회. 각 step 에서 도입된 커밋의 태그가 현재
+    // 버전보다 높으면 그 코어로 설정(증분 없음 = stable/pre-release 확정), 아니면 증분.
+    let mut trunk = ignore.filter(repo.first_parent_between(None, &head.sha)?);
     trunk.reverse();
 
     let default = strategy_to_field(eff.increment);
-    let mut version = base.clone();
+    let mut version = SemanticVersion::new(0, 0, 0);
+    let mut highest_tag = SemanticVersion::new(0, 0, 0);
     for c in &trunk {
-        // 이 step 이 도입한 커밋들의 메시지에서 최대 증분을 구한다. merge 커밋이면
-        // 병합된 브랜치(두 번째 부모 계열)의 커밋들을, 아니면 자기 자신을 본다.
+        // 이 step 이 도입한 커밋들. merge 면 병합된 브랜치(두 번째 부모 계열), 아니면 자신.
         let introduced: Vec<CommitInfo> = if c.parents.len() >= 2 {
             ignore.filter(repo.commits_between(Some(&c.parents[0]), &c.parents[1])?)
         } else {
             vec![c.clone()]
         };
-        // 기본 증분을 바닥으로, 도입 커밋들의 메시지 증분을 consolidate(최댓값).
+
+        // 도입 커밋(및 merge 커밋 자신)에 붙은 가장 높은 태그 코어.
+        let mut step_tag: Option<SemanticVersion> = None;
+        for sha in introduced.iter().map(|x| &x.sha).chain(std::iter::once(&c.sha)) {
+            if let Some(tv) = tags_by_sha.get(sha) {
+                if step_tag.as_ref().map(|s| core_gt(tv, s)).unwrap_or(true) {
+                    step_tag = Some(tv.clone());
+                }
+            }
+        }
+
+        if let Some(tv) = step_tag {
+            if core_gt(&tv, &highest_tag) {
+                highest_tag = tv.clone();
+            }
+            // 현재 버전 이상인 태그는 그 코어로 확정(증분하지 않음).
+            if !core_gt(&version, &tv) {
+                version = tv;
+                continue;
+            }
+        }
+
+        // 태그가 없거나 더 낮으면 증분(도입 커밋 메시지 consolidate, 바닥은 기본 증분).
         let mut field = default;
         for ic in &introduced {
             if let Some(f) = increment_from_message(&ic.message, eff) {
@@ -563,16 +584,31 @@ fn mainline_calculate(
         }
         version = version.increment(field, None, true);
     }
+    let base = highest_tag;
 
     // Mainline 의 version source 는 head 의 첫 번째 부모(직전 트렁크 상태). distance 는
     // 그로부터 head 까지의 전체 커밋 수(merge 면 병합된 커밋들 포함).
     let source_sha = head.parents.first().cloned();
     let distance = repo.commits_between(source_sha.as_deref(), &head.sha)?.len() as i64;
 
-    // ContinuousDeployment: pre-release 없이 코어 버전만.
-    version.pre_release_tag = PreReleaseTag::default();
+    // deployment mode 별 pre-release / build metadata.
+    let label = eff.label.as_str();
+    let mut commits_since_tag = None;
+    version.pre_release_tag = match eff.deployment_mode {
+        // 코어 버전만(pre-release 제거).
+        DeploymentMode::ContinuousDeployment => PreReleaseTag::default(),
+        // pre-release 번호 = distance.
+        DeploymentMode::ContinuousDelivery => {
+            PreReleaseTag::new(label, Some(distance), label.is_empty())
+        }
+        // pre-release 번호 = 1, build metadata = distance.
+        DeploymentMode::ManualDeployment => {
+            commits_since_tag = Some(distance);
+            PreReleaseTag::new(label, Some(1), label.is_empty())
+        }
+    };
     version.build_metadata = BuildMetaData {
-        commits_since_tag: None,
+        commits_since_tag,
         branch: Some(branch_name.to_string()),
         sha: Some(head.sha.clone()),
         short_sha: Some(head.short_sha.clone()),
