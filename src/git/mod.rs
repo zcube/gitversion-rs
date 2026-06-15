@@ -157,6 +157,28 @@ impl GitRepo {
         Ok(out)
     }
 
+    /// `from`(제외)부터 `to`(포함)까지 **첫 번째 부모만** 따라가며 커밋을 최신순으로
+    /// 반환(Mainline 트렁크 순회용).
+    pub fn first_parent_between(&self, from: Option<&str>, to: &str) -> Result<Vec<CommitInfo>> {
+        let to_oid = self
+            .resolve(to)
+            .with_context(|| format!("커밋을 찾을 수 없습니다: {to}"))?;
+        let mut platform = self.repo.rev_walk([to_oid]).first_parent_only();
+        if let Some(f) = from {
+            if let Some(f_oid) = self.resolve(f) {
+                platform = platform.with_hidden([f_oid]);
+            }
+        }
+        let mut out = Vec::new();
+        for info in platform.all()? {
+            let info = info?;
+            if let Ok(commit) = self.repo.find_commit(info.id) {
+                out.push(Self::commit_info(&commit)?);
+            }
+        }
+        Ok(out)
+    }
+
     /// 두 커밋의 merge-base.
     pub fn merge_base(&self, a: &str, b: &str) -> Result<Option<String>> {
         let (oid_a, oid_b) = match (self.resolve(a), self.resolve(b)) {

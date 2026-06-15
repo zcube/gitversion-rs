@@ -506,18 +506,36 @@ fn mainline_calculate(
         }
     }
 
-    // base 이후 커밋들을 오래된 순으로 누적.
-    let mut commits = ignore.filter(repo.commits_between(base_source.as_deref(), &head.sha)?);
-    commits.reverse();
+    // first-parent 트렁크를 오래된 순으로 순회하며 step 당 증분 1회 적용.
+    let mut trunk = ignore.filter(repo.first_parent_between(base_source.as_deref(), &head.sha)?);
+    trunk.reverse();
 
     let default = strategy_to_field(eff.increment);
     let mut version = base.clone();
-    for c in &commits {
-        let field = increment_from_message(&c.message, eff)
-            .filter(|f| *f > default)
-            .unwrap_or(default);
+    for c in &trunk {
+        // 이 step 이 도입한 커밋들의 메시지에서 최대 증분을 구한다. merge 커밋이면
+        // 병합된 브랜치(두 번째 부모 계열)의 커밋들을, 아니면 자기 자신을 본다.
+        let introduced: Vec<CommitInfo> = if c.parents.len() >= 2 {
+            ignore.filter(repo.commits_between(Some(&c.parents[0]), &c.parents[1])?)
+        } else {
+            vec![c.clone()]
+        };
+        // 기본 증분을 바닥으로, 도입 커밋들의 메시지 증분을 consolidate(최댓값).
+        let mut field = default;
+        for ic in &introduced {
+            if let Some(f) = increment_from_message(&ic.message, eff) {
+                if f > field {
+                    field = f;
+                }
+            }
+        }
         version = version.increment(field, None, true);
     }
+
+    // Mainline 의 version source 는 head 의 첫 번째 부모(직전 트렁크 상태). distance 는
+    // 그로부터 head 까지의 전체 커밋 수(merge 면 병합된 커밋들 포함).
+    let source_sha = head.parents.first().cloned();
+    let distance = repo.commits_between(source_sha.as_deref(), &head.sha)?.len() as i64;
 
     // ContinuousDeployment: pre-release 없이 코어 버전만.
     version.pre_release_tag = PreReleaseTag::default();
@@ -527,9 +545,8 @@ fn mainline_calculate(
         sha: Some(head.sha.clone()),
         short_sha: Some(head.short_sha.clone()),
         commit_date: Some(head.when),
-        version_source_sha: base_source.clone(),
-        // Mainline 에서는 각 커밋이 버전 소스이므로 distance 는 1.
-        version_source_distance: 1,
+        version_source_sha: source_sha,
+        version_source_distance: distance,
         uncommitted_changes: repo.uncommitted_changes().unwrap_or(0),
         version_source_increment: VersionField::None,
         other_metadata: None,

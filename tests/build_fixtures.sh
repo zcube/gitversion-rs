@@ -238,6 +238,13 @@ writeconfig "$MAINLINE_CFG"
 commit a; commit "feat
 +semver: minor"; commit c; record
 
+# Mainline + feature merge: 병합 브랜치 증분을 1회로 consolidate
+newrepo mainline_merge main
+writeconfig "$MAINLINE_CFG"
+git -C "$CUR" config merge.ff false
+commit m1; branch feature/x; commit f1; commit f2
+checkout main; merge feature/x "Merge branch 'feature/x'"; record
+
 # 34. 빌드에이전트 golden: 동일 저장소에 대해 각 CI 의 실제 출력을 저장.
 newrepo buildagent_repo main
 tagcommit v1.0.0; commit b
