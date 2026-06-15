@@ -127,6 +127,26 @@ pub struct Cli {
     #[arg(long = "updatepackagefiles", num_args = 0.., value_name = "FILE")]
     pub update_package_files: Option<Vec<String>>,
 
+    /// 원격 git 저장소 URL(지정 시 clone 후 계산). `--branch` 필수.
+    #[arg(long)]
+    pub url: Option<String>,
+
+    /// 원격 인증 사용자명(`--url` 과 함께).
+    #[arg(long = "username", short = 'u')]
+    pub username: Option<String>,
+
+    /// 원격 인증 비밀번호(`--url` 과 함께).
+    #[arg(long = "password", short = 'p')]
+    pub password: Option<String>,
+
+    /// 확인할 커밋 ID(생략 시 브랜치 최신). `--url` 과 함께.
+    #[arg(long = "commit", short = 'c')]
+    pub commit: Option<String>,
+
+    /// 동적 clone 위치(기본: 임시 디렉터리).
+    #[arg(long = "dynamicRepoLocation")]
+    pub dynamic_repo_location: Option<PathBuf>,
+
     /// 대화형 Ratatui TUI 실행.
     #[arg(long)]
     pub tui: bool,

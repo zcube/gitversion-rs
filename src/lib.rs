@@ -12,5 +12,6 @@ pub mod cli;
 pub mod config;
 pub mod git;
 pub mod output;
+pub mod remote;
 pub mod tui;
 pub mod version;

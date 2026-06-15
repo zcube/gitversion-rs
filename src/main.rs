@@ -7,7 +7,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use gitversion::{buildagent, cache, cli, config, git, output, tui, version};
+use gitversion::{buildagent, cache, cli, config, git, output, remote, tui, version};
 use cli::{Cli, OutputFormat};
 use std::io::Write;
 use std::path::PathBuf;
@@ -30,8 +30,21 @@ fn run() -> Result<()> {
         .format_timestamp(None)
         .init();
 
-    // /targetpath 가 주어지면 위치 인자 대신 사용.
-    let target = args.target_path.clone().unwrap_or_else(|| args.path.clone());
+    // /url 이 주어지면 원격 저장소를 동적으로 clone 해 그 경로를 대상으로 사용.
+    let target = if let Some(url) = &args.url {
+        let opts = remote::DynamicRepoOptions {
+            url: url.clone(),
+            branch: args.branch.clone(),
+            username: args.username.clone(),
+            password: args.password.clone(),
+            commit: args.commit.clone(),
+            location: args.dynamic_repo_location.clone(),
+        };
+        remote::prepare(&opts).context("동적 원격 저장소 준비에 실패했습니다")?
+    } else {
+        // /targetpath 가 주어지면 위치 인자 대신 사용.
+        args.target_path.clone().unwrap_or_else(|| args.path.clone())
+    };
     log::debug!("대상 경로: {}", target.display());
 
     // 저장소 오픈.
