@@ -1,0 +1,11 @@
+# 레퍼런스(.NET GitVersion 원본 소스)는 추적하지 않음
+/refs/
+
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# 로그/임시
+*.log
+.DS_Store
