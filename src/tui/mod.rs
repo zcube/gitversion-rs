@@ -34,6 +34,7 @@ enum InputAction {
     SetNextVersion,
     DynamicClone,
     EditExecHook,
+    EditConfig,
 }
 
 impl InputAction {
@@ -44,6 +45,7 @@ impl InputAction {
             InputAction::SetNextVersion => "next-version 설정 — 버전 입력(예: 2.0.0)",
             InputAction::DynamicClone => "동적 clone — 'URL 브랜치' 입력",
             InputAction::EditExecHook => "exec 훅 편집 — '이름=명령' (이름: verify/prepare/publish/success/fail/version, 빈 명령은 삭제)",
+            InputAction::EditConfig => "전역 설정 편집",
         }
     }
 }
@@ -74,6 +76,64 @@ struct App {
     actions: Vec<&'static str>,
     /// 이벤트 루프가 터미널을 잠시 빠져나가 side-effect 훅을 실행하도록 요청.
     pending_run_hooks: bool,
+    /// 편집 중인 전역 설정 키(EditConfig 입력용).
+    edit_config_key: Option<String>,
+    /// TUI 에서 변경한 전역 설정(key=value). 파일 저장 시 최소 diff 로 기록.
+    tui_overrides: std::collections::BTreeMap<String, String>,
+}
+
+/// 설정 탭에서 편집 가능한 전역 설정 키(overrideconfig 와 동일 의미).
+const EDITABLE_CONFIG: [(&str, &str); 14] = [
+    ("increment", "None/Major/Minor/Patch/Inherit"),
+    ("mode", "ContinuousDelivery/ContinuousDeployment/ManualDeployment"),
+    ("label", "pre-release label"),
+    ("tag-prefix", "예: [vV]?"),
+    ("next-version", "예: 2.0.0"),
+    ("commit-message-convention", "Default/ConventionalCommits"),
+    ("semantic-version-format", "Strict/Loose"),
+    ("tag-pre-release-weight", "정수"),
+    ("update-build-number", "true/false"),
+    ("commit-date-format", "예: yyyy-MM-dd"),
+    ("major-version-bump-message", "정규식"),
+    ("minor-version-bump-message", "정규식"),
+    ("patch-version-bump-message", "정규식"),
+    ("no-bump-message", "정규식"),
+];
+
+/// 문자열을 YAML 스칼라(bool/int/문자열)로 변환.
+fn yaml_scalar(v: &str) -> serde_yaml::Value {
+    if let Ok(b) = v.parse::<bool>() {
+        return serde_yaml::Value::Bool(b);
+    }
+    if let Ok(i) = v.parse::<i64>() {
+        return serde_yaml::Value::Number(i.into());
+    }
+    serde_yaml::Value::String(v.to_string())
+}
+
+/// 전역 설정 키의 현재 값을 문자열로.
+fn global_value(config: &GitVersionConfiguration, key: &str) -> String {
+    use crate::config::CommitMessageConvention as C;
+    match key {
+        "increment" => config.increment.map(|v| format!("{v:?}")).unwrap_or_default(),
+        "mode" => config.mode.map(|v| format!("{v:?}")).unwrap_or_default(),
+        "label" => config.label.clone().unwrap_or_default(),
+        "tag-prefix" => config.tag_prefix.clone().unwrap_or_default(),
+        "next-version" => config.next_version.clone().unwrap_or_default(),
+        "commit-message-convention" => match config.commit_message_convention {
+            Some(C::ConventionalCommits) => "ConventionalCommits".into(),
+            _ => "Default".into(),
+        },
+        "semantic-version-format" => config.semantic_version_format.map(|v| format!("{v:?}")).unwrap_or_default(),
+        "tag-pre-release-weight" => config.tag_pre_release_weight.map(|v| v.to_string()).unwrap_or_default(),
+        "update-build-number" => config.update_build_number.map(|v| v.to_string()).unwrap_or_default(),
+        "commit-date-format" => config.commit_date_format.clone().unwrap_or_default(),
+        "major-version-bump-message" => config.major_version_bump_message.clone().unwrap_or_default(),
+        "minor-version-bump-message" => config.minor_version_bump_message.clone().unwrap_or_default(),
+        "patch-version-bump-message" => config.patch_version_bump_message.clone().unwrap_or_default(),
+        "no-bump-message" => config.no_bump_message.clone().unwrap_or_default(),
+        _ => String::new(),
+    }
 }
 
 /// TUI 실행. 저장소·설정을 받아 대화형으로 동작한다.
@@ -105,12 +165,15 @@ pub fn run(repo: GitRepo, config: GitVersionConfiguration, work_dir: PathBuf) ->
             "Conventional Commits 토글",
             "exec 훅 편집",
             "exec 훅 실행 (prepare 등)",
+            "설정 저장 (GitVersion.yml)",
             "캐시 삭제",
             "동적 원격 clone",
             "재계산",
             "기준 브랜치로 초기화",
         ],
         pending_run_hooks: false,
+        edit_config_key: None,
+        tui_overrides: std::collections::BTreeMap::new(),
     };
     app.recompute();
     app.reload_lists();
@@ -268,8 +331,15 @@ impl App {
                     self.config.exec.insert(name.clone(), cmd);
                     self.status = format!("exec 훅 설정: {name}");
                 }
-                // version 훅 변경은 버전에 영향 → 재계산.
+                // version 훅 변경은 버전에 영향 → 재계산 후 저장.
                 self.recompute();
+                self.save_config();
+            }
+            Some(InputAction::EditConfig) => {
+                if let Some(key) = self.edit_config_key.take() {
+                    self.apply_global_edit(&key, &buf);
+                    self.status = format!("{key} = {buf} (저장됨)");
+                }
             }
             None => {}
         }
@@ -327,19 +397,23 @@ impl App {
                     CommitMessageConvention::ConventionalCommits => CommitMessageConvention::Default,
                     CommitMessageConvention::Default => CommitMessageConvention::ConventionalCommits,
                 };
+                let val = format!("{next:?}");
                 self.config.commit_message_convention = Some(next);
+                self.tui_overrides.insert("commit-message-convention".into(), val.clone());
                 self.recompute();
-                self.status = format!("commit-message-convention = {next:?}");
+                self.save_config();
+                self.status = format!("commit-message-convention = {val} (저장됨)");
             }
             4 => self.start_input(InputAction::EditExecHook),
             5 => self.pending_run_hooks = true, // 이벤트 루프가 터미널을 빠져나가 실행.
-            6 => match self.repo.clear_cache() {
+            6 => self.save_config(),
+            7 => match self.repo.clear_cache() {
                 Ok(n) => self.status = format!("캐시 삭제: {n}개 파일"),
                 Err(e) => self.status = format!("캐시 삭제 실패: {e}"),
             },
-            7 => self.start_input(InputAction::DynamicClone),
-            8 => self.recompute(),
-            9 => {
+            8 => self.start_input(InputAction::DynamicClone),
+            9 => self.recompute(),
+            10 => {
                 self.branch_override = None;
                 self.next_version_override = None;
                 self.recompute();
@@ -347,6 +421,45 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    /// 변경된 전역 설정을 GitVersion.yml 에 최소 diff 로 저장(기존 파일 보존).
+    fn save_config(&mut self) {
+        let path = self.work_dir.join("GitVersion.yml");
+        let mut doc: serde_yaml::Mapping = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_yaml::from_str(&s).ok())
+            .unwrap_or_default();
+
+        // 변경한 전역 키들을 스칼라로 기록.
+        for (k, v) in &self.tui_overrides {
+            doc.insert(serde_yaml::Value::String(k.clone()), yaml_scalar(v));
+        }
+        // exec 훅 맵.
+        if self.config.exec.is_empty() {
+            doc.remove(serde_yaml::Value::String("exec".into()));
+        } else {
+            let mut exec_map = serde_yaml::Mapping::new();
+            for (k, v) in &self.config.exec {
+                exec_map.insert(serde_yaml::Value::String(k.clone()), serde_yaml::Value::String(v.clone()));
+            }
+            doc.insert(serde_yaml::Value::String("exec".into()), serde_yaml::Value::Mapping(exec_map));
+        }
+
+        match serde_yaml::to_string(&doc).map_err(anyhow::Error::from).and_then(|y| {
+            std::fs::write(&path, y).map_err(anyhow::Error::from)
+        }) {
+            Ok(_) => self.status = format!("설정 저장: {}", path.display()),
+            Err(e) => self.status = format!("설정 저장 실패: {e}"),
+        }
+    }
+
+    /// 전역 설정 키를 편집(overrideconfig 동일 로직) + 기록 + 재계산 + 저장.
+    fn apply_global_edit(&mut self, key: &str, value: &str) {
+        crate::cli::apply_overrides(&mut self.config, &[format!("{key}={value}")]);
+        self.tui_overrides.insert(key.to_string(), value.to_string());
+        self.recompute();
+        self.save_config();
     }
 
     fn start_input(&mut self, action: InputAction) {
@@ -483,6 +596,7 @@ impl App {
     fn list_len(&self) -> usize {
         match self.tab {
             0 => self.filtered_vars().len(),
+            1 => EDITABLE_CONFIG.len(),
             2 => self.commits.len(),
             3 => self.branches.len(),
             4 => self.actions.len(),
@@ -490,24 +604,24 @@ impl App {
         }
     }
     fn move_down(&mut self) {
-        if self.tab == 1 {
-            self.scroll = self.scroll.saturating_add(1);
-            return;
-        }
         let len = self.list_len();
         if len > 0 {
             self.selected = (self.selected + 1).min(len - 1);
         }
     }
     fn move_up(&mut self) {
-        if self.tab == 1 {
-            self.scroll = self.scroll.saturating_sub(1);
-            return;
-        }
         self.selected = self.selected.saturating_sub(1);
     }
     fn on_enter(&mut self) {
         match self.tab {
+            1 => {
+                // 선택한 전역 설정 키 편집(현재 값 미리 채움).
+                if let Some((key, _)) = EDITABLE_CONFIG.get(self.selected) {
+                    self.edit_config_key = Some((*key).to_string());
+                    self.input_buf = global_value(&self.config, key);
+                    self.input = Some(InputAction::EditConfig);
+                }
+            }
             3 => {
                 if let Some(b) = self.branches.get(self.selected).cloned() {
                     self.branch_override =
@@ -517,6 +631,18 @@ impl App {
             }
             4 => self.run_action(self.selected),
             _ => {}
+        }
+    }
+
+    /// 입력 모달 프롬프트(EditConfig 는 키 표시).
+    fn input_prompt(&self) -> String {
+        match (&self.input, &self.edit_config_key) {
+            (Some(InputAction::EditConfig), Some(key)) => {
+                let hint = EDITABLE_CONFIG.iter().find(|(k, _)| k == key).map(|(_, h)| *h).unwrap_or("");
+                format!("{key} 설정 — {hint}")
+            }
+            (Some(a), _) => a.prompt().to_string(),
+            _ => String::new(),
         }
     }
 }
@@ -564,6 +690,7 @@ fn ui(f: &mut Frame, app: &App) {
     // 푸터(상태 + 도움말).
     let help = match app.tab {
         0 => "[/]검색 [c]값복사 [C]JSON복사 [↑↓]이동 [1-5]탭 [q]종료",
+        1 => "[Enter]설정 편집(저장됨) [↑↓]이동 [1-5]탭 [q]종료",
         3 => "[Enter]해당 브랜치로 재계산 [↑↓]이동 [q]종료",
         4 => "[Enter]실행 [↑↓]이동 [q]종료",
         _ => "[↑↓]스크롤/이동 [1-5]탭 [C]JSON복사 [q]종료",
@@ -577,7 +704,8 @@ fn ui(f: &mut Frame, app: &App) {
 
     // 입력 모달.
     if let Some(action) = &app.input {
-        render_input_modal(f, action.prompt(), &app.input_buf);
+        let _ = action;
+        render_input_modal(f, &app.input_prompt(), &app.input_buf);
     }
 }
 
@@ -607,6 +735,32 @@ fn render_variables(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_config(f: &mut Frame, app: &App, area: Rect) {
+    // 위: 편집 가능한 전역 설정(선택 목록), 아래: effective 결과.
+    let halves = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(45), Constraint::Percentage(55)])
+        .split(area);
+
+    let edit_items: Vec<ListItem> = EDITABLE_CONFIG
+        .iter()
+        .enumerate()
+        .map(|(i, (key, _))| {
+            let val = global_value(&app.config, key);
+            let shown = if val.is_empty() { "(미설정)".to_string() } else { val };
+            let style = if i == app.selected {
+                Style::default().fg(Color::Black).bg(Color::Cyan)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            ListItem::new(format!("{key:<28}{shown}")).style(style)
+        })
+        .collect();
+    f.render_widget(
+        List::new(edit_items)
+            .block(Block::default().borders(Borders::ALL).title(" 전역 설정 (Enter=편집, 변경 시 GitVersion.yml 저장) ")),
+        halves[0],
+    );
+
     let eff = EffectiveConfiguration::resolve(&app.config, app.branch_override.as_deref().unwrap_or(&app.base_branch));
     let strategies: Vec<String> = if app.config.strategies.is_empty() {
         vec!["(기본)".into()]
@@ -642,9 +796,8 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
         kv("next-version", app.next_version_override.as_deref().or(app.config.next_version.as_deref()).unwrap_or("(없음)")),
     ];
     let para = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL).title(" 유효 설정(effective) "))
-        .scroll((app.scroll, 0));
-    f.render_widget(para, area);
+        .block(Block::default().borders(Borders::ALL).title(" 유효 설정(effective) — 위 설정이 이 브랜치에 해석된 결과 "));
+    f.render_widget(para, halves[1]);
 }
 
 fn kv(k: &str, v: &str) -> Line<'static> {

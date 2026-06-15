@@ -9,9 +9,10 @@
 - **CLI**: [`clap`](https://docs.rs/clap)
 - **로깅**: [`env_logger`](https://docs.rs/env_logger) (`RUST_LOG` 또는 `--verbosity`/`--diag`)
 - **TUI**: [`ratatui`](https://ratatui.rs) (`--tui`) — 5개 탭(변수/설정/커밋/브랜치/액션).
-  변수 검색·복사, effective 설정 보기(commit-message-convention/exec 훅 포함), first-parent
-  커밋과 버전 소스 표시, 브랜치 선택 재계산, 액션(태그·브랜치 생성, next-version 설정,
-  **Conventional Commits 토글**, **exec 훅 편집·실행**, 캐시 삭제, 동적 clone, 재계산).
+  변수 검색·복사, **설정 탭에서 전역 설정 편집**(Enter)하면 그 아래 effective 결과가 즉시
+  갱신되고 **GitVersion.yml 에 최소 diff 로 저장되어 유지**됨, first-parent 커밋과 버전 소스
+  표시, 브랜치 선택 재계산, 액션(태그·브랜치 생성, next-version 설정, **Conventional Commits
+  토글(저장됨)**, **exec 훅 편집·실행**, 설정 저장, 캐시 삭제, 동적 clone, 재계산).
   version 훅은 즉시 재계산에 반영. 패닉이 나도 터미널을 복구하고 우아하게 종료(catch_unwind)
 - **워크플로**: GitFlow / GitHubFlow / TrunkBased(Mainline)
 - **버전 전략**: ConfiguredNextVersion, TaggedCommit, MergeMessage, VersionInBranchName,
