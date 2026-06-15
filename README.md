@@ -18,7 +18,11 @@
   AppVeyor, TravisCI, Drone, CodeBuild, ContinuaCI, EnvRun, MyGet, BitBucket, BuildKite,
   SpaceAutomation — 환경변수로 감지해 각 CI 형식으로 출력(`--output build-server`)
 - **파일 출력**: AssemblyInfo 갱신/생성(`--updateassemblyinfo [파일] [--ensureassemblyinfo]`),
-  프로젝트 파일 버전 요소 갱신(`--updateprojectfiles`), Wix 버전 파일(`--updatewixversionfile`)
+  프로젝트 파일 갱신(`--updateprojectfiles`, 정규식이 아닌 실제 XML 파싱으로 안전하게
+  갱신·삽입), Wix 버전 파일(`--updatewixversionfile`)
+- **패키지 매니페스트**: `--updatepackagefiles` 로 `package.json`(Node.js),
+  `Cargo.toml`(Rust), `pyproject.toml`(Python, PEP 621/Poetry)의 version 을 각 형식의
+  포맷 보존 파서(serde_json/toml_edit)로 갱신
 
 ## 빌드
 

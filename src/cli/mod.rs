@@ -122,6 +122,11 @@ pub struct Cli {
     #[arg(long = "updatewixversionfile")]
     pub update_wix_version_file: bool,
 
+    /// 패키지 매니페스트의 version 갱신(package.json/Cargo.toml/pyproject.toml).
+    /// 파일명 생략 시 재귀 탐색.
+    #[arg(long = "updatepackagefiles", num_args = 0.., value_name = "FILE")]
+    pub update_package_files: Option<Vec<String>>,
+
     /// 대화형 Ratatui TUI 실행.
     #[arg(long)]
     pub tui: bool,

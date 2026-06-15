@@ -82,6 +82,12 @@ fn run() -> Result<()> {
         let p = output::files::write_wix(&variables, &work_dir)?;
         log::info!("Wix 버전 파일 생성: {}", p.display());
     }
+    if let Some(files) = &args.update_package_files {
+        let updated = output::files::update_package_files(&variables, &work_dir, files)?;
+        for p in &updated {
+            log::info!("패키지 매니페스트 갱신: {}", p.display());
+        }
+    }
 
     // TUI 모드.
     if args.tui {

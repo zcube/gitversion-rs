@@ -4,7 +4,11 @@
 
 use super::variables::VersionVariables;
 use anyhow::{Context, Result};
+use quick_xml::events::{BytesText, Event};
+use quick_xml::reader::Reader;
+use quick_xml::writer::Writer;
 use regex::Regex;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 /// AssemblyInfo 생성 시 템플릿 헤더(원본과 동일).
@@ -143,25 +147,239 @@ pub fn update_project_files(
         }
         let content = std::fs::read_to_string(&path)
             .with_context(|| format!("읽기 실패: {}", path.display()))?;
-        let new = replace_project_elements(&content, vars);
+        let new = replace_project_elements(&content, vars)
+            .with_context(|| format!("XML 갱신 실패: {}", path.display()))?;
         std::fs::write(&path, new)?;
         updated.push(path);
     }
     Ok(updated)
 }
 
-/// 프로젝트 파일의 XML 요소 텍스트를 치환(존재하는 요소만).
-fn replace_project_elements(content: &str, vars: &VersionVariables) -> String {
-    let replace_elem = |text: &str, elem: &str, value: &str| -> String {
-        let re = Regex::new(&format!(r"(<{elem}>)[^<]*(</{elem}>)")).unwrap();
-        re.replace_all(text, format!("${{1}}{value}${{2}}").as_str()).into_owned()
+/// 대상 버전 요소(고정 순서: 원본 ProjectFileUpdater 처리 순서).
+const PROJECT_ELEMENTS: [&str; 4] =
+    ["AssemblyVersion", "FileVersion", "InformationalVersion", "Version"];
+
+/// 프로젝트 파일의 버전 요소를 실제 XML 파싱으로 갱신한다.
+///
+/// 정규식이 아니라 quick-xml 이벤트를 다루므로 주석·속성·들여쓰기가 보존된다.
+/// 원본 `ProjectFileUpdater` 처럼 존재하는 요소는 값을 갱신하고, 없는 요소는
+/// 첫 번째 `<PropertyGroup>` 에 추가한다.
+fn replace_project_elements(content: &str, vars: &VersionVariables) -> Result<String> {
+    let value_of = |elem: &str| -> &str {
+        match elem {
+            "AssemblyVersion" => &vars.assembly_sem_ver,
+            "FileVersion" => &vars.assembly_sem_file_ver,
+            "InformationalVersion" => &vars.informational_version,
+            _ => &vars.sem_ver,
+        }
     };
-    let mut out = content.to_string();
-    out = replace_elem(&out, "AssemblyVersion", &vars.assembly_sem_ver);
-    out = replace_elem(&out, "FileVersion", &vars.assembly_sem_file_ver);
-    out = replace_elem(&out, "InformationalVersion", &vars.informational_version);
-    out = replace_elem(&out, "Version", &vars.sem_ver);
-    out
+
+    // 1) 모든 이벤트를 소유 형태로 수집.
+    let mut reader = Reader::from_str(content);
+    reader.config_mut().trim_text(false);
+    let mut events: Vec<Event<'static>> = Vec::new();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Eof) => break,
+            Ok(ev) => events.push(ev.into_owned()),
+            Err(e) => return Err(anyhow::anyhow!("XML 파싱 오류: {e}")),
+        }
+    }
+
+    let name_of = |e: &quick_xml::events::BytesStart| String::from_utf8_lossy(e.name().as_ref()).into_owned();
+    let end_name_of = |e: &quick_xml::events::BytesEnd| String::from_utf8_lossy(e.name().as_ref()).into_owned();
+
+    // 2) 존재하는 대상 요소의 텍스트를 갱신하고, 존재 여부와 첫 PropertyGroup 위치를 기록.
+    let mut existing: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut current: Option<String> = None;
+    let mut replaced = false;
+    let mut first_pg_start: Option<usize> = None;
+    let mut first_pg_end: Option<usize> = None;
+    let mut child_indent: Option<String> = None;
+    let mut pg_depth = 0i32;
+
+    for i in 0..events.len() {
+        match &events[i] {
+            Event::Start(e) => {
+                let name = name_of(e);
+                if name == "PropertyGroup" {
+                    pg_depth += 1;
+                    if first_pg_start.is_none() {
+                        first_pg_start = Some(i);
+                    }
+                }
+                if PROJECT_ELEMENTS.contains(&name.as_str()) {
+                    existing.insert(name.clone());
+                    current = Some(name);
+                    replaced = false;
+                }
+            }
+            Event::Text(_) => {
+                // 첫 PropertyGroup 의 첫 자식 들여쓰기 포착.
+                if first_pg_start.is_some() && first_pg_end.is_none() && child_indent.is_none() {
+                    if let (Event::Text(t), Some(Event::Start(_))) =
+                        (&events[i], events.get(i + 1))
+                    {
+                        let s = String::from_utf8_lossy(t.as_ref()).into_owned();
+                        if s.contains('\n') {
+                            child_indent = Some(s);
+                        }
+                    }
+                }
+                if let Some(name) = current.clone() {
+                    if !replaced {
+                        events[i] = Event::Text(BytesText::new(value_of(&name)).into_owned());
+                        replaced = true;
+                    }
+                }
+            }
+            Event::End(e) => {
+                let name = end_name_of(e);
+                if current.as_deref() == Some(name.as_str()) {
+                    current = None;
+                }
+                if name == "PropertyGroup" {
+                    pg_depth -= 1;
+                    if first_pg_end.is_none() && first_pg_start.is_some() && pg_depth == 0 {
+                        first_pg_end = Some(i);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // 3) 없는 요소를 첫 PropertyGroup 끝에 삽입.
+    let missing: Vec<&str> =
+        PROJECT_ELEMENTS.iter().filter(|e| !existing.contains(**e)).copied().collect();
+    if let (Some(end_idx), false) = (first_pg_end, missing.is_empty()) {
+        let indent = child_indent.unwrap_or_else(|| "\n    ".into());
+        // 닫는 들여쓰기 텍스트(End 직전) 앞에 삽입.
+        let insert_at = if end_idx > 0 && matches!(&events[end_idx - 1], Event::Text(_)) {
+            end_idx - 1
+        } else {
+            end_idx
+        };
+        let mut new_events: Vec<Event<'static>> = Vec::new();
+        for elem in &missing {
+            new_events.push(Event::Text(BytesText::new(&indent).into_owned()));
+            new_events.push(Event::Start(quick_xml::events::BytesStart::new(*elem).into_owned()));
+            new_events.push(Event::Text(BytesText::new(value_of(elem)).into_owned()));
+            new_events.push(Event::End(quick_xml::events::BytesEnd::new(*elem).into_owned()));
+        }
+        events.splice(insert_at..insert_at, new_events);
+    }
+
+    // 4) 다시 직렬화.
+    let mut writer = Writer::new(Cursor::new(Vec::new()));
+    for ev in events {
+        writer.write_event(ev)?;
+    }
+    Ok(String::from_utf8(writer.into_inner().into_inner())?)
+}
+
+/// 언어별 패키지 매니페스트의 버전 필드를 갱신.
+///
+/// 각 형식의 포맷 보존 파서를 사용한다(정규식 아님):
+/// - `package.json`(Node.js): serde_json(키 순서 보존)
+/// - `Cargo.toml`(Rust), `pyproject.toml`(Python): toml_edit(주석·포맷 보존)
+///
+/// `files` 가 비어 있으면 작업 디렉터리에서 알려진 매니페스트를 재귀 탐색.
+pub fn update_package_files(
+    vars: &VersionVariables,
+    work_dir: &Path,
+    files: &[String],
+) -> Result<Vec<PathBuf>> {
+    let targets: Vec<PathBuf> = if files.is_empty() {
+        find_recursive(work_dir, |p| {
+            let name =
+                p.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+            // node_modules/벤더 디렉터리의 매니페스트는 제외.
+            let in_vendor = p.components().any(|c| {
+                let s = c.as_os_str().to_string_lossy();
+                s == "node_modules" || s == "vendor" || s == "target"
+            });
+            !in_vendor && matches!(name.as_str(), "package.json" | "cargo.toml" | "pyproject.toml")
+        })
+    } else {
+        files.iter().map(|f| work_dir.join(f)).collect()
+    };
+
+    let mut updated = Vec::new();
+    for path in targets {
+        if !path.exists() {
+            continue;
+        }
+        let name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+        let content = std::fs::read_to_string(&path)
+            .with_context(|| format!("읽기 실패: {}", path.display()))?;
+        // 패키지 매니페스트에는 SemVer(빌드 메타데이터 제외)를 사용한다.
+        let version = &vars.sem_ver;
+        let new = match name.as_str() {
+            "package.json" => update_package_json(&content, version)?,
+            "cargo.toml" => update_cargo_toml(&content, version)?,
+            "pyproject.toml" => update_pyproject_toml(&content, version)?,
+            _ => continue,
+        };
+        if let Some(new) = new {
+            std::fs::write(&path, new)?;
+            updated.push(path);
+        }
+    }
+    Ok(updated)
+}
+
+/// package.json 의 최상위 "version" 갱신(키 순서 보존, 2-space 들여쓰기).
+fn update_package_json(content: &str, version: &str) -> Result<Option<String>> {
+    let mut value: serde_json::Value =
+        serde_json::from_str(content).context("package.json 파싱 실패")?;
+    let serde_json::Value::Object(map) = &mut value else { return Ok(None) };
+    if !map.contains_key("version") {
+        return Ok(None);
+    }
+    map.insert("version".into(), serde_json::Value::String(version.to_string()));
+    let mut out = serde_json::to_string_pretty(&value)?;
+    out.push('\n'); // npm 관례상 끝에 개행.
+    Ok(Some(out))
+}
+
+/// Cargo.toml 의 [package] version 갱신(포맷 보존).
+fn update_cargo_toml(content: &str, version: &str) -> Result<Option<String>> {
+    let mut doc = content.parse::<toml_edit::DocumentMut>().context("Cargo.toml 파싱 실패")?;
+    let Some(pkg) = doc.get_mut("package").and_then(|p| p.as_table_mut()) else {
+        return Ok(None);
+    };
+    if !pkg.contains_key("version") {
+        return Ok(None);
+    }
+    pkg["version"] = toml_edit::value(version);
+    Ok(Some(doc.to_string()))
+}
+
+/// pyproject.toml 의 [project] 또는 [tool.poetry] version 갱신(포맷 보존).
+fn update_pyproject_toml(content: &str, version: &str) -> Result<Option<String>> {
+    let mut doc = content.parse::<toml_edit::DocumentMut>().context("pyproject.toml 파싱 실패")?;
+    let mut changed = false;
+    // PEP 621: [project] version
+    if let Some(project) = doc.get_mut("project").and_then(|p| p.as_table_mut()) {
+        if project.contains_key("version") {
+            project["version"] = toml_edit::value(version);
+            changed = true;
+        }
+    }
+    // Poetry: [tool.poetry] version
+    if let Some(poetry) = doc
+        .get_mut("tool")
+        .and_then(|t| t.as_table_mut())
+        .and_then(|t| t.get_mut("poetry"))
+        .and_then(|p| p.as_table_mut())
+    {
+        if poetry.contains_key("version") {
+            poetry["version"] = toml_edit::value(version);
+            changed = true;
+        }
+    }
+    Ok(if changed { Some(doc.to_string()) } else { None })
 }
 
 /// Wix 버전 파일(GitVersion_WixVersion.wxi) 생성.
@@ -205,11 +423,52 @@ mod tests {
     }
 
     #[test]
-    fn project_element_replacement() {
-        let src = "<Version>0.0.0</Version><AssemblyVersion>0.0.0.0</AssemblyVersion>";
-        let out = replace_project_elements(src, &vars());
+    fn project_element_replacement_preserves_structure() {
+        let src = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <!-- 주석 유지 -->\n  <PropertyGroup>\n    <Version>0.0.0</Version>\n    <AssemblyVersion>0.0.0.0</AssemblyVersion>\n  </PropertyGroup>\n</Project>";
+        let out = replace_project_elements(src, &vars()).unwrap();
         assert!(out.contains("<Version>1.0.1-1</Version>"));
         assert!(out.contains("<AssemblyVersion>1.0.1.0</AssemblyVersion>"));
+        // 주석과 속성이 보존된다.
+        assert!(out.contains("<!-- 주석 유지 -->"));
+        assert!(out.contains("Sdk=\"Microsoft.NET.Sdk\""));
+    }
+
+    #[test]
+    fn project_does_not_touch_unrelated_text() {
+        // 대상이 아닌 요소나 텍스트는 건드리지 않는다.
+        let src = "<Project><PropertyGroup><Other>0.0.0</Other></PropertyGroup></Project>";
+        let out = replace_project_elements(src, &vars()).unwrap();
+        assert!(out.contains("<Other>0.0.0</Other>"));
+    }
+
+    #[test]
+    fn package_json_version_update() {
+        let src = "{\n  \"name\": \"x\",\n  \"version\": \"0.0.0\",\n  \"private\": true\n}";
+        let out = update_package_json(src, "1.0.1-1").unwrap().unwrap();
+        assert!(out.contains("\"version\": \"1.0.1-1\""));
+        // 키 순서 보존(name 이 version 보다 먼저).
+        assert!(out.find("\"name\"").unwrap() < out.find("\"version\"").unwrap());
+        assert!(out.contains("\"private\""));
+    }
+
+    #[test]
+    fn cargo_toml_version_update_preserves_comments() {
+        let src = "# 주석\n[package]\nname = \"x\"  # inline\nversion = \"0.0.0\"\n";
+        let out = update_cargo_toml(src, "1.0.1-1").unwrap().unwrap();
+        assert!(out.contains("version = \"1.0.1-1\""));
+        assert!(out.contains("# 주석"));
+        assert!(out.contains("# inline"));
+    }
+
+    #[test]
+    fn pyproject_pep621_and_poetry() {
+        let pep621 = "[project]\nname = \"x\"\nversion = \"0.0.0\"\n";
+        let out = update_pyproject_toml(pep621, "1.0.1-1").unwrap().unwrap();
+        assert!(out.contains("version = \"1.0.1-1\""));
+
+        let poetry = "[tool.poetry]\nname = \"x\"\nversion = \"0.0.0\"\n";
+        let out = update_pyproject_toml(poetry, "2.0.0").unwrap().unwrap();
+        assert!(out.contains("version = \"2.0.0\""));
     }
 
     #[test]
