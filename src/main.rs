@@ -7,7 +7,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use gitversion::{buildagent, cli, config, git, output, tui, version};
+use gitversion::{buildagent, cache, cli, config, git, output, tui, version};
 use cli::{Cli, OutputFormat};
 use std::io::Write;
 use std::path::PathBuf;
@@ -51,9 +51,31 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
-    // 버전 계산.
-    let variables = version::calculation::calculate(&repo, &configuration, args.branch.clone())
-        .context("버전 계산에 실패했습니다")?;
+    // 캐시 키 입력: overrideconfig + 브랜치 오버라이드.
+    let mut key_inputs = args.override_config.clone();
+    if let Some(b) = &args.branch {
+        key_inputs.push(format!("branch={b}"));
+    }
+    let config_path =
+        args.config.clone().or_else(|| config::loader::locate(&work_dir, repo_root.as_deref()));
+    let cache_key = if args.nocache {
+        None
+    } else {
+        Some(cache::compute_key(&repo, config_path.as_deref(), &key_inputs))
+    };
+
+    // 버전 계산(캐시 적중 시 계산 생략).
+    let variables = match cache_key.as_deref().and_then(|k| cache::load(&repo, k)) {
+        Some(v) => v,
+        None => {
+            let v = version::calculation::calculate(&repo, &configuration, args.branch.clone())
+                .context("버전 계산에 실패했습니다")?;
+            if let Some(k) = &cache_key {
+                cache::store(&repo, k, &v);
+            }
+            v
+        }
+    };
 
     let branch_name = match &args.branch {
         Some(b) => b.clone(),

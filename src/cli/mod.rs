@@ -51,15 +51,15 @@ pub struct Cli {
     #[arg(long = "targetpath", value_name = "DIR")]
     pub target_path: Option<PathBuf>,
 
-    // 다음 플래그들은 원본 CLI 호환을 위해 인식하지만, 이 포트는 fetch/normalize/
-    // 캐싱을 하지 않으므로 동작상 무효과(no-op)다.
+    // nofetch/nonormalize/allowshallow 는 원본 CLI 호환을 위해 인식하지만, 이 포트는
+    // fetch/normalize 를 하지 않으므로 동작상 무효과(no-op)다.
     /// fetch 비활성화(무효과: 본 포트는 fetch 하지 않음).
     #[arg(long)]
     pub nofetch: bool,
     /// 정규화 비활성화(무효과).
     #[arg(long)]
     pub nonormalize: bool,
-    /// 캐시 무시(무효과: 본 포트는 캐싱하지 않음).
+    /// 디스크 캐시 읽기·쓰기 비활성화(`<.git>/gitversion_cache`).
     #[arg(long)]
     pub nocache: bool,
     /// shallow clone 허용(무효과: gix 가 shallow 도 읽음).

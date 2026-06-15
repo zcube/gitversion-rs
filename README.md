@@ -23,6 +23,9 @@
 - **패키지 매니페스트**: `--updatepackagefiles` 로 `package.json`(Node.js),
   `Cargo.toml`(Rust), `pyproject.toml`(Python, PEP 621/Poetry)의 version 을 각 형식의
   포맷 보존 파서(serde_json/toml_edit)로 갱신
+- **결과 캐싱**: 계산 결과를 `<.git>/gitversion_cache/<키>.json` 에 저장해 재사용. 키는
+  refs·HEAD·설정파일·overrideconfig 의 SHA1 해시라 저장소 상태가 바뀌면 자동 무효화.
+  `--nocache` 로 비활성화
 
 ## 빌드
 
@@ -143,9 +146,9 @@ GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
   `GetTaggedSemanticVersion()`(태그 후보에 *merge target* 태그를 추가) 에서만 소비되는
   플래그입니다. 본 포트는 이미 HEAD 에서 도달 가능한 모든 태그를 후보로 보므로 도달
   가능한 merge-target 태그는 포괄되며, 도달 불가한 경우(주로 Mainline)는 미반영입니다.
-- 동적(원격) 저장소 clone(`/url /u /p /c /dynamicRepoLocation`), 결과 캐싱, 로그 파일
-  출력(`/l`)은 미구현입니다. `/nofetch /nonormalize /nocache /allowshallow` 는 인식하지만
-  이 포트의 구조상 무효과인 정직한 no-op 입니다.
+- 동적(원격) 저장소 clone(`/url /u /p /c /dynamicRepoLocation`), 로그 파일 출력(`/l`)은
+  미구현입니다. `/nofetch /nonormalize /allowshallow` 는 인식하지만 이 포트의 구조상
+  무효과인 정직한 no-op 입니다.
 - `GitVersionInformation` 소스 파일 생성은 원본에서도 CLI 가 아닌 MSBuild 태스크가
   담당하므로 본 CLI 포트의 범위 밖입니다.
 

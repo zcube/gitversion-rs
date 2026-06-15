@@ -2,14 +2,14 @@
 //!
 //! 원본 `GitVersion.Output/Serializer/VersionVariablesJsonModel.cs` 와 1:1 대응.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// GitVersion 이 계산해 내는 모든 출력 변수.
 ///
 /// JSON 출력 시 원본과 동일한 키 이름(PascalCase)을 사용한다.
-#[derive(Debug, Clone, Default, Serialize)]
-#[serde(rename_all = "PascalCase")]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase", default)]
 pub struct VersionVariables {
     pub major: u32,
     pub minor: u32,

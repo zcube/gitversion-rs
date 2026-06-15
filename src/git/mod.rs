@@ -56,6 +56,39 @@ impl GitRepo {
         self.repo.workdir()
     }
 
+    /// `.git` 디렉터리 경로(캐시 위치 계산용).
+    pub fn git_dir(&self) -> &Path {
+        self.repo.git_dir()
+    }
+
+    /// HEAD 의 canonical ref 이름(detached 면 short sha).
+    pub fn head_ref_name(&self) -> String {
+        match self.repo.head_name() {
+            Ok(Some(name)) => name.as_bstr().to_string(),
+            _ => self.head_commit().map(|c| c.short_sha).unwrap_or_else(|_| "HEAD".into()),
+        }
+    }
+
+    /// 모든 ref 의 "이름 target_sha" 목록(정렬). 캐시 키의 refs 스냅샷용.
+    pub fn refs_snapshot(&self) -> Result<Vec<String>> {
+        let mut out = Vec::new();
+        if let Ok(platform) = self.repo.references() {
+            if let Ok(iter) = platform.all() {
+                for reference in iter.flatten() {
+                    let name = reference.name().as_bstr().to_string();
+                    let target = reference
+                        .clone()
+                        .into_fully_peeled_id()
+                        .map(|id| id.to_string())
+                        .unwrap_or_default();
+                    out.push(format!("{name} {target}"));
+                }
+            }
+        }
+        out.sort();
+        Ok(out)
+    }
+
     fn commit_info(commit: &gix::Commit<'_>) -> Result<CommitInfo> {
         let sha = commit.id().to_string();
         let when = gix_time_to_chrono(commit.time()?);
