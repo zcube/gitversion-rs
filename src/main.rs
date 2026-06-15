@@ -64,6 +64,11 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
+    // 대화형 TUI: 설정·저장소를 넘기고 인터랙티브하게 동작(자체 재계산).
+    if args.tui {
+        return tui::run(repo, configuration, work_dir);
+    }
+
     // 캐시 키 입력: overrideconfig + 브랜치 오버라이드.
     let mut key_inputs = args.override_config.clone();
     if let Some(b) = &args.branch {
@@ -88,11 +93,6 @@ fn run() -> Result<()> {
             }
             v
         }
-    };
-
-    let branch_name = match &args.branch {
-        Some(b) => b.clone(),
-        None => repo.current_branch_name().unwrap_or_default(),
     };
 
     // 파일 출력 작업(AssemblyInfo / 프로젝트 파일 / Wix).
@@ -122,11 +122,6 @@ fn run() -> Result<()> {
         for p in &updated {
             log::info!("패키지 매니페스트 갱신: {}", p.display());
         }
-    }
-
-    // TUI 모드.
-    if args.tui {
-        return tui::run(variables, branch_name);
     }
 
     // 단일 변수.

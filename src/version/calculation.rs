@@ -336,10 +336,14 @@ pub fn calculate(
     config: &GitVersionConfiguration,
     branch_override: Option<String>,
 ) -> Result<VersionVariables> {
-    let head = repo.head_commit()?;
-    let branch_name = match branch_override {
-        Some(b) => b,
-        None => repo.current_branch_name()?,
+    // branch override 가 실제 ref 면 그 브랜치 tip 을 head 로 사용(해당 브랜치 기준
+    // 재계산). 아니면 현재 HEAD.
+    let (head, branch_name) = match &branch_override {
+        Some(b) => {
+            let head = repo.commit_info_of(b).map(Ok).unwrap_or_else(|| repo.head_commit())?;
+            (head, b.clone())
+        }
+        None => (repo.head_commit()?, repo.current_branch_name()?),
     };
     let mut eff = EffectiveConfiguration::resolve(config, &branch_name);
     let ignore = IgnoreSet::from_config(config);
@@ -494,7 +498,7 @@ fn mainline_calculate(
         if ignore.is_ignored(&tag.target_sha, &tag.when) {
             continue;
         }
-        if !repo.is_ancestor_of_head(&tag.target_sha).unwrap_or(false) {
+        if !repo.is_ancestor_of(&tag.target_sha, &head.sha).unwrap_or(false) {
             continue;
         }
         if let Some(v) = parse_version(&tag.name, eff) {
@@ -567,7 +571,7 @@ fn gather_tagged(
         if ignore.is_ignored(&tag.target_sha, &tag.when) {
             continue;
         }
-        if !repo.is_ancestor_of_head(&tag.target_sha).unwrap_or(false) {
+        if !repo.is_ancestor_of(&tag.target_sha, &head.sha).unwrap_or(false) {
             continue;
         }
         let Some(version) = parse_version(&tag.name, &eff) else { continue };

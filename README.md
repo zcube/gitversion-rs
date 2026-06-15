@@ -8,7 +8,10 @@
 - **순수 Rust git 접근**: [`gix`](https://github.com/GitoxideLabs/gitoxide) (gitoxide) 사용 — libgit2 등 C 의존성 없음
 - **CLI**: [`clap`](https://docs.rs/clap)
 - **로깅**: [`env_logger`](https://docs.rs/env_logger) (`RUST_LOG` 또는 `--verbosity`/`--diag`)
-- **TUI**: [`ratatui`](https://ratatui.rs) (`--tui`)
+- **TUI**: [`ratatui`](https://ratatui.rs) (`--tui`) — 5개 탭(변수/설정/커밋/브랜치/액션).
+  변수 검색·복사, effective 설정 보기, first-parent 커밋과 버전 소스 표시, 브랜치 선택
+  재계산, 액션(태그·브랜치 생성, next-version 설정, 캐시 삭제, 동적 clone, 재계산).
+  패닉이 나도 터미널을 복구하고 우아하게 종료(catch_unwind 방어)
 - **워크플로**: GitFlow / GitHubFlow / TrunkBased(Mainline)
 - **버전 전략**: ConfiguredNextVersion, TaggedCommit, MergeMessage, VersionInBranchName,
   TrackReleaseBranches, Fallback, (Mainline 단순화)

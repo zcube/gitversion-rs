@@ -28,6 +28,7 @@ anyhow = "1"
 thiserror = "1"
 ratatui = "0.28"
 crossterm = "0.28"
+arboard = "3"
 
 [dev-dependencies]
 flate2 = "1"

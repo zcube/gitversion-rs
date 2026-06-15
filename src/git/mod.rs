@@ -226,21 +226,86 @@ impl GitRepo {
 
     /// 특정 커밋이 HEAD 에서 도달 가능한지(조상인지).
     pub fn is_ancestor_of_head(&self, sha: &str) -> Result<bool> {
-        let head = match self.repo.head_commit() {
-            Ok(c) => c.id,
-            Err(_) => return Ok(false),
+        let head = self.head_commit()?;
+        self.is_ancestor_of(sha, &head.sha)
+    }
+
+    /// `ancestor` 가 `descendant` 의 조상(또는 동일)인지.
+    pub fn is_ancestor_of(&self, ancestor: &str, descendant: &str) -> Result<bool> {
+        let (a, d) = match (self.resolve(ancestor), self.resolve(descendant)) {
+            (Some(a), Some(d)) => (a, d),
+            _ => return Ok(false),
         };
-        let target = match self.resolve(sha) {
-            Some(t) => t,
-            None => return Ok(false),
-        };
-        if head == target {
+        if a == d {
             return Ok(true);
         }
-        match self.repo.merge_base(head, target) {
-            Ok(base) => Ok(base.detach() == target),
+        match self.repo.merge_base(a, d) {
+            Ok(base) => Ok(base.detach() == a),
             Err(_) => Ok(false),
         }
+    }
+
+    /// spec(브랜치/태그/sha)을 CommitInfo 로 해석.
+    pub fn commit_info_of(&self, spec: &str) -> Option<CommitInfo> {
+        let id = self.resolve(spec)?;
+        let commit = self.repo.find_commit(id).ok()?;
+        Self::commit_info(&commit).ok()
+    }
+
+    /// 로컬 브랜치 이름 목록(shorthand).
+    pub fn local_branch_names(&self) -> Result<Vec<String>> {
+        let mut out = Vec::new();
+        let platform = self.repo.references()?;
+        for reference in platform.local_branches()?.flatten() {
+            out.push(reference.name().shorten().to_string());
+        }
+        out.sort();
+        Ok(out)
+    }
+
+    /// 지정 커밋(기본 HEAD)에 lightweight 태그 생성.
+    pub fn create_tag(&self, name: &str, target_spec: Option<&str>) -> Result<()> {
+        let target = match target_spec {
+            Some(s) => self.resolve(s).context("대상 커밋을 찾을 수 없습니다")?,
+            None => self.repo.head_commit()?.id,
+        };
+        self.repo
+            .reference(
+                format!("refs/tags/{name}"),
+                target,
+                gix::refs::transaction::PreviousValue::MustNotExist,
+                format!("gitversion: create tag {name}"),
+            )
+            .with_context(|| format!("태그 생성 실패: {name}"))?;
+        Ok(())
+    }
+
+    /// 지정 커밋(기본 HEAD)에 브랜치 ref 생성(작업 트리는 변경하지 않음).
+    pub fn create_branch(&self, name: &str, target_spec: Option<&str>) -> Result<()> {
+        let target = match target_spec {
+            Some(s) => self.resolve(s).context("대상 커밋을 찾을 수 없습니다")?,
+            None => self.repo.head_commit()?.id,
+        };
+        self.repo
+            .reference(
+                format!("refs/heads/{name}"),
+                target,
+                gix::refs::transaction::PreviousValue::MustNotExist,
+                format!("gitversion: create branch {name}"),
+            )
+            .with_context(|| format!("브랜치 생성 실패: {name}"))?;
+        Ok(())
+    }
+
+    /// 디스크 캐시 디렉터리(`<.git>/gitversion_cache`) 삭제.
+    pub fn clear_cache(&self) -> Result<usize> {
+        let dir = self.git_dir().join("gitversion_cache");
+        if !dir.exists() {
+            return Ok(0);
+        }
+        let count = std::fs::read_dir(&dir).map(|d| d.count()).unwrap_or(0);
+        std::fs::remove_dir_all(&dir).with_context(|| format!("캐시 삭제 실패: {}", dir.display()))?;
+        Ok(count)
     }
 
     /// 작업 트리의 미커밋 변경 수.
