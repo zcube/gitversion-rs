@@ -29,6 +29,10 @@
 - **동적 원격 저장소**: `--url <repo> --branch <b>` 로 원격을 clone 해 계산(`-u`/`-p` 인증,
   `-c` 커밋 지정, `--dynamicRepoLocation` 위치 지정). gix 순수 Rust clone 으로 https/file 및
   SSH(`ssh://`·scp-like `git@host:path`, 시스템 ssh 사용) 지원
+  - **자격증명 helper / OS 키링**: https 인증 시 git 의 credential helper 프로토콜을 그대로
+    사용한다. `-u`/`-p` 미지정 시 git 설정(`credential.helper`)을 호출하므로 macOS
+    Keychain(`osxkeychain`)·GCM·libsecret 등에 저장된 자격증명을 자동 사용한다(get/erase
+    전체 프로토콜). helper 에 없으면 TTY 프롬프트 가능
 
 ## 빌드
 
