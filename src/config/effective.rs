@@ -31,26 +31,48 @@ pub fn find_branch_config<'a>(
     unknown
 }
 
-/// 브랜치 정규식의 named capture 로 label placeholder 를 치환.
+/// 브랜치 정규식의 named capture, `{env:VAR}`, `?? fallback` 으로 label 을 치환.
+/// 원본 Formatting/StringFormatWithExtension.cs 의 동작을 단순화해 옮긴다.
 fn resolve_label(label: &str, regex_src: &Option<String>, branch_name: &str) -> String {
-    let mut out = label.to_string();
+    // 브랜치 정규식의 named capture 수집.
+    let mut captures: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     if let Some(src) = regex_src {
         if let Ok(re) = Regex::new(&format!("(?i){src}")) {
             if let Some(caps) = re.captures(branch_name) {
-                if let Some(m) = caps.name("BranchName") {
-                    out = out.replace("{BranchName}", m.as_str());
-                }
-                if let Some(m) = caps.name("Number") {
-                    out = out.replace("{Number}", m.as_str());
+                for name in re.capture_names().flatten() {
+                    if let Some(m) = caps.name(name) {
+                        captures.insert(name.to_string(), m.as_str().to_string());
+                    }
                 }
             }
         }
     }
-    // 미치환 placeholder 는 브랜치 마지막 세그먼트로 대체
-    if out.contains("{BranchName}") {
-        let short = branch_name.rsplit('/').next().unwrap_or(branch_name);
-        out = out.replace("{BranchName}", short);
-    }
+    // 미지정 BranchName 은 브랜치 마지막 세그먼트로.
+    captures
+        .entry("BranchName".into())
+        .or_insert_with(|| branch_name.rsplit('/').next().unwrap_or(branch_name).to_string());
+
+    let token_re = Regex::new(r"\{([^}]+)\}").unwrap();
+    let out = token_re
+        .replace_all(label, |c: &regex::Captures| {
+            let inner = c[1].trim();
+            // `?? "fallback"` 분리.
+            let (expr, fallback) = match inner.split_once("??") {
+                Some((l, r)) => (l.trim(), Some(r.trim().trim_matches('"').to_string())),
+                None => (inner, None),
+            };
+            // `:format` 지정자 분리(이름만 사용).
+            let name = expr.split(':').next().unwrap_or(expr).trim();
+            let resolved = if let Some(var) = expr.strip_prefix("env:") {
+                let var = var.split("??").next().unwrap_or(var).trim();
+                std::env::var(var).ok().filter(|v| !v.is_empty())
+            } else {
+                captures.get(name).cloned().filter(|v| !v.is_empty())
+            };
+            resolved.or(fallback).unwrap_or_default()
+        })
+        .into_owned();
+
     // 파일시스템 안전: '/' -> '-'
     out.replace('/', "-")
 }

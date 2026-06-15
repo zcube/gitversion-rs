@@ -215,6 +215,12 @@ git -C "$CUR" config merge.ff false
 tagcommit v1.0.0; branch feature/login; commit f1
 checkout main; merge feature/login "Merge pull request #42 from org/feature/login"; record
 
+# support 브랜치 병합은 release 가 아니므로 버전 무시(merge 게이팅 검증)
+newrepo merge_support_ignored main
+git -C "$CUR" config merge.ff false
+tagcommit v1.0.0; branch support/2.0; commit s1
+checkout main; merge support/2.0 "Merge remote-tracking branch 'support/2.0'"; record
+
 # 31~33. Mainline 전략(per-commit 누적)
 MAINLINE_CFG='strategies:
 - Mainline

@@ -121,9 +121,13 @@ GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
 `tag-pre-release-weight`, `prevent-increment.*`, `track-merge-message`,
 `ignore`(sha·commits-before), `commit-date-format`, `semantic-version-format`,
 `assembly-versioning-scheme`/`-format`, `assembly-file-versioning-scheme`/`-format`,
-`assembly-informational-format`, `merge-message-formats`.
+`assembly-informational-format`, `merge-message-formats`, `is-source-branch-for`.
 
-`Inherit` 증분은 git 조상을 추적해 실제로 분기한 source 브랜치의 증분을 상속합니다.
+- `Inherit` 증분은 git 조상을 추적해 실제로 분기한 source 브랜치의 증분을 상속합니다.
+- merge 메시지는 8종 내장 포맷(Default/SmartGit/BitBucket/GitHub/AzureDevOps/RemoteTracking 등)과
+  사용자 정의 포맷을 인식하며, 병합된 브랜치가 release 브랜치일 때만 버전을 사용합니다.
+- 라벨은 정규식 named capture 외에 `{env:VAR}` 환경변수와 `{X ?? "기본값"}` 폴백을 지원합니다.
+- `is-source-branch-for` 는 대상 브랜치의 `source-branches` 로 역매핑됩니다.
 
 ## 알려진 단순화 / 미구현
 

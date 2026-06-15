@@ -53,7 +53,28 @@ pub fn load(
 
     let mut base = defaults::for_workflow(overrides.workflow.as_deref());
     merge(&mut base, overrides);
+    apply_source_branch_mappings(&mut base);
     Ok(base)
+}
+
+/// `is-source-branch-for` 역매핑: 브랜치 A 가 `is-source-branch-for: [X]` 를 가지면
+/// 대상 X 의 `source-branches` 에 A 를 추가한다(원본 ApplySourceBranchesSourceBranch).
+pub fn apply_source_branch_mappings(config: &mut GitVersionConfiguration) {
+    let mappings: Vec<(String, Vec<String>)> = config
+        .branches
+        .iter()
+        .filter(|(_, b)| !b.is_source_branch_for.is_empty())
+        .map(|(k, b)| (k.clone(), b.is_source_branch_for.clone()))
+        .collect();
+    for (source, targets) in mappings {
+        for target in targets {
+            if let Some(tb) = config.branches.get_mut(&target) {
+                if !tb.source_branches.contains(&source) {
+                    tb.source_branches.push(source.clone());
+                }
+            }
+        }
+    }
 }
 
 /// override 설정을 base 위에 덮어쓴다(Some/비어있지 않은 값만).

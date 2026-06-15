@@ -268,42 +268,66 @@ fn resolve_inherit_via_git(
     Ok(best.map(|(_, inc)| inc))
 }
 
-/// merge 커밋 메시지에서 버전 추출. 빌트인 규칙(메시지에 "merge" 포함)과
-/// 사용자 정의 `merge-message-formats`(이름→정규식)를 모두 시도한다.
-fn extract_merge_version(
+/// 내장 merge 메시지 포맷(원본 MergeMessage.cs). 각 포맷은 SourceBranch 를 추출하며,
+/// 거기서 version-in-branch 패턴으로 버전을 얻는다.
+const BUILTIN_MERGE_FORMATS: &[&str] = &[
+    // Default
+    r"^Merge (branch|tag) '(?<SourceBranch>[^']*)'(?: into (?<TargetBranch>[^\s]*))*",
+    // SmartGit
+    r"^Finish (?<SourceBranch>[^\s]*)(?: into (?<TargetBranch>[^\s]*))*",
+    // BitBucketPull
+    r"^Merge pull request #(?<PullRequestNumber>\d+) (from|in) (?<Source>.*) from (?<SourceBranch>[^\s]*) to (?<TargetBranch>[^\s]*)",
+    // BitBucketCloudPull
+    r"^Merged in (?<SourceBranch>[^\s]*) \(pull request #(?<PullRequestNumber>\d+)\)",
+    // GitHubPull
+    r"^Merge pull request #(?<PullRequestNumber>\d+) (from|in) (?:[^\s/]+/)?(?<SourceBranch>[^\s]*)(?: into (?<TargetBranch>[^\s]*))*",
+    // RemoteTracking
+    r"^Merge remote-tracking branch '(?<SourceBranch>[^\s]*)'(?: into (?<TargetBranch>[^\s]*))*",
+    // AzureDevOpsPull
+    r"^Merge pull request (?<PullRequestNumber>\d+) from (?<SourceBranch>[^\s]*) into (?<TargetBranch>[^\s]*)",
+];
+
+/// merge 메시지를 파싱해 (병합된 브랜치명, 추출된 버전)을 반환. 사용자 정의
+/// `merge-message-formats` 와 8종 내장 포맷을 시도한다.
+fn parse_merge_message(
     message: &str,
     eff: &EffectiveConfiguration,
-    builtin_version_pattern: &str,
-) -> Option<SemanticVersion> {
-    // 1) 사용자 정의 포맷 우선.
-    for pattern in eff.merge_message_formats.values() {
-        let Ok(re) = Regex::new(&format!("(?i){pattern}")) else { continue };
-        if let Some(caps) = re.captures(message) {
-            // SourceBranch 그룹이 있으면 그 안에서 version-in-branch 패턴으로 추출.
-            if let Some(sb) = caps.name("SourceBranch") {
-                if let Some(v) =
-                    extract_version(sb.as_str(), &eff.version_in_branch_pattern, &eff.tag_prefix)
-                {
-                    return Some(v);
-                }
-            }
-            // 직접 Version 그룹.
-            if let Some(ver) = caps.name("Version") {
-                if let Some(v) = SemanticVersion::parse(ver.as_str(), &eff.tag_prefix) {
-                    return Some(v);
-                }
-            }
-            // 매치 전체에서 버전 토큰.
-            if let Some(v) = extract_version(message, builtin_version_pattern, &eff.tag_prefix) {
-                return Some(v);
-            }
+) -> Option<(String, SemanticVersion)> {
+    let from_branch = |sb: &str| -> Option<SemanticVersion> {
+        SemanticVersion::parse(sb, &eff.tag_prefix)
+            .or_else(|| extract_version(sb, &eff.version_in_branch_pattern, &eff.tag_prefix))
+    };
+
+    // 사용자 정의 포맷 우선, 이어서 8종 내장 포맷.
+    let custom = eff.merge_message_formats.values().map(|s| s.as_str());
+    for pattern in custom.chain(BUILTIN_MERGE_FORMATS.iter().copied()) {
+        let Ok(re) = Regex::new(&format!("(?s){pattern}")) else { continue };
+        let Some(caps) = re.captures(message) else { continue };
+        let Some(sb) = caps.name("SourceBranch") else { continue };
+        let branch = sb.as_str().to_string();
+        if let Some(v) = caps.name("Version").and_then(|m| SemanticVersion::parse(m.as_str(), &eff.tag_prefix)) {
+            return Some((branch, v));
         }
-    }
-    // 2) 빌트인: 메시지에 "merge" 가 포함된 경우.
-    if message.to_lowercase().contains("merge") {
-        return extract_version(message, builtin_version_pattern, &eff.tag_prefix);
+        if let Some(v) = from_branch(&branch) {
+            return Some((branch, v));
+        }
+        return None; // 포맷은 맞지만 버전 없음.
     }
     None
+}
+
+/// 브랜치명이 release 브랜치 설정(is-release-branch)에 매칭되는지.
+fn is_release_branch(config: &GitVersionConfiguration, branch_name: &str) -> bool {
+    let short = branch_name.rsplit('/').next().unwrap_or(branch_name);
+    config.branches.values().any(|bc| {
+        bc.is_release_branch == Some(true)
+            && bc
+                .regex
+                .as_ref()
+                .and_then(|r| Regex::new(&format!("(?i){r}")).ok())
+                .map(|re| re.is_match(branch_name) || re.is_match(short))
+                .unwrap_or(false)
+    })
 }
 
 /// 전체 계산 진입점. 최종 출력 변수를 만든다.
@@ -380,7 +404,7 @@ pub fn calculate(
             VersionStrategy::MergeMessage => {
                 // track-merge-message 가 false 면 merge 메시지를 버전으로 해석하지 않음.
                 if eff.track_merge_message {
-                    gather_merge_messages(repo, &eff, &head, &ignore, &mut candidates)?;
+                    gather_merge_messages(repo, config, &eff, &head, &ignore, &mut candidates)?;
                 }
             }
             VersionStrategy::TrackReleaseBranches => {
@@ -559,48 +583,38 @@ fn gather_tagged(
 }
 
 /// merge 커밋 메시지에서 버전을 추출.
+///
+/// 원본 MergeMessageVersionStrategy 와 동일하게, 병합된 브랜치가 release 브랜치인
+/// 경우에만 그 버전을 사용한다.
 fn gather_merge_messages(
     repo: &GitRepo,
+    config: &GitVersionConfiguration,
     eff: &EffectiveConfiguration,
     head: &CommitInfo,
     ignore: &IgnoreSet,
     out: &mut Vec<BaseVersion>,
 ) -> Result<()> {
-    let pattern = r"(?<version>\d+\.\d+(\.\d+)?)";
     for c in ignore.filter(repo.commits_between(None, &head.sha)?) {
-        if c.parent_count < 2 {
+        let Some((merged_branch, v)) = parse_merge_message(&c.message, eff) else { continue };
+        // 병합된 브랜치가 release 브랜치가 아니면 버전을 사용하지 않는다.
+        if !is_release_branch(config, &merged_branch) {
             continue;
         }
-        // 빌트인(메시지에 "merge" 포함) 또는 사용자 정의 merge-message-formats 로
-        // 버전 추출 시도.
-        let version = extract_merge_version(&c.message, eff, pattern);
-        if let Some(v) = version {
-            // merge 커밋의 base source 는 두 부모의 merge-base(원본
-            // MergeMessageVersionStrategy). 그래야 병합으로 들어온 커밋들이
-            // 버전 소스 이후 커밋 수에 정확히 반영된다.
-            let base_src = if c.parents.len() >= 2 {
-                repo.merge_base(&c.parents[0], &c.parents[1])?.unwrap_or_else(|| c.sha.clone())
-            } else {
-                c.sha.clone()
-            };
-            // prevent-increment: of-merged-branch 또는 when-branch-merged.
-            let field = if eff.prevent_increment_of_merged_branch
-                || eff.prevent_increment_when_branch_merged
-            {
-                VersionField::None
-            } else {
-                determine_increment(repo, Some(&base_src), &head.sha, false, eff, ignore)?
-            };
-            let mut bv = BaseVersion::new(
-                "merge 메시지",
-                v,
-                Some(base_src),
-                field,
-                Some(eff.label.clone()),
-            );
-            bv.source_when = Some(c.when);
-            out.push(bv);
-        }
+        // merge 커밋의 base source 는 두 부모의 merge-base. 그래야 병합으로 들어온
+        // 커밋들이 버전 소스 이후 커밋 수에 정확히 반영된다.
+        let base_src = if c.parents.len() >= 2 {
+            repo.merge_base(&c.parents[0], &c.parents[1])?.unwrap_or_else(|| c.sha.clone())
+        } else {
+            c.sha.clone()
+        };
+        let field = if eff.prevent_increment_of_merged_branch {
+            VersionField::None
+        } else {
+            determine_increment(repo, Some(&base_src), &head.sha, true, eff, ignore)?
+        };
+        let mut bv = BaseVersion::new("merge 메시지", v, Some(base_src), field, Some(eff.label.clone()));
+        bv.source_when = Some(c.when);
+        out.push(bv);
     }
     Ok(())
 }
