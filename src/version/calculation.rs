@@ -5,9 +5,9 @@
 //! 처리하며, Mainline 은 단순화된 형태로 구현한다.
 
 use crate::config::{
-    effective::EffectiveConfiguration, CommitMessageIncrementMode, DeploymentMode,
-    GitVersionConfiguration, IncrementStrategy, SemanticVersionFormat, VersionStrategy,
-    VersioningScheme,
+    effective::EffectiveConfiguration, CommitMessageConvention, CommitMessageIncrementMode,
+    DeploymentMode, GitVersionConfiguration, IncrementStrategy, SemanticVersionFormat,
+    VersionStrategy, VersioningScheme,
 };
 use crate::git::{CommitInfo, GitRepo};
 use crate::output::variables::VersionVariables;
@@ -141,8 +141,36 @@ fn strategy_to_field(s: IncrementStrategy) -> VersionField {
     }
 }
 
+/// Conventional Commits 규약에서 증분 필드 추출.
+///
+/// - `feat!:` / `fix(scope)!:` 또는 `BREAKING CHANGE:` 푸터 → Major
+/// - `feat:` → Minor
+/// - `fix:` / `perf:` / `revert:` → Patch
+/// - 그 외 type(docs/chore/...) 또는 비규약 메시지 → None(폴백)
+fn conventional_increment(msg: &str) -> Option<VersionField> {
+    let first = msg.lines().next().unwrap_or("");
+    let header = Regex::new(r"^\s*(?P<type>[a-zA-Z]+)(\([^)]*\))?(?P<bang>!)?:").ok()?;
+    let caps = header.captures(first)?;
+    let breaking = caps.name("bang").is_some()
+        || Regex::new(r"(?m)^BREAKING[ -]CHANGE:").map(|r| r.is_match(msg)).unwrap_or(false);
+    if breaking {
+        return Some(VersionField::Major);
+    }
+    match caps.name("type")?.as_str().to_ascii_lowercase().as_str() {
+        "feat" => Some(VersionField::Minor),
+        "fix" | "perf" | "revert" => Some(VersionField::Patch),
+        _ => None,
+    }
+}
+
 /// 단일 커밋 메시지에서 bump 필드 추출. 매칭 없으면 None.
 fn increment_from_message(msg: &str, eff: &EffectiveConfiguration) -> Option<VersionField> {
+    // Conventional Commits 모드: 규약을 우선 인식하고, 없으면 +semver 로 폴백.
+    if eff.commit_message_convention == CommitMessageConvention::ConventionalCommits {
+        if let Some(f) = conventional_increment(msg) {
+            return Some(f);
+        }
+    }
     let test = |pat: &str| Regex::new(&format!("(?im){pat}")).map(|r| r.is_match(msg)).unwrap_or(false);
     if test(&eff.major_bump_message) {
         Some(VersionField::Major)
@@ -863,5 +891,39 @@ fn assembly_version(sv: &SemanticVersion, scheme: VersioningScheme) -> String {
             format!("{}.{}.{}.{}", sv.major, sv.minor, sv.patch, pre)
         }
         VersioningScheme::None => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::conventional_increment;
+    use crate::version::VersionField;
+
+    #[test]
+    fn conventional_types() {
+        let f = |m: &str| conventional_increment(m);
+        assert_eq!(f("feat: add x"), Some(VersionField::Minor));
+        assert_eq!(f("feat(api): add x"), Some(VersionField::Minor));
+        assert_eq!(f("fix: bug"), Some(VersionField::Patch));
+        assert_eq!(f("perf: faster"), Some(VersionField::Patch));
+        assert_eq!(f("revert: x"), Some(VersionField::Patch));
+        // 비-릴리스 타입 → None(폴백).
+        assert_eq!(f("docs: readme"), None);
+        assert_eq!(f("chore: deps"), None);
+        assert_eq!(f("refactor: y"), None);
+        // 비규약 메시지 → None.
+        assert_eq!(f("random message"), None);
+        assert_eq!(f("+semver: major"), None);
+    }
+
+    #[test]
+    fn conventional_breaking() {
+        let f = |m: &str| conventional_increment(m);
+        assert_eq!(f("feat!: drop x"), Some(VersionField::Major));
+        assert_eq!(f("fix(core)!: change"), Some(VersionField::Major));
+        assert_eq!(f("feat: x\n\nBREAKING CHANGE: removed"), Some(VersionField::Major));
+        assert_eq!(f("feat: x\n\nBREAKING-CHANGE: removed"), Some(VersionField::Major));
+        // BREAKING 푸터지만 헤더가 비규약이면 인식 안 함.
+        assert_eq!(f("random\n\nBREAKING CHANGE: x"), None);
     }
 }

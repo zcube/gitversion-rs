@@ -15,6 +15,9 @@
 - **워크플로**: GitFlow / GitHubFlow / TrunkBased(Mainline)
 - **버전 전략**: ConfiguredNextVersion, TaggedCommit, MergeMessage, VersionInBranchName,
   TrackReleaseBranches, Fallback, (Mainline 단순화)
+- **증분 규약**: GitVersion `+semver:` 방식과 **Conventional Commits**(`feat`→minor,
+  `fix`/`perf`→patch, `feat!`·`BREAKING CHANGE:`→major)를 선택
+  (`commit-message-convention: ConventionalCommits`). semantic-release 검토에서 차용
 - **배포 모드**: ManualDeployment / ContinuousDelivery / ContinuousDeployment
 - **출력**: JSON, dot-env, build-server, 단일 변수(`-v`), 포맷 문자열(`--format`)
 - **빌드에이전트 통합**: TeamCity, Azure Pipelines, GitHub Actions, GitLab CI, Jenkins,
@@ -64,6 +67,7 @@ gitversion --output build-server
 # 설정/오버라이드
 gitversion --config GitVersion.yml
 gitversion --overrideconfig next-version=2.0.0
+gitversion --overrideconfig commit-message-convention=ConventionalCommits
 gitversion --showconfig
 
 # 대화형 TUI
