@@ -6,6 +6,7 @@
 // 않는 헬퍼(예: tags_on_commit, format_short)도 의도적으로 포함한다.
 #![allow(dead_code)]
 
+pub mod buildagent;
 pub mod cli;
 pub mod config;
 pub mod git;

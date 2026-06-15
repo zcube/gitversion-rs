@@ -186,7 +186,9 @@ impl GitRepo {
 
     /// 작업 트리의 미커밋 변경 수.
     pub fn uncommitted_changes(&self) -> Result<i64> {
-        // gix status 플랫폼으로 index-vs-worktree 변경을 센다.
+        // 원본 GitVersion 은 HEAD 트리와 (index + working dir) 의 차이를 세며,
+        // 여기에는 untracked(추가된) 파일도 포함된다. gix 의 index-worktree 상태는
+        // untracked + 수정된 추적 파일을 모두 포함하므로 그 개수를 센다.
         let status = match self.repo.status(gix::progress::Discard) {
             Ok(s) => s,
             Err(_) => return Ok(0),
@@ -195,13 +197,7 @@ impl GitRepo {
             Ok(it) => it,
             Err(_) => return Ok(0),
         };
-        let mut count: i64 = 0;
-        for item in iter {
-            if item.is_ok() {
-                count += 1;
-            }
-        }
-        Ok(count)
+        Ok(iter.flatten().count() as i64)
     }
 
     /// 특정 커밋에 직접 붙은 태그들의 이름.

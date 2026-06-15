@@ -13,7 +13,10 @@
 - **버전 전략**: ConfiguredNextVersion, TaggedCommit, MergeMessage, VersionInBranchName,
   TrackReleaseBranches, Fallback, (Mainline 단순화)
 - **배포 모드**: ManualDeployment / ContinuousDelivery / ContinuousDeployment
-- **출력**: JSON, dot-env, build-server env, 단일 변수(`-v`), 포맷 문자열(`--format`)
+- **출력**: JSON, dot-env, build-server, 단일 변수(`-v`), 포맷 문자열(`--format`)
+- **빌드에이전트 통합**: TeamCity, Azure Pipelines, GitHub Actions, GitLab CI, Jenkins,
+  AppVeyor, TravisCI, Drone, CodeBuild, ContinuaCI, EnvRun, MyGet, BitBucket, BuildKite,
+  SpaceAutomation — 환경변수로 감지해 각 CI 형식으로 출력(`--output build-server`)
 
 ## 빌드
 
@@ -96,7 +99,7 @@ GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
   golden 기대값(`expected.json`)을 기록한 뒤 `testdata/fixtures.tar.gz` 로 압축.
 - `tests/fixtures.rs`: 압축을 임시 디렉터리로 풀어 우리 엔진 출력을 golden 값과
   필드 단위로 비교. 테스트 시점에는 git/gitversion 이 불필요(재현 가능).
-- 현재 **27개 시나리오 × 21개 출력 필드**가 실제 GitVersion 6.7.0 과 일치
+- 현재 **27개 시나리오 × 22개 출력 필드**가 실제 GitVersion 6.7.0 과 일치
   (main/develop/release/feature/hotfix/support, +semver 메시지, GitHubFlow,
   next-version, custom tag-prefix, pre-release 태그, 다중 태그, ignore.sha,
   custom commit-date-format, semantic-version-format Strict/Loose,
@@ -119,6 +122,10 @@ GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
 ## 알려진 단순화 / 미구현
 
 - Mainline 전략은 TaggedCommit 기반의 단순화된 형태입니다(워크플로 `TrunkBased` 미지원).
-- `update-build-number`, `track-merge-target` 은 파싱되지만 버전 계산 출력에 영향이
-  없습니다(빌드에이전트 build number 갱신 / 이미 TaggedCommit 으로 포괄).
-- AssemblyInfo/프로젝트 파일 쓰기, 동적(원격) 저장소 clone, 캐싱, 빌드에이전트별 통합은 미구현입니다.
+- `update-build-number`: `--output build-server` 시 빌드에이전트의 build number 설정
+  출력을 제어합니다(false 면 생략). 계산되는 버전 변수에는 영향이 없습니다(원본과 동일).
+- `track-merge-target`: 원본에서 `MainlineVersionStrategy` 와
+  `GetTaggedSemanticVersion()`(태그 후보에 *merge target* 태그를 추가) 에서만 소비되는
+  플래그입니다. 본 포트는 이미 HEAD 에서 도달 가능한 모든 태그를 후보로 보므로 도달
+  가능한 merge-target 태그는 포괄되며, 도달 불가한 경우(주로 Mainline)는 미반영입니다.
+- AssemblyInfo/프로젝트 파일 쓰기, 동적(원격) 저장소 clone, 캐싱은 미구현입니다.

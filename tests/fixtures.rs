@@ -35,8 +35,11 @@ const COMPARED_KEYS: &[&str] = &[
     "InformationalVersion",
     "WeightedPreReleaseNumber",
     "VersionSourceDistance",
+    "VersionSourceIncrement",
     "Sha",
     "ShortSha",
+    // 주의: UncommittedChanges 는 작업트리의 untracked/수정 파일에 의존하는
+    // 비결정적 값이라 고정 fixture 로 단언하지 않는다(구현은 별도 검증됨).
 ];
 
 /// 압축된 fixture 를 유니크한 임시 디렉터리로 푼다.

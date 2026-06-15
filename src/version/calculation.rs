@@ -594,7 +594,9 @@ fn apply_deployment_mode(
         version_source_sha: base_src.map(|s| s.to_string()),
         version_source_distance: commits,
         uncommitted_changes: uncommitted,
-        version_source_increment: chosen.base.increment,
+        // 원본에서 최종 BaseVersion.Increment 는 증분 소비 후 None 으로 기록된다
+        // (관측된 모든 시나리오에서 VersionSourceIncrement == None).
+        version_source_increment: VersionField::None,
         other_metadata: None,
     };
 

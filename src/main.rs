@@ -7,7 +7,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use gitversion::{cli, config, git, output, tui, version};
+use gitversion::{buildagent, cli, config, git, output, tui, version};
 use cli::{Cli, OutputFormat};
 use std::io::Write;
 use std::path::PathBuf;
@@ -87,7 +87,18 @@ fn run() -> Result<()> {
             OutputFormat::Json => rendered.push_str(&output::generator::to_json(&variables)?),
             OutputFormat::DotEnv => rendered.push_str(&output::generator::to_dotenv(&variables)),
             OutputFormat::BuildServer => {
-                rendered.push_str(&output::generator::to_buildserver_env(&variables))
+                let update_build_number = configuration.update_build_number.unwrap_or(true);
+                match buildagent::detect() {
+                    Some(agent) => {
+                        log::info!("감지된 빌드에이전트: {}", agent.name());
+                        let lines = agent.write_integration(&variables, update_build_number);
+                        rendered.push_str(&lines.join("\n"));
+                    }
+                    None => {
+                        // 에이전트 미감지 시 GitVersion_K=V 형식으로 출력.
+                        rendered.push_str(&output::generator::to_buildserver_env(&variables));
+                    }
+                }
             }
         }
     }
