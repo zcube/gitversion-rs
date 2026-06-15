@@ -199,6 +199,22 @@ tagcommit v1.0.0; branch feature/foo; commit f1; record
 newrepo stable_weighted main
 commit a; tagcommit v3.0.0; record
 
+# 31. 빌드에이전트 golden: 동일 저장소에 대해 각 CI 의 실제 출력을 저장.
+newrepo buildagent_repo main
+tagcommit v1.0.0; commit b
+record   # expected.json (일반 JSON)
+git -C "$CUR" remote add origin https://example.com/r.git
+gen_agent(){ # $1=AgentName  $2=env assignments  $3=grep filter
+  env $2 "$GV" "$CUR" /nocache /nonormalize /output buildserver 2>/dev/null \
+    | grep -E "$3" > "$CUR/agent_$1.txt" || true
+  printf '  buildagent/%-16s -> %s줄\n' "$1" "$(wc -l < "$CUR/agent_$1.txt" | tr -d ' ')"
+}
+gen_agent TeamCity       "TEAMCITY_VERSION=2020 Git_Branch=main" '^##teamcity|^Set '
+gen_agent AzurePipelines "TF_BUILD=True"                          '^##vso|^Set '
+gen_agent ContinuaCi     "ContinuaCI.Version=1"                   '^@@continua|^Set '
+gen_agent MyGet          "BuildRunner=MyGet"                      '^##myget|^Set '
+gen_agent Drone          "DRONE=true"                             '^GitVersion_|^Set '
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"

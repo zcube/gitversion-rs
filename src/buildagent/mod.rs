@@ -334,6 +334,29 @@ impl BuildAgent for AppVeyor {
     }
 }
 
+/// 에이전트 이름(GetType().Name)으로 인스턴스 생성. 테스트/명시 선택용.
+pub fn by_name(name: &str) -> Option<Box<dyn BuildAgent>> {
+    let agent: Box<dyn BuildAgent> = match name {
+        "TeamCity" => Box::new(TeamCity),
+        "MyGet" => Box::new(MyGet),
+        "AzurePipelines" => Box::new(AzurePipelines),
+        "ContinuaCi" => Box::new(ContinuaCi),
+        "EnvRun" => Box::new(EnvRun),
+        "TravisCI" => Box::new(TravisCi),
+        "Drone" => Box::new(Drone),
+        "GitLabCi" => Box::new(GitLabCi),
+        "Jenkins" => Box::new(Jenkins),
+        "CodeBuild" => Box::new(CodeBuild),
+        "BitBucketPipelines" => Box::new(BitBucketPipelines),
+        "GitHubActions" => Box::new(GitHubActions),
+        "BuildKite" => Box::new(BuildKite),
+        "SpaceAutomation" => Box::new(SpaceAutomation),
+        "AppVeyor" => Box::new(AppVeyor),
+        _ => return None,
+    };
+    Some(agent)
+}
+
 /// 환경변수로 현재 빌드에이전트 감지. 원본 등록 순서와 유사.
 pub fn detect() -> Option<Box<dyn BuildAgent>> {
     let has = |k: &str| env::var(k).map(|v| !v.is_empty()).unwrap_or(false);
