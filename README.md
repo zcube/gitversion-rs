@@ -128,6 +128,8 @@ GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
   사용자 정의 포맷을 인식하며, 병합된 브랜치가 release 브랜치일 때만 버전을 사용합니다.
 - 라벨은 정규식 named capture 외에 `{env:VAR}` 환경변수와 `{X ?? "기본값"}` 폴백을 지원합니다.
 - `is-source-branch-for` 는 대상 브랜치의 `source-branches` 로 역매핑됩니다.
+- 설정 검증: 각 브랜치에 `regex` 필수, `source-branches` 는 설정된 브랜치만 참조 가능
+  (원본과 동일한 메시지로 에러).
 
 ## 알려진 단순화 / 미구현
 

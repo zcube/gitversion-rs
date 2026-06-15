@@ -54,7 +54,37 @@ pub fn load(
     let mut base = defaults::for_workflow(overrides.workflow.as_deref());
     merge(&mut base, overrides);
     apply_source_branch_mappings(&mut base);
+    validate(&base).with_context(|| format!("설정 검증 실패: {}", path.display()))?;
     Ok(base)
+}
+
+/// 설정 검증(원본 ConfigurationBuilderBase.ValidateConfiguration).
+///
+/// 각 브랜치는 `regex` 가 있어야 하고, `source-branches` 는 설정된 브랜치만 참조해야
+/// 한다. 위반 시 에러(원본은 ConfigurationException 으로 중단).
+pub fn validate(config: &GitVersionConfiguration) -> Result<()> {
+    const HELP: &str =
+        "\nSee https://gitversion.net/docs/reference/configuration for more info";
+    for (name, bc) in &config.branches {
+        if bc.regex.is_none() {
+            anyhow::bail!(
+                "Branch configuration '{name}' is missing required configuration 'regex'{HELP}"
+            );
+        }
+        let missing: Vec<&str> = bc
+            .source_branches
+            .iter()
+            .filter(|sb| !config.branches.contains_key(*sb))
+            .map(|s| s.as_str())
+            .collect();
+        if !missing.is_empty() {
+            anyhow::bail!(
+                "Branch configuration '{name}' defines these 'source-branches' that are not configured: '[{}]'{HELP}",
+                missing.join(",")
+            );
+        }
+    }
+    Ok(())
 }
 
 /// `is-source-branch-for` 역매핑: 브랜치 A 가 `is-source-branch-for: [X]` 를 가지면
@@ -136,6 +166,47 @@ pub fn merge(base: &mut GitVersionConfiguration, over: GitVersionConfiguration) 
     for (key, ob) in over.branches {
         let entry = base.branches.entry(key).or_default();
         merge_branch(entry, ob);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config_from(yaml: &str) -> GitVersionConfiguration {
+        let over: GitVersionConfiguration = serde_yaml::from_str(yaml).unwrap();
+        let mut base = defaults::for_workflow(over.workflow.as_deref());
+        merge(&mut base, over);
+        apply_source_branch_mappings(&mut base);
+        base
+    }
+
+    #[test]
+    fn validate_rejects_missing_regex() {
+        let c = config_from("branches:\n  custom:\n    label: x\n");
+        let err = validate(&c).unwrap_err().to_string();
+        assert!(err.contains("'custom'") && err.contains("'regex'"), "{err}");
+    }
+
+    #[test]
+    fn validate_rejects_unknown_source_branch() {
+        let c = config_from("branches:\n  custom:\n    regex: '^c$'\n    source-branches: [nope]\n");
+        let err = validate(&c).unwrap_err().to_string();
+        assert!(err.contains("not configured") && err.contains("nope"), "{err}");
+    }
+
+    #[test]
+    fn validate_accepts_defaults_and_valid_custom() {
+        assert!(validate(&defaults::gitflow()).is_ok());
+        assert!(validate(&defaults::githubflow()).is_ok());
+        let c = config_from("branches:\n  custom:\n    regex: '^c$'\n    source-branches: [main]\n");
+        assert!(validate(&c).is_ok());
+    }
+
+    #[test]
+    fn source_branch_reverse_mapping() {
+        let c = config_from("branches:\n  myfeat:\n    regex: '^myfeat$'\n    is-source-branch-for: [main]\n");
+        assert!(c.branches["main"].source_branches.contains(&"myfeat".to_string()));
     }
 }
 
