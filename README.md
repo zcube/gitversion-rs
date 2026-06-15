@@ -133,4 +133,22 @@ GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
   `GetTaggedSemanticVersion()`(태그 후보에 *merge target* 태그를 추가) 에서만 소비되는
   플래그입니다. 본 포트는 이미 HEAD 에서 도달 가능한 모든 태그를 후보로 보므로 도달
   가능한 merge-target 태그는 포괄되며, 도달 불가한 경우(주로 Mainline)는 미반영입니다.
-- 동적(원격) 저장소 clone, 결과 캐싱은 미구현입니다.
+- 동적(원격) 저장소 clone(`/url /u /p /c /dynamicRepoLocation`), 결과 캐싱, 로그 파일
+  출력(`/l`)은 미구현입니다. `/nofetch /nonormalize /nocache /allowshallow` 는 인식하지만
+  이 포트의 구조상 무효과인 정직한 no-op 입니다.
+- `GitVersionInformation` 소스 파일 생성은 원본에서도 CLI 가 아닌 MSBuild 태스크가
+  담당하므로 본 CLI 포트의 범위 밖입니다.
+
+## 원본 대비 커버리지 요약
+
+| 영역 | 상태 |
+|---|---|
+| CLI 옵션 27종 | 핵심 18종 구현 + no-op 4종 + 원격/로그 5종 미구현 |
+| 설정(config schema) | 전 필드 파싱, 대부분 동작 반영(위 "설정 반영 현황") |
+| 버전 전략 | ConfiguredNextVersion·TaggedCommit·MergeMessage·VersionInBranchName·TrackReleaseBranches·Fallback·Mainline 구현 |
+| 배포 모드 | Manual / ContinuousDelivery / ContinuousDeployment 구현 |
+| 출력 | JSON·dot-env·build-server(에이전트 15종)·showvariable·format·파일(AssemblyInfo/proj/Wix) |
+| 워크플로 | GitFlow·GitHubFlow 구현, TrunkBased 는 strategies+mode 로 대체 |
+
+검증은 실제 GitVersion 6.7.0 바이너리와의 차등 테스트(31 시나리오 × 22 필드, 빌드에이전트
+5종, 파일 출력)로 보장됩니다.

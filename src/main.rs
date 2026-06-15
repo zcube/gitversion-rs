@@ -30,12 +30,14 @@ fn run() -> Result<()> {
         .format_timestamp(None)
         .init();
 
-    log::debug!("대상 경로: {}", args.path.display());
+    // /targetpath 가 주어지면 위치 인자 대신 사용.
+    let target = args.target_path.clone().unwrap_or_else(|| args.path.clone());
+    log::debug!("대상 경로: {}", target.display());
 
     // 저장소 오픈.
-    let repo = git::GitRepo::discover(&args.path)
+    let repo = git::GitRepo::discover(&target)
         .context("git 저장소를 열 수 없습니다 (먼저 'git init' 후 커밋이 필요합니다)")?;
-    let work_dir = args.path.canonicalize().unwrap_or_else(|_| args.path.clone());
+    let work_dir = target.canonicalize().unwrap_or(target);
     let repo_root: Option<PathBuf> = repo.workdir().map(|p| p.to_path_buf());
 
     // 설정 로드 + 오버라이드.

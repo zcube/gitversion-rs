@@ -47,6 +47,25 @@ pub struct Cli {
     #[arg(default_value = ".")]
     pub path: PathBuf,
 
+    /// path 와 동일하지만 위치 무관(원본 `/targetpath`).
+    #[arg(long = "targetpath", value_name = "DIR")]
+    pub target_path: Option<PathBuf>,
+
+    // 다음 플래그들은 원본 CLI 호환을 위해 인식하지만, 이 포트는 fetch/normalize/
+    // 캐싱을 하지 않으므로 동작상 무효과(no-op)다.
+    /// fetch 비활성화(무효과: 본 포트는 fetch 하지 않음).
+    #[arg(long)]
+    pub nofetch: bool,
+    /// 정규화 비활성화(무효과).
+    #[arg(long)]
+    pub nonormalize: bool,
+    /// 캐시 무시(무효과: 본 포트는 캐싱하지 않음).
+    #[arg(long)]
+    pub nocache: bool,
+    /// shallow clone 허용(무효과: gix 가 shallow 도 읽음).
+    #[arg(long)]
+    pub allowshallow: bool,
+
     /// 출력 형식(json, dot-env, build-server). 여러 번 지정 가능.
     #[arg(long, value_enum, default_value = "json")]
     pub output: Vec<OutputFormat>,
