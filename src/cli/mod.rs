@@ -87,6 +87,22 @@ pub struct Cli {
     #[arg(long)]
     pub diag: bool,
 
+    /// AssemblyInfo 파일 갱신(파일명 생략 시 재귀 탐색).
+    #[arg(long = "updateassemblyinfo", num_args = 0.., value_name = "FILE")]
+    pub update_assembly_info: Option<Vec<String>>,
+
+    /// AssemblyInfo 파일이 없으면 생성(updateassemblyinfo 와 함께).
+    #[arg(long = "ensureassemblyinfo")]
+    pub ensure_assembly_info: bool,
+
+    /// 프로젝트 파일(.csproj 등) 버전 요소 갱신(파일명 생략 시 재귀 탐색).
+    #[arg(long = "updateprojectfiles", num_args = 0.., value_name = "FILE")]
+    pub update_project_files: Option<Vec<String>>,
+
+    /// GitVersion_WixVersion.wxi 생성.
+    #[arg(long = "updatewixversionfile")]
+    pub update_wix_version_file: bool,
+
     /// 대화형 Ratatui TUI 실행.
     #[arg(long)]
     pub tui: bool,

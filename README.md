@@ -17,6 +17,8 @@
 - **빌드에이전트 통합**: TeamCity, Azure Pipelines, GitHub Actions, GitLab CI, Jenkins,
   AppVeyor, TravisCI, Drone, CodeBuild, ContinuaCI, EnvRun, MyGet, BitBucket, BuildKite,
   SpaceAutomation — 환경변수로 감지해 각 CI 형식으로 출력(`--output build-server`)
+- **파일 출력**: AssemblyInfo 갱신/생성(`--updateassemblyinfo [파일] [--ensureassemblyinfo]`),
+  프로젝트 파일 버전 요소 갱신(`--updateprojectfiles`), Wix 버전 파일(`--updatewixversionfile`)
 
 ## 빌드
 
@@ -128,4 +130,4 @@ GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
   `GetTaggedSemanticVersion()`(태그 후보에 *merge target* 태그를 추가) 에서만 소비되는
   플래그입니다. 본 포트는 이미 HEAD 에서 도달 가능한 모든 태그를 후보로 보므로 도달
   가능한 merge-target 태그는 포괄되며, 도달 불가한 경우(주로 Mainline)는 미반영입니다.
-- AssemblyInfo/프로젝트 파일 쓰기, 동적(원격) 저장소 clone, 캐싱은 미구현입니다.
+- 동적(원격) 저장소 clone, 결과 캐싱은 미구현입니다.

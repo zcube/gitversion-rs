@@ -58,6 +58,29 @@ fn run() -> Result<()> {
         None => repo.current_branch_name().unwrap_or_default(),
     };
 
+    // 파일 출력 작업(AssemblyInfo / 프로젝트 파일 / Wix).
+    if let Some(files) = &args.update_assembly_info {
+        let updated = output::files::update_assembly_info(
+            &variables,
+            &work_dir,
+            files,
+            args.ensure_assembly_info,
+        )?;
+        for p in &updated {
+            log::info!("AssemblyInfo 갱신: {}", p.display());
+        }
+    }
+    if let Some(files) = &args.update_project_files {
+        let updated = output::files::update_project_files(&variables, &work_dir, files)?;
+        for p in &updated {
+            log::info!("프로젝트 파일 갱신: {}", p.display());
+        }
+    }
+    if args.update_wix_version_file {
+        let p = output::files::write_wix(&variables, &work_dir)?;
+        log::info!("Wix 버전 파일 생성: {}", p.display());
+    }
+
     // TUI 모드.
     if args.tui {
         return tui::run(variables, branch_name);
