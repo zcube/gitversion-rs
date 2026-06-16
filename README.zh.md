@@ -61,10 +61,37 @@ CLI、交互式 TUI 以及所有内部消息均通过 [`rust-i18n`](https://gith
     在没有 `-u`/`-p` 时，它会调用已配置的 `credential.helper`，因此存储在 macOS
     钥匙串（`osxkeychain`）、GCM、libsecret 等中的凭据会被自动使用（完整的 get/erase 协议）
 
-## 构建
+## 安装
+
+### Homebrew (macOS / Linux)
 
 ```bash
-cargo build --release
+brew install zcube/tap/gitversion-rs
+```
+
+安装 **`gitversion-rs`** 命令。官方 .NET [GitVersion](https://gitversion.net) 同样提供
+`gitversion` 命令，为避免冲突，本项目特意统一为 `gitversion-rs`（而非 `gitversion`）——
+两者可以并存安装。
+
+### 预构建二进制
+
+从 [Releases](https://github.com/zcube/gitversion-rs/releases) 页面下载对应平台的归档，
+放到 `PATH` 中：
+
+```bash
+tar xzf gitversion-v0.1.0-aarch64-apple-darwin.tar.gz
+install -m 0755 gitversion /usr/local/bin/gitversion-rs   # 名称随意
+```
+
+目标平台：macOS(arm64/x86_64)、Linux(x86_64/aarch64, gnu/musl)、Windows(x86_64)。
+归档内的可执行文件名为 `gitversion`，仅 Homebrew 安装的命令为 `gitversion-rs`。
+
+### 从源码构建
+
+```bash
+cargo install --git https://github.com/zcube/gitversion-rs --locked
+# 或在克隆后：
+cargo build --release   # -> target/release/gitversion
 ```
 
 ## 用法

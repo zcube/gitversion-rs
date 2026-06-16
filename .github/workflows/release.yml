@@ -147,7 +147,8 @@ jobs:
           v   = os.environ["VERSION"]
           tag = os.environ["TAG"]
           base = os.environ["BASE"]
-          f = f'''class Gitversion < Formula
+          # .NET GitVersion(명령명 gitversion)과 겹치지 않도록 명령/포뮬러를 gitversion-rs 로 통일.
+          f = f'''class GitversionRs < Formula
             desc "Rust port of GitVersion - semantic versioning from Git history"
             homepage "https://github.com/zcube/gitversion-rs"
             version "{v}"
@@ -173,26 +174,32 @@ jobs:
               end
             end
 
+            # 아카이브 안의 실행파일명은 gitversion 이지만, 충돌을 피하려고 gitversion-rs 로 설치한다.
             def install
-              bin.install "gitversion"
+              bin.install "gitversion" => "gitversion-rs"
             end
 
             test do
-              assert_match version.to_s, shell_output("#{{bin}}/gitversion --version")
+              assert_match version.to_s, shell_output("#{{bin}}/gitversion-rs --version")
             end
           end
           '''
-          open("tap/Formula/gitversion.rb", "w", encoding="utf-8").write(f)
-          print(f"rendered formula for {v}")
+          open("tap/Formula/gitversion-rs.rb", "w", encoding="utf-8").write(f)
+          # 예전 gitversion.rb(충돌 명령) 이 남아 있으면 제거.
+          try:
+              os.remove("tap/Formula/gitversion.rb")
+          except FileNotFoundError:
+              pass
+          print(f"rendered gitversion-rs formula for {v}")
           PY
 
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Formula/gitversion.rb
+          git add -A Formula/
           if git diff --cached --quiet; then
             echo "포뮬러 변경 없음."
             exit 0
           fi
-          git commit -m "chore: gitversion $VERSION 업데이트"
+          git commit -m "chore: gitversion-rs $VERSION 업데이트"
           git push

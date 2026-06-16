@@ -62,10 +62,37 @@ variable.
     Without `-u`/`-p` it invokes the configured `credential.helper`, so credentials stored in macOS
     Keychain (`osxkeychain`), GCM, libsecret, etc. are used automatically (full get/erase protocol)
 
-## Build
+## Installation
+
+### Homebrew (macOS / Linux)
 
 ```bash
-cargo build --release
+brew install zcube/tap/gitversion-rs
+```
+
+Installs the **`gitversion-rs`** command. It is deliberately named `gitversion-rs` (not
+`gitversion`) so it never collides with the official .NET [GitVersion](https://gitversion.net),
+which also ships a `gitversion` command — the two can be installed side by side.
+
+### Prebuilt binary
+
+Download the archive for your platform from the
+[Releases](https://github.com/zcube/gitversion-rs/releases) page and put it on your `PATH`:
+
+```bash
+tar xzf gitversion-v0.1.0-aarch64-apple-darwin.tar.gz
+install -m 0755 gitversion /usr/local/bin/gitversion-rs   # name it as you like
+```
+
+Targets: macOS (arm64/x86_64), Linux (x86_64/aarch64, gnu/musl), Windows (x86_64). The executable
+inside the archive is named `gitversion`; only the Homebrew command is `gitversion-rs`.
+
+### From source
+
+```bash
+cargo install --git https://github.com/zcube/gitversion-rs --locked
+# or, in a clone:
+cargo build --release   # -> target/release/gitversion
 ```
 
 ## Usage

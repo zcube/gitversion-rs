@@ -62,10 +62,37 @@ CLI、対話型 TUI、およびすべての内部メッセージは [`rust-i18n`
     Keychain（`osxkeychain`）、GCM、libsecret などに保存された資格情報が自動的に使用されます
     （get/erase プロトコルに完全対応）
 
-## Build
+## インストール
+
+### Homebrew (macOS / Linux)
 
 ```bash
-cargo build --release
+brew install zcube/tap/gitversion-rs
+```
+
+**`gitversion-rs`** コマンドをインストールします。公式の .NET [GitVersion](https://gitversion.net)
+も `gitversion` コマンドを提供するため、衝突を避けてあえて `gitversion` ではなく
+`gitversion-rs` に統一しています — 両者を併存させてインストールできます。
+
+### ビルド済みバイナリ
+
+[Releases](https://github.com/zcube/gitversion-rs/releases) からプラットフォーム別アーカイブを
+取得し、`PATH` に置きます:
+
+```bash
+tar xzf gitversion-v0.1.0-aarch64-apple-darwin.tar.gz
+install -m 0755 gitversion /usr/local/bin/gitversion-rs   # 名前は任意
+```
+
+ターゲット: macOS(arm64/x86_64)、Linux(x86_64/aarch64, gnu/musl)、Windows(x86_64)。
+アーカイブ内の実行ファイル名は `gitversion` で、Homebrew のコマンドのみ `gitversion-rs` です。
+
+### ソースから
+
+```bash
+cargo install --git https://github.com/zcube/gitversion-rs --locked
+# またはクローン後:
+cargo build --release   # -> target/release/gitversion
 ```
 
 ## Usage

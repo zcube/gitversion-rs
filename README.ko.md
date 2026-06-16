@@ -54,10 +54,37 @@ CLI·대화형 TUI·모든 내부 메시지가 [`rust-i18n`](https://github.com/
     `-u`/`-p` 미지정 시 git 설정(`credential.helper`)을 호출하므로 macOS Keychain·GCM·libsecret
     등에 저장된 자격증명을 자동 사용한다
 
-## 빌드
+## 설치
+
+### Homebrew (macOS / Linux)
 
 ```bash
-cargo build --release
+brew install zcube/tap/gitversion-rs
+```
+
+**`gitversion-rs`** 명령을 설치합니다. 공식 .NET [GitVersion](https://gitversion.net) 도
+`gitversion` 명령을 제공하므로, 충돌을 피하려고 일부러 `gitversion`(X) 이 아닌
+`gitversion-rs` 로 통일했습니다 — 두 도구를 나란히 설치해 둘 수 있습니다.
+
+### 사전 빌드 바이너리
+
+[Releases](https://github.com/zcube/gitversion-rs/releases) 에서 플랫폼별 아카이브를 받아
+`PATH` 에 둡니다:
+
+```bash
+tar xzf gitversion-v0.1.0-aarch64-apple-darwin.tar.gz
+install -m 0755 gitversion /usr/local/bin/gitversion-rs   # 이름은 자유
+```
+
+타깃: macOS(arm64/x86_64), Linux(x86_64/aarch64, gnu/musl), Windows(x86_64). 아카이브 안의
+실행파일명은 `gitversion` 이며, Homebrew 로 설치되는 명령만 `gitversion-rs` 입니다.
+
+### 소스 빌드
+
+```bash
+cargo install --git https://github.com/zcube/gitversion-rs --locked
+# 또는 클론 후:
+cargo build --release   # -> target/release/gitversion
 ```
 
 ## 사용
