@@ -24,15 +24,12 @@ CLI、対話型 TUI、およびすべての内部メッセージは [`rust-i18n`
   変数の検索とコピー、**Config タブでグローバル設定を編集**（Enter）でき、実効結果が即座に
   更新され、**最小限の差分として GitVersion.yml に保存**されます。バージョンソースが
   マークされた first-parent コミット、ブランチごとの再計算、各種アクション（タグ/ブランチの作成、
-  next-version の設定、**Conventional Commits の切り替え（永続化）**、**exec フックの編集/実行**、
+  next-version の設定、**exec フックの編集/実行**、
   設定の保存、キャッシュのクリア、動的クローン、再計算）。バージョンフックは即座に反映されます。
   パニックは捕捉され（`catch_unwind`）、ターミナルは復元され、正常に終了します
 - **ワークフロー**: GitFlow / GitHubFlow / TrunkBased (Mainline)
 - **バージョン戦略**: ConfiguredNextVersion, TaggedCommit, MergeMessage, VersionInBranchName,
   TrackReleaseBranches, Fallback, Mainline
-- **インクリメント規約**: GitVersion の `+semver:` と **Conventional Commits**（`feat`→minor,
-  `fix`/`perf`→patch, `feat!`/`BREAKING CHANGE:`→major）。
-  `commit-message-convention: ConventionalCommits` で選択可能（semantic-release のレビューから借用）
 - **デプロイモード**: ManualDeployment / ContinuousDelivery / ContinuousDeployment
 - **出力**: JSON, dot-env, build-server, 単一変数（`-v`）, フォーマット文字列（`--format`）
 - **ログファイル**: `--log`/`-l <FILE>`（原本 `/l`）でタイムスタンプ付きログをファイルに追記。

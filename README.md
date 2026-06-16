@@ -25,15 +25,12 @@ variable.
   Variable search & copy, **edit global config in the Config tab** (Enter) with the effective
   result refreshed instantly and **saved to GitVersion.yml as a minimal diff**, first-parent
   commits with the version source marked, per-branch recompute, and actions (create tag/branch,
-  set next-version, **toggle Conventional Commits (persisted)**, **edit/run exec hooks**, save
+  set next-version, **edit/run exec hooks**, save
   config, clear cache, dynamic clone, recompute). The version hook is reflected immediately.
   Panics are caught (`catch_unwind`), the terminal is restored, and it exits gracefully
 - **Workflows**: GitFlow / GitHubFlow / TrunkBased (Mainline)
 - **Version strategies**: ConfiguredNextVersion, TaggedCommit, MergeMessage, VersionInBranchName,
   TrackReleaseBranches, Fallback, Mainline
-- **Increment conventions**: GitVersion `+semver:` and **Conventional Commits** (`feat`→minor,
-  `fix`/`perf`→patch, `feat!`/`BREAKING CHANGE:`→major), selectable via
-  `commit-message-convention: ConventionalCommits` (borrowed from a semantic-release review)
 - **Deployment modes**: ManualDeployment / ContinuousDelivery / ContinuousDeployment
 - **Output**: JSON, dot-env, build-server, single variable (`-v`), format string (`--format`)
 - **Log file**: `--log`/`-l <FILE>` (upstream `/l`) appends timestamped log output to a file while

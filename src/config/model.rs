@@ -33,17 +33,6 @@ pub enum CommitMessageIncrementMode {
     MergeMessageOnly,
 }
 
-/// 커밋 메시지에서 증분을 읽는 규약. `commit-message-convention` 키.
-///
-/// - `Default`: GitVersion 방식(`+semver:` 정규식)만 사용
-/// - `ConventionalCommits`: Conventional Commits(feat/fix/BREAKING 등)를 우선 인식하고,
-///   매칭이 없으면 `+semver:` 로 폴백
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CommitMessageConvention {
-    Default,
-    ConventionalCommits,
-}
-
 /// 버전 탐색 전략. `strategies` 키.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VersionStrategy {
@@ -182,8 +171,6 @@ pub struct GitVersionConfiguration {
     pub regex: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commit_message_incrementing: Option<CommitMessageIncrementMode>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub commit_message_convention: Option<CommitMessageConvention>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prevent_increment: Option<PreventIncrement>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

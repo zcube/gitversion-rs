@@ -130,7 +130,6 @@ pub struct EffectiveConfiguration {
     pub pre_release_weight: i64,
     pub tag_pre_release_weight: i64,
     pub commit_message_incrementing: CommitMessageIncrementMode,
-    pub commit_message_convention: CommitMessageConvention,
     pub major_bump_message: String,
     pub minor_bump_message: String,
     pub patch_bump_message: String,
@@ -210,9 +209,6 @@ impl EffectiveConfiguration {
                 .commit_message_incrementing
                 .or(config.commit_message_incrementing)
                 .unwrap_or(CommitMessageIncrementMode::Enabled),
-            commit_message_convention: config
-                .commit_message_convention
-                .unwrap_or(CommitMessageConvention::Default),
             major_bump_message: config
                 .major_version_bump_message
                 .clone()

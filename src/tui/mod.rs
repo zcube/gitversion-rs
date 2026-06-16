@@ -4,7 +4,7 @@
 //! 생성, next-version 설정, 캐시 삭제, 동적 clone, 브랜치별 재계산)을 제공한다.
 
 use crate::config::effective::EffectiveConfiguration;
-use crate::config::{loader, CommitMessageConvention, GitVersionConfiguration};
+use crate::config::{loader, GitVersionConfiguration};
 use crate::exec;
 use crate::git::{CommitInfo, GitRepo};
 use crate::output::{generator, VersionVariables};
@@ -92,13 +92,12 @@ struct App {
 
 /// 설정 탭에서 편집 가능한 전역 설정 키(overrideconfig 와 동일 의미).
 /// (설정 키, 힌트 번역 키). 힌트는 렌더 시점에 t! 로 해석한다.
-const EDITABLE_CONFIG: [(&str, &str); 14] = [
+const EDITABLE_CONFIG: [(&str, &str); 13] = [
     ("increment", "tui.hint.increment"),
     ("mode", "tui.hint.mode"),
     ("label", "tui.hint.prerelease_label"),
     ("tag-prefix", "tui.hint.tag_prefix"),
     ("next-version", "tui.hint.version_example"),
-    ("commit-message-convention", "tui.hint.convention"),
     ("semantic-version-format", "tui.hint.semver_format"),
     ("tag-pre-release-weight", "tui.hint.integer"),
     ("update-build-number", "tui.hint.bool"),
@@ -122,7 +121,6 @@ fn yaml_scalar(v: &str) -> serde_yaml::Value {
 
 /// 전역 설정 키의 현재 값을 문자열로.
 fn global_value(config: &GitVersionConfiguration, key: &str) -> String {
-    use crate::config::CommitMessageConvention as C;
     match key {
         "increment" => config
             .increment
@@ -132,10 +130,6 @@ fn global_value(config: &GitVersionConfiguration, key: &str) -> String {
         "label" => config.label.clone().unwrap_or_default(),
         "tag-prefix" => config.tag_prefix.clone().unwrap_or_default(),
         "next-version" => config.next_version.clone().unwrap_or_default(),
-        "commit-message-convention" => match config.commit_message_convention {
-            Some(C::ConventionalCommits) => "ConventionalCommits".into(),
-            _ => "Default".into(),
-        },
         "semantic-version-format" => config
             .semantic_version_format
             .map(|v| format!("{v:?}"))
@@ -193,7 +187,6 @@ pub fn run(repo: GitRepo, config: GitVersionConfiguration, work_dir: PathBuf) ->
             "tui.action.create_tag",
             "tui.action.create_branch",
             "tui.action.set_next_version",
-            "tui.action.toggle_conventional",
             "tui.action.edit_exec_hook",
             "tui.action.run_exec_hook",
             "tui.action.save_config",
@@ -456,41 +449,19 @@ impl App {
             0 => self.start_input(InputAction::CreateTag),
             1 => self.start_input(InputAction::CreateBranch),
             2 => self.start_input(InputAction::SetNextVersion),
-            3 => {
-                // Conventional Commits 토글 후 재계산.
-                let cur = self
-                    .config
-                    .commit_message_convention
-                    .unwrap_or(CommitMessageConvention::Default);
-                let next = match cur {
-                    CommitMessageConvention::ConventionalCommits => {
-                        CommitMessageConvention::Default
-                    }
-                    CommitMessageConvention::Default => {
-                        CommitMessageConvention::ConventionalCommits
-                    }
-                };
-                let val = format!("{next:?}");
-                self.config.commit_message_convention = Some(next);
-                self.tui_overrides
-                    .insert("commit-message-convention".into(), val.clone());
-                self.recompute();
-                self.save_config();
-                self.status = t!("tui.status.convention_toggled", value = val).to_string();
-            }
-            4 => self.start_input(InputAction::EditExecHook),
-            5 => self.pending_run_hooks = true, // 이벤트 루프가 터미널을 빠져나가 실행.
-            6 => self.save_config(),
-            7 => match self.repo.clear_cache() {
+            3 => self.start_input(InputAction::EditExecHook),
+            4 => self.pending_run_hooks = true, // 이벤트 루프가 터미널을 빠져나가 실행.
+            5 => self.save_config(),
+            6 => match self.repo.clear_cache() {
                 Ok(n) => self.status = t!("tui.status.cache_cleared", count = n).to_string(),
                 Err(e) => {
                     self.status =
                         t!("tui.status.cache_clear_failed", error = format!("{e}")).to_string()
                 }
             },
-            8 => self.start_input(InputAction::DynamicClone),
-            9 => self.recompute(),
-            10 => {
+            7 => self.start_input(InputAction::DynamicClone),
+            8 => self.recompute(),
+            9 => {
                 self.branch_override = None;
                 self.next_version_override = None;
                 self.recompute();
@@ -959,10 +930,6 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
         kv(
             "commit-message-incrementing",
             &format!("{:?}", eff.commit_message_incrementing),
-        ),
-        kv(
-            "commit-message-convention",
-            &format!("{:?}", eff.commit_message_convention),
         ),
         kv(
             "prevent-increment.of-merged",

@@ -137,7 +137,6 @@ pub fn merge(base: &mut GitVersionConfiguration, over: GitVersionConfiguration) 
     ov!(commit_date_format);
     ov!(semantic_version_format);
     ov!(update_build_number);
-    ov!(commit_message_convention);
     ov!(increment);
     ov!(mode);
     ov!(label);

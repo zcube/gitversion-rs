@@ -325,7 +325,6 @@ tui.prompt.edit_config:
 # ── TUI: hints ────────────────────────────────────────────
 tui.hint.increment: { en: None/Major/Minor/Patch/Inherit, ko: None/Major/Minor/Patch/Inherit, ja: None/Major/Minor/Patch/Inherit, zh: None/Major/Minor/Patch/Inherit }
 tui.hint.mode: { en: ContinuousDelivery/ContinuousDeployment/ManualDeployment, ko: ContinuousDelivery/ContinuousDeployment/ManualDeployment, ja: ContinuousDelivery/ContinuousDeployment/ManualDeployment, zh: ContinuousDelivery/ContinuousDeployment/ManualDeployment }
-tui.hint.convention: { en: Default/ConventionalCommits, ko: Default/ConventionalCommits, ja: Default/ConventionalCommits, zh: Default/ConventionalCommits }
 tui.hint.semver_format: { en: Strict/Loose, ko: Strict/Loose, ja: Strict/Loose, zh: Strict/Loose }
 tui.hint.bool: { en: true/false, ko: true/false, ja: true/false, zh: true/false }
 tui.hint.prerelease_label: { en: pre-release label, ko: 프리릴리스 라벨, ja: プレリリースラベル, zh: 预发布标签 }
@@ -339,7 +338,6 @@ tui.hint.regex: { en: regex, ko: 정규식, ja: 正規表現, zh: 正则表达�
 tui.action.create_tag: { en: "Create tag (HEAD)", ko: "태그 생성 (HEAD)", ja: "タグ作成 (HEAD)", zh: "创建标签 (HEAD)" }
 tui.action.create_branch: { en: "Create branch (HEAD)", ko: "브랜치 생성 (HEAD)", ja: "ブランチ作成 (HEAD)", zh: "创建分支 (HEAD)" }
 tui.action.set_next_version: { en: Set next-version, ko: next-version 설정, ja: next-version 設定, zh: 设置 next-version }
-tui.action.toggle_conventional: { en: Toggle Conventional Commits, ko: Conventional Commits 토글, ja: Conventional Commits 切替, zh: 切换 Conventional Commits }
 tui.action.edit_exec_hook: { en: Edit exec hook, ko: exec 훅 편집, ja: exec フック編集, zh: 编辑 exec 钩子 }
 tui.action.run_exec_hook: { en: "Run exec hooks (prepare etc.)", ko: "exec 훅 실행 (prepare 등)", ja: "exec フック実行 (prepare など)", zh: "运行 exec 钩子 (prepare 等)" }
 tui.action.save_config: { en: "Save config (GitVersion.yml)", ko: "설정 저장 (GitVersion.yml)", ja: "設定保存 (GitVersion.yml)", zh: "保存配置 (GitVersion.yml)" }
@@ -433,11 +431,6 @@ tui.status.clone_failed:
   ko: "clone 실패: %{error}"
   ja: "clone 失敗: %{error}"
   zh: "克隆失败: %{error}"
-tui.status.convention_toggled:
-  en: "commit-message-convention = %{value} (saved)"
-  ko: "commit-message-convention = %{value} (저장됨)"
-  ja: "commit-message-convention = %{value} (保存済み)"
-  zh: "commit-message-convention = %{value} (已保存)"
 tui.status.cache_cleared:
   en: "Cache cleared: %{count} files"
   ko: "캐시 삭제: %{count}개 파일"

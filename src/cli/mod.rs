@@ -228,15 +228,6 @@ pub fn apply_overrides(config: &mut GitVersionConfiguration, overrides: &[String
                     _ => Some(SemanticVersionFormat::Strict),
                 }
             }
-            "commit-message-convention" => {
-                config.commit_message_convention =
-                    match value.to_lowercase().replace('-', "").as_str() {
-                        "conventionalcommits" | "conventional" => {
-                            Some(crate::config::CommitMessageConvention::ConventionalCommits)
-                        }
-                        _ => Some(crate::config::CommitMessageConvention::Default),
-                    }
-            }
             other => log::warn!("{}", t!("cli.override_unsupported", key = other)),
         }
     }

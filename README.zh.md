@@ -24,15 +24,12 @@ CLI、交互式 TUI 以及所有内部消息均通过 [`rust-i18n`](https://gith
   变量搜索与复制、**在 Config 标签页中编辑全局配置**（Enter），即时刷新生效后的
   结果，并**以最小差分的方式保存到 GitVersion.yml**；显示标记了版本来源的
   第一父提交（first-parent），支持按分支重新计算，以及各类操作（创建标签/分支、
-  设置 next-version、**切换 Conventional Commits（持久化）**、**编辑/运行 exec 钩子**、保存
+  设置 next-version、**编辑/运行 exec 钩子**、保存
   配置、清除缓存、动态克隆、重新计算）。version 钩子会被立即反映。
   panic 会被捕获（`catch_unwind`），终端会被恢复，并优雅退出
 - **工作流**：GitFlow / GitHubFlow / TrunkBased（Mainline）
 - **版本策略**：ConfiguredNextVersion、TaggedCommit、MergeMessage、VersionInBranchName、
   TrackReleaseBranches、Fallback、Mainline
-- **递增约定**：GitVersion 的 `+semver:` 以及 **Conventional Commits**（`feat`→minor、
-  `fix`/`perf`→patch、`feat!`/`BREAKING CHANGE:`→major），可通过
-  `commit-message-convention: ConventionalCommits` 选择（借鉴自 semantic-release 的方案）
 - **部署模式**：ManualDeployment / ContinuousDelivery / ContinuousDeployment
 - **输出**：JSON、dot-env、build-server、单个变量（`-v`）、格式化字符串（`--format`）
 - **日志文件**：`--log`/`-l <FILE>`（原版 `/l`）将带时间戳的日志追加写入文件，stdout 保持干净，

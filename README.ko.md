@@ -22,15 +22,11 @@ CLI·대화형 TUI·모든 내부 메시지가 [`rust-i18n`](https://github.com/
 - **TUI**: [`ratatui`](https://ratatui.rs) (`--tui`) — 5개 탭(변수/설정/커밋/브랜치/액션).
   변수 검색·복사, **설정 탭에서 전역 설정 편집**(Enter)하면 그 아래 effective 결과가 즉시
   갱신되고 **GitVersion.yml 에 최소 diff 로 저장되어 유지**됨, first-parent 커밋과 버전 소스
-  표시, 브랜치 선택 재계산, 액션(태그·브랜치 생성, next-version 설정, **Conventional Commits
-  토글(저장됨)**, **exec 훅 편집·실행**, 설정 저장, 캐시 삭제, 동적 clone, 재계산).
+  표시, 브랜치 선택 재계산, 액션(태그·브랜치 생성, next-version 설정, **exec 훅 편집·실행**, 설정 저장, 캐시 삭제, 동적 clone, 재계산).
   version 훅은 즉시 재계산에 반영. 패닉이 나도 터미널을 복구하고 우아하게 종료(catch_unwind)
 - **워크플로**: GitFlow / GitHubFlow / TrunkBased(Mainline)
 - **버전 전략**: ConfiguredNextVersion, TaggedCommit, MergeMessage, VersionInBranchName,
   TrackReleaseBranches, Fallback, Mainline
-- **증분 규약**: GitVersion `+semver:` 방식과 **Conventional Commits**(`feat`→minor,
-  `fix`/`perf`→patch, `feat!`·`BREAKING CHANGE:`→major)를 선택
-  (`commit-message-convention: ConventionalCommits`). semantic-release 검토에서 차용
 - **배포 모드**: ManualDeployment / ContinuousDelivery / ContinuousDeployment
 - **출력**: JSON, dot-env, build-server, 단일 변수(`-v`), 포맷 문자열(`--format`)
 - **로그 파일**: `--log`/`-l <FILE>`(원본 `/l`)로 타임스탬프 로그를 파일에 append. stdout 은 버전
