@@ -386,6 +386,7 @@ fn parse_merge_message(
 /// Mainline 트렁크 walk 에서 merge 커밋의 증분 floor 를 결정할 때 사용한다.
 /// 병합된 브랜치가 Minor 설정(예: TrunkBased feature)이면 Patch 기본값 대신
 /// Minor 로 올려준다. Inherit/None 은 효과 없음으로 None 반환.
+/// 병합된 브랜치에 `prevent_increment.when_branch_merged = true` 이면 None.
 fn merge_branch_increment(config: &GitVersionConfiguration, message: &str) -> Option<VersionField> {
     for pattern in BUILTIN_MERGE_FORMATS {
         let Ok(re) = Regex::new(&format!("(?s){pattern}")) else {
@@ -399,6 +400,16 @@ fn merge_branch_increment(config: &GitVersionConfiguration, message: &str) -> Op
         };
         let branch = sb.as_str();
         let (_, bc) = crate::config::effective::find_branch_config(config, branch)?;
+        // when_branch_merged=true 이면 이 병합 커밋은 일체 증분하지 않음.
+        // Some(VersionField::None) 은 trunk_default 도 차단하는 강제 no-op 신호.
+        if bc
+            .prevent_increment
+            .as_ref()
+            .and_then(|pi| pi.when_branch_merged)
+            .unwrap_or(false)
+        {
+            return Some(VersionField::None);
+        }
         let increment = bc.increment.unwrap_or(IncrementStrategy::Inherit);
         if matches!(
             increment,
@@ -475,13 +486,19 @@ pub fn calculate(
             VersionStrategy::ConfiguredNextVersion => {
                 if let Some(nv) = &eff.next_version {
                     if let Some(v) = parse_version(nv, &eff) {
-                        candidates.push(BaseVersion::new(
-                            "ConfiguredNextVersion",
-                            v,
-                            None,
-                            VersionField::None,
-                            Some(eff.label.clone()),
-                        ));
+                        // pre-release label 이 있으면 현재 브랜치 label 과 일치해야 함.
+                        // (.NET IsMatchForBranchSpecificLabel 동작)
+                        let label_ok =
+                            !v.pre_release_tag.has_tag() || v.pre_release_tag.name == eff.label;
+                        if label_ok {
+                            candidates.push(BaseVersion::new(
+                                "ConfiguredNextVersion",
+                                v,
+                                None,
+                                VersionField::None,
+                                Some(eff.label.clone()),
+                            ));
+                        }
                     }
                 }
             }
@@ -703,11 +720,16 @@ fn mainline_calculate(
         }
         // 병합 커밋이면 병합된 브랜치의 설정 증분도 floor 로 적용.
         // (예: TrunkBased feature = Minor → main Patch 보다 높으면 Minor 적용)
+        // Some(None) 은 when_branch_merged=true 신호: trunk_default 포함 일체 차단.
         if c.parents.len() >= 2 {
-            if let Some(branch_field) = merge_branch_increment(config, &c.message) {
-                if branch_field > field {
+            match merge_branch_increment(config, &c.message) {
+                Some(VersionField::None) => {
+                    field = VersionField::None;
+                }
+                Some(branch_field) if branch_field > field => {
                     field = branch_field;
                 }
+                _ => {}
             }
         }
         version = version.increment(field, None, true);
@@ -818,11 +840,14 @@ fn gather_tagged(
         };
         let is_current = tag.target_sha == head.sha;
         let exact = is_current && eff.prevent_increment_when_current_commit_tagged;
-        // pre-release 태그(예: 1.0.0-beta.1)는 아직 "릴리스" 가 아니므로 버전
-        // source 로 삼지 않는다. 코어를 올리지 않고, 커밋 수는 태그 커밋을
+        // named pre-release 태그(예: 1.0.0-beta.1)는 아직 "릴리스" 가 아니므로
+        // 버전 source 로 삼지 않는다. 코어를 올리지 않고, 커밋 수는 태그 커밋을
         // 포함해 그 이전부터 센다(원본 TaggedCommitVersionStrategy 동작).
+        // 단, 숫자만으로 된 pre-release(예: 1.0.0-1)는 CD 스타일 체크포인트이므로
+        // 버전 source 로 사용한다.
         let has_pre = version.pre_release_tag.has_tag();
-        let use_as_source = exact || !has_pre;
+        let is_numeric_only_pre = has_pre && version.pre_release_tag.name.is_empty();
+        let use_as_source = exact || !has_pre || is_numeric_only_pre;
         let base_src = if use_as_source {
             Some(tag.target_sha.clone())
         } else {
@@ -1071,7 +1096,7 @@ fn build_variables(
         .into_owned();
 
     let date_fmt = dotnet_date_format_to_strftime(&eff.commit_date_format);
-    let commit_date = head.when.format(&date_fmt).to_string();
+    let commit_date = head.when.naive_utc().format(&date_fmt).to_string();
 
     let mut vars = VersionVariables {
         major: sv.major as u32,

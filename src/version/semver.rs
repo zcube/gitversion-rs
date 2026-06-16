@@ -33,6 +33,10 @@ impl PreReleaseTag {
     }
 
     /// 원본 `SemanticVersionPreReleaseTag.Parse`. `beta.1`, `beta`, `1` 형태 지원.
+    ///
+    /// 입력이 비어있지 않으면 `promote_tag_even_if_name_is_empty = true` 로 설정한다.
+    /// 이로 인해 `1` 처럼 숫자만 있는 pre-release(`name=""`)도 `has_tag() = true` 가 되어
+    /// pre-release 태그로 올바르게 인식된다.
     pub fn parse(input: &str) -> Self {
         if input.trim().is_empty() {
             return Self::default();
@@ -47,13 +51,13 @@ impl PreReleaseTag {
             return Self {
                 name,
                 number,
-                promote_tag_even_if_name_is_empty: false,
+                promote_tag_even_if_name_is_empty: true,
             };
         }
         Self {
             name: input.to_string(),
             number: None,
-            promote_tag_even_if_name_is_empty: false,
+            promote_tag_even_if_name_is_empty: true,
         }
     }
 

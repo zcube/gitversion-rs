@@ -756,6 +756,37 @@ git -C "$CUR" tag v0.5.0
 commit a; commit b
 record
 
+# Mainline: when_branch_merged=true 브랜치 병합 → 브랜치 설정 증분(Minor) 미적용 검증
+# feature 에 prevent-increment.when-branch-merged=true 를 주면
+# 병합되어도 Minor 가 아닌 Patch(main 기본값)만 적용되어야 한다.
+newrepo mainline_when_branch_merged main
+writeconfig 'workflow: TrunkBased/preview1
+branches:
+  feature:
+    prevent-increment:
+      when-branch-merged: true'
+git -C "$CUR" config merge.ff false
+tagcommit v1.0.0; commit m1
+branch feature/skip; commit f1; commit f2
+checkout main; merge feature/skip "Merge branch 'feature/skip'"
+record
+
+# ConfiguredNextVersion: pre-release label 불일치 시 건너뜀 검증
+# develop(label=alpha)에서 next-version="2.0.0-beta"는 label 불일치라 무시되어야 함.
+newrepo nextversion_label_mismatch main
+writeconfig 'next-version: "2.0.0-beta"'
+tagcommit v1.0.0
+branch develop; commit d1; commit d2
+record
+
+# numeric-only pre-release 태그(promote 검증): v1.0.0-1 은 pre-release 로 인식되어야 함.
+# promote_tag_even_if_name_is_empty=true 이면 has_tag()=true → pre-release 태그로 처리.
+newrepo numeric_prerelease_tag main
+commit a
+git -C "$CUR" tag v1.0.0-1
+commit b
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"
