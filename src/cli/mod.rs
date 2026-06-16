@@ -45,7 +45,7 @@ impl Verbosity {
 // long_about 으로 쓰여 about 오버라이드를 가리므로 일반 주석(`//`)으로 둔다.
 #[derive(Debug, Parser)]
 #[command(
-    name = "gitversion",
+    name = "gitversion-rs",
     version,
     about = "Calculate a semantic version from Git history (GitVersion Rust port)"
 )]

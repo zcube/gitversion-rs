@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use flate2::read::GzDecoder;
-use gitversion::{buildagent, config, git, version};
+use gitversion_rs::{buildagent, config, git, version};
 
 /// 에이전트별 비교 대상 라인 접두어(golden 생성 시의 grep 필터와 동일).
 fn line_prefixes(agent: &str) -> &'static [&'static str] {

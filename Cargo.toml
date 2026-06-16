@@ -1,14 +1,19 @@
 [package]
-name = "gitversion"
+name = "gitversion-rs"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.88"
 description = "Rust port of GitVersion — calculates semantic versions from Git history. Full feature port with a Ratatui TUI."
 license = "MIT"
-default-run = "gitversion"
+default-run = "gitversion-rs"
+
+# 라이브러리 크레이트 이름은 gitversion-rs(임포트 시 gitversion_rs).
+[lib]
+name = "gitversion_rs"
+path = "src/lib.rs"
 
 [[bin]]
-name = "gitversion"
+name = "gitversion-rs"
 path = "src/main.rs"
 
 [dependencies]

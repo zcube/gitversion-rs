@@ -82,9 +82,9 @@ cargo clippy --all-targets -- -D warnings   # 린트(경고 0 유지)
    - 시크릿이 없으면 이 잡은 조용히 건너뛴다(릴리스 자체에는 영향 없음).
    - 사전 릴리스(버전에 `-` 포함, 예: `0.1.0-rc.1`)에는 tap 을 갱신하지 않는다.
    - 설치: `brew install zcube/tap/gitversion-rs` (명령: `gitversion-rs`).
-   - 명령/포뮬러는 `gitversion-rs` 로 통일했다. 공식 .NET GitVersion(`gitversion`)과
-     충돌하지 않게 하기 위함이며, 아카이브의 실행파일(`gitversion`)을 `gitversion-rs` 로
-     설치한다.
+   - 패키지·바이너리·명령·포뮬러를 모두 `gitversion-rs` 로 통일했다(공식 .NET
+     GitVersion(`gitversion`)과 충돌 방지). 릴리스 아카이브명도 `gitversion-rs-<tag>-<target>`,
+     내부 실행파일도 `gitversion-rs` 다.
 
 > 수동 재빌드가 필요하면 Actions 의 `Release` 워크플로를 `workflow_dispatch` 로 실행하고
 > 태그명을 입력한다.

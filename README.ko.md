@@ -1,4 +1,4 @@
-# gitversion (Rust 포트)
+# gitversion-rs (Rust 포트)
 
 [English](README.md) · **한국어** · [日本語](README.ja.md) · [中文](README.zh.md)
 
@@ -72,51 +72,50 @@ brew install zcube/tap/gitversion-rs
 `PATH` 에 둡니다:
 
 ```bash
-tar xzf gitversion-v0.1.0-aarch64-apple-darwin.tar.gz
-install -m 0755 gitversion /usr/local/bin/gitversion-rs   # 이름은 자유
+tar xzf gitversion-rs-v0.1.0-aarch64-apple-darwin.tar.gz
+install -m 0755 gitversion-rs /usr/local/bin/   # 이름은 자유
 ```
 
-타깃: macOS(arm64/x86_64), Linux(x86_64/aarch64, gnu/musl), Windows(x86_64). 아카이브 안의
-실행파일명은 `gitversion` 이며, Homebrew 로 설치되는 명령만 `gitversion-rs` 입니다.
+타깃: macOS(arm64/x86_64), Linux(x86_64/aarch64, gnu/musl), Windows(x86_64).
 
 ### 소스 빌드
 
 ```bash
 cargo install --git https://github.com/zcube/gitversion-rs --locked
 # 또는 클론 후:
-cargo build --release   # -> target/release/gitversion
+cargo build --release   # -> target/release/gitversion-rs
 ```
 
 ## 사용
 
 ```bash
 # 현재 디렉터리 저장소의 전체 변수를 JSON 으로 출력
-gitversion
+gitversion-rs
 
 # 단일 변수 / 포맷 문자열
-gitversion -v FullSemVer
-gitversion --format "v{Major}.{Minor}.{Patch} ({EscapedBranchName})"
+gitversion-rs -v FullSemVer
+gitversion-rs --format "v{Major}.{Minor}.{Patch} ({EscapedBranchName})"
 
 # 출력 형식
-gitversion --output json
-gitversion --output build-server
+gitversion-rs --output json
+gitversion-rs --output build-server
 
 # 설정/오버라이드
-gitversion --overrideconfig next-version=2.0.0
-gitversion --showconfig
+gitversion-rs --overrideconfig next-version=2.0.0
+gitversion-rs --showconfig
 
 # 외부 명령 훅(exec)
-gitversion --exec 'npm version {SemVer} --no-git-tag-version'
-gitversion --exec-version './scripts/decide-version.sh'
+gitversion-rs --exec 'npm version {SemVer} --no-git-tag-version'
+gitversion-rs --exec-version './scripts/decide-version.sh'
 
 # 대화형 TUI
-gitversion --tui
+gitversion-rs --tui
 
 # 언어(기본 영어)
-gitversion --lang ko
+gitversion-rs --lang ko
 
 # 특정 브랜치 기준 계산
-gitversion -b release/2.0.0
+gitversion-rs -b release/2.0.0
 ```
 
 ## 설정 파일

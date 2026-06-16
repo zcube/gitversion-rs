@@ -1,4 +1,4 @@
-# gitversion（Rust 移植版）
+# gitversion-rs（Rust 移植版）
 
 [English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md) · **中文**
 
@@ -79,58 +79,57 @@ brew install zcube/tap/gitversion-rs
 放到 `PATH` 中：
 
 ```bash
-tar xzf gitversion-v0.1.0-aarch64-apple-darwin.tar.gz
-install -m 0755 gitversion /usr/local/bin/gitversion-rs   # 名称随意
+tar xzf gitversion-rs-v0.1.0-aarch64-apple-darwin.tar.gz
+install -m 0755 gitversion-rs /usr/local/bin/   # 名称随意
 ```
 
 目标平台：macOS(arm64/x86_64)、Linux(x86_64/aarch64, gnu/musl)、Windows(x86_64)。
-归档内的可执行文件名为 `gitversion`，仅 Homebrew 安装的命令为 `gitversion-rs`。
 
 ### 从源码构建
 
 ```bash
 cargo install --git https://github.com/zcube/gitversion-rs --locked
 # 或在克隆后：
-cargo build --release   # -> target/release/gitversion
+cargo build --release   # -> target/release/gitversion-rs
 ```
 
 ## 用法
 
 ```bash
 # 将当前仓库的所有变量以 JSON 形式打印
-gitversion
+gitversion-rs
 
 # 单个变量
-gitversion -v FullSemVer
+gitversion-rs -v FullSemVer
 
 # 格式化字符串
-gitversion --format "v{Major}.{Minor}.{Patch} ({EscapedBranchName})"
+gitversion-rs --format "v{Major}.{Minor}.{Patch} ({EscapedBranchName})"
 
 # 输出格式
-gitversion --output json
-gitversion --output dot-env
-gitversion --output build-server
+gitversion-rs --output json
+gitversion-rs --output dot-env
+gitversion-rs --output build-server
 
 # 配置 / 覆盖
-gitversion --config GitVersion.yml
-gitversion --overrideconfig next-version=2.0.0
-gitversion --showconfig
+gitversion-rs --config GitVersion.yml
+gitversion-rs --overrideconfig next-version=2.0.0
+gitversion-rs --showconfig
 
 # 外部命令钩子（exec）——版本变量以环境变量/模板形式暴露
-gitversion --exec 'npm version {SemVer} --no-git-tag-version'
-gitversion --exec-version './scripts/decide-version.sh'
-gitversion --exec 'make release' --dry-run
+gitversion-rs --exec 'npm version {SemVer} --no-git-tag-version'
+gitversion-rs --exec-version './scripts/decide-version.sh'
+gitversion-rs --exec 'make release' --dry-run
 
 # 交互式 TUI
-gitversion --tui
+gitversion-rs --tui
 
 # 语言（默认英语）
-gitversion --lang ko
-gitversion --lang ja
-gitversion --lang zh
+gitversion-rs --lang ko
+gitversion-rs --lang ja
+gitversion-rs --lang zh
 
 # 为指定分支计算
-gitversion -b release/2.0.0
+gitversion-rs -b release/2.0.0
 ```
 
 ## 配置文件

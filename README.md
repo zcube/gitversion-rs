@@ -1,4 +1,4 @@
-# gitversion (Rust port)
+# gitversion-rs (Rust port)
 
 **English** · [한국어](README.ko.md) · [日本語](README.ja.md) · [中文](README.zh.md)
 
@@ -80,58 +80,57 @@ Download the archive for your platform from the
 [Releases](https://github.com/zcube/gitversion-rs/releases) page and put it on your `PATH`:
 
 ```bash
-tar xzf gitversion-v0.1.0-aarch64-apple-darwin.tar.gz
-install -m 0755 gitversion /usr/local/bin/gitversion-rs   # name it as you like
+tar xzf gitversion-rs-v0.1.0-aarch64-apple-darwin.tar.gz
+install -m 0755 gitversion-rs /usr/local/bin/
 ```
 
-Targets: macOS (arm64/x86_64), Linux (x86_64/aarch64, gnu/musl), Windows (x86_64). The executable
-inside the archive is named `gitversion`; only the Homebrew command is `gitversion-rs`.
+Targets: macOS (arm64/x86_64), Linux (x86_64/aarch64, gnu/musl), Windows (x86_64).
 
 ### From source
 
 ```bash
 cargo install --git https://github.com/zcube/gitversion-rs --locked
 # or, in a clone:
-cargo build --release   # -> target/release/gitversion
+cargo build --release   # -> target/release/gitversion-rs
 ```
 
 ## Usage
 
 ```bash
 # Print all variables of the current repo as JSON
-gitversion
+gitversion-rs
 
 # Single variable
-gitversion -v FullSemVer
+gitversion-rs -v FullSemVer
 
 # Format string
-gitversion --format "v{Major}.{Minor}.{Patch} ({EscapedBranchName})"
+gitversion-rs --format "v{Major}.{Minor}.{Patch} ({EscapedBranchName})"
 
 # Output formats
-gitversion --output json
-gitversion --output dot-env
-gitversion --output build-server
+gitversion-rs --output json
+gitversion-rs --output dot-env
+gitversion-rs --output build-server
 
 # Config / overrides
-gitversion --config GitVersion.yml
-gitversion --overrideconfig next-version=2.0.0
-gitversion --showconfig
+gitversion-rs --config GitVersion.yml
+gitversion-rs --overrideconfig next-version=2.0.0
+gitversion-rs --showconfig
 
 # External command hooks (exec) — version variables exposed as env/templates
-gitversion --exec 'npm version {SemVer} --no-git-tag-version'
-gitversion --exec-version './scripts/decide-version.sh'
-gitversion --exec 'make release' --dry-run
+gitversion-rs --exec 'npm version {SemVer} --no-git-tag-version'
+gitversion-rs --exec-version './scripts/decide-version.sh'
+gitversion-rs --exec 'make release' --dry-run
 
 # Interactive TUI
-gitversion --tui
+gitversion-rs --tui
 
 # Language (default English)
-gitversion --lang ko
-gitversion --lang ja
-gitversion --lang zh
+gitversion-rs --lang ko
+gitversion-rs --lang ja
+gitversion-rs --lang zh
 
 # Compute for a specific branch
-gitversion -b release/2.0.0
+gitversion-rs -b release/2.0.0
 ```
 
 ## Configuration file

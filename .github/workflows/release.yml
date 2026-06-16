@@ -30,13 +30,13 @@ jobs:
           fetch-depth: 0 # gitversion 은 전체 히스토리와 태그가 필요하다.
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build gitversion (bootstrap)
-        run: cargo build --release --bin gitversion
+      - name: Build gitversion-rs (bootstrap)
+        run: cargo build --release --bin gitversion-rs
       - id: gv
         name: Compute SemVer
         shell: bash
         run: |
-          v="$(./target/release/gitversion -v SemVer)"
+          v="$(./target/release/gitversion-rs -v SemVer)"
           echo "Computed version: $v"
           echo "version=$v" >> "$GITHUB_OUTPUT"
       - name: Ensure GitHub Release exists
@@ -97,10 +97,10 @@ jobs:
       - name: Build and upload binary
         uses: taiki-e/upload-rust-binary-action@v1
         with:
-          bin: gitversion
+          bin: gitversion-rs
           target: ${{ matrix.target }}
           # taiki-e/upload-rust-binary-action cross-compiles via `cross` when needed.
-          archive: gitversion-$tag-$target
+          archive: gitversion-rs-$tag-$target
           include: README.md,README.ko.md,README.ja.md,README.zh.md,LICENSE
           # 태그 푸시는 ref 태그를, workflow_dispatch 는 입력 태그를 빌드한다.
           ref: refs/tags/${{ github.event.inputs.tag || github.ref_name }}
@@ -135,10 +135,10 @@ jobs:
             gh release download "$TAG" --repo "$SRC_REPO" --pattern "$1" --dir /tmp/dl --clobber
             sha256sum "/tmp/dl/$1" | awk '{print $1}'
           }
-          export SHA_MAC_ARM="$(sha "gitversion-$TAG-aarch64-apple-darwin.tar.gz")"
-          export SHA_MAC_X86="$(sha "gitversion-$TAG-x86_64-apple-darwin.tar.gz")"
-          export SHA_LIN_ARM="$(sha "gitversion-$TAG-aarch64-unknown-linux-gnu.tar.gz")"
-          export SHA_LIN_X86="$(sha "gitversion-$TAG-x86_64-unknown-linux-gnu.tar.gz")"
+          export SHA_MAC_ARM="$(sha "gitversion-rs-$TAG-aarch64-apple-darwin.tar.gz")"
+          export SHA_MAC_X86="$(sha "gitversion-rs-$TAG-x86_64-apple-darwin.tar.gz")"
+          export SHA_LIN_ARM="$(sha "gitversion-rs-$TAG-aarch64-unknown-linux-gnu.tar.gz")"
+          export SHA_LIN_X86="$(sha "gitversion-rs-$TAG-x86_64-unknown-linux-gnu.tar.gz")"
           export BASE="$base"
 
           git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/$TAP_REPO.git" tap
@@ -156,27 +156,26 @@ jobs:
 
             on_macos do
               if Hardware::CPU.arm?
-                url "{base}/gitversion-{tag}-aarch64-apple-darwin.tar.gz"
+                url "{base}/gitversion-rs-{tag}-aarch64-apple-darwin.tar.gz"
                 sha256 "{os.environ["SHA_MAC_ARM"]}"
               else
-                url "{base}/gitversion-{tag}-x86_64-apple-darwin.tar.gz"
+                url "{base}/gitversion-rs-{tag}-x86_64-apple-darwin.tar.gz"
                 sha256 "{os.environ["SHA_MAC_X86"]}"
               end
             end
 
             on_linux do
               if Hardware::CPU.arm?
-                url "{base}/gitversion-{tag}-aarch64-unknown-linux-gnu.tar.gz"
+                url "{base}/gitversion-rs-{tag}-aarch64-unknown-linux-gnu.tar.gz"
                 sha256 "{os.environ["SHA_LIN_ARM"]}"
               else
-                url "{base}/gitversion-{tag}-x86_64-unknown-linux-gnu.tar.gz"
+                url "{base}/gitversion-rs-{tag}-x86_64-unknown-linux-gnu.tar.gz"
                 sha256 "{os.environ["SHA_LIN_X86"]}"
               end
             end
 
-            # 아카이브 안의 실행파일명은 gitversion 이지만, 충돌을 피하려고 gitversion-rs 로 설치한다.
             def install
-              bin.install "gitversion" => "gitversion-rs"
+              bin.install "gitversion-rs"
             end
 
             test do

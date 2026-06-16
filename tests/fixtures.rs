@@ -11,7 +11,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use flate2::read::GzDecoder;
-use gitversion::{config, git, version};
+use gitversion_rs::{config, git, version};
 use serde_json::Value;
 
 /// 비교할 출력 변수 키(버전 핵심 필드). Sha/CommitDate/Weighted 등은 제외.
