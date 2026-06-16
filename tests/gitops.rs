@@ -32,6 +32,10 @@ fn temp_repo() -> std::path::PathBuf {
     std::fs::create_dir_all(&dir).unwrap();
     git(&dir, &["init", "-q", "-b", "main"]);
     git(&dir, &["config", "commit.gpgsign", "false"]);
+    // gix 가 브랜치 생성 시 reflog 서명용 committer 신원을 읽도록 로컬 설정.
+    // (CI 러너에는 전역 git 신원이 없다.)
+    git(&dir, &["config", "user.email", "test@example.com"]);
+    git(&dir, &["config", "user.name", "test"]);
     git(
         &dir,
         &["commit", "-q", "--no-verify", "--allow-empty", "-m", "a"],
