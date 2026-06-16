@@ -9,3 +9,6 @@ Cargo.lock.bak
 # 로그/임시
 *.log
 .DS_Store
+
+# Claude Code 세션/스케줄 데이터
+/.claude/

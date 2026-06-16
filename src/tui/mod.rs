@@ -565,7 +565,10 @@ fn truncate(s: &str, n: usize) -> String {
     }
 }
 
-fn event_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
+fn event_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()>
+where
+    B::Error: std::error::Error + Send + Sync + 'static,
+{
     loop {
         terminal.draw(|f| ui(f, app))?;
         if !event::poll(Duration::from_millis(200))? {
@@ -656,7 +659,10 @@ fn event_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<(
 }
 
 /// 터미널을 일시 복구해 exec side-effect 훅을 실행하고 다시 진입한다.
-fn run_hooks_suspended<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
+fn run_hooks_suspended<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()>
+where
+    B::Error: std::error::Error + Send + Sync + 'static,
+{
     if app.config.exec.is_empty() {
         app.status = t!("tui.status.no_exec_hooks").to_string();
         return Ok(());
