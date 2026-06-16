@@ -12,18 +12,54 @@
 #
 set -euo pipefail
 
-GV="${GITVERSION_BIN:-/opt/homebrew/bin/gitversion}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/testdata/fixtures.tar.gz"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
-if [ ! -x "$GV" ] && ! command -v "$GV" >/dev/null 2>&1; then
-  echo "오류: GitVersion 바이너리를 찾을 수 없습니다: $GV" >&2
+# golden 값은 반드시 .NET GitVersion(원본)으로 생성해야 한다. 우리 Rust 포트가
+# PATH 의 `gitversion` 을 가릴 수 있으므로(brew/cargo install), 후보를 순회하며
+# ".NET GitVersion 인지" 검증해 첫 번째로 통과하는 것을 쓴다.
+#
+# 검증: 슬래시 인자 `/version` 에 .NET GitVersion 의 깨끗한 semver(>=5.x)를
+# 출력하는가. 우리 Rust 포트는 `/version` 을 경로로 해석해 실패하므로 자동 배제된다.
+is_dotnet_gitversion() {
+  local out
+  out="$("$1" /version 2>/dev/null | head -1 | tr -d '[:space:]')" || return 1
+  printf '%s' "$out" | grep -qE '^([5-9]|[1-9][0-9]+)\.[0-9]+\.[0-9]+'
+}
+
+find_gitversion() {
+  local c
+  for c in \
+    "${GITVERSION_BIN:-}" \
+    dotnet-gitversion \
+    /opt/homebrew/bin/gitversion \
+    "$(command -v gitversion 2>/dev/null || true)" \
+    /usr/local/bin/gitversion; do
+    [ -n "$c" ] || continue
+    if command -v "$c" >/dev/null 2>&1 || [ -x "$c" ]; then
+      if is_dotnet_gitversion "$c"; then
+        command -v "$c" 2>/dev/null || printf '%s\n' "$c"
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
+
+GV="$(find_gitversion || true)"
+if [ -z "$GV" ]; then
+  {
+    echo "오류: .NET GitVersion(원본) 바이너리를 찾을 수 없습니다."
+    echo "  golden 값은 원본으로만 생성해야 합니다(우리 Rust 포트로는 자가 비교가 됩니다)."
+    echo "  설치: brew install gitversion  또는  dotnet tool install -g GitVersion.Tool"
+    echo "  또는: GITVERSION_BIN=<.NET gitversion 경로> $0"
+  } >&2
   exit 1
 fi
 
-echo "GitVersion: $("$GV" /version 2>/dev/null | head -1)"
+echo "GitVersion(.NET): $GV -> $("$GV" /version 2>/dev/null | head -1)"
 mkdir -p "$ROOT/testdata"
 
 # 결정론적 커밋: 날짜/작성자 고정 → SHA 재현 가능.
