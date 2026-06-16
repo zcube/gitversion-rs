@@ -372,6 +372,27 @@ tagcommit v1.0.0; branch hotfix/1.0.1; commit h1
 git -C "$CUR" tag v1.0.1
 record
 
+# TrunkBased main: feature 병합 후 버전 (prevent_increment.of_merged_branch=true 검증)
+# main 이 of_merged_branch=true 이므로 feature 의 Minor 증분이 아닌
+# main 의 Patch 증분을 사용해야 한다.
+newrepo trunkbased_main_merged_feature main
+writeconfig 'workflow: TrunkBased/preview1'
+git -C "$CUR" config merge.ff false
+tagcommit v1.0.0; commit m1
+branch feature/new; commit f1; commit f2
+checkout main; merge feature/new "Merge branch 'feature/new'"
+record
+
+# TrunkBased unknown 브랜치 + HEAD 태그(when-current-commit-tagged=false 검증)
+# unknown 브랜치는 when_current_commit_tagged=false 이므로
+# release 태그된 HEAD 커밋에서도 한 단계 더 증분해야 한다.
+newrepo trunkbased_unknown_tagged main
+writeconfig 'workflow: TrunkBased/preview1'
+tagcommit v1.0.0
+branch custom/work; commit w1
+git -C "$CUR" tag v1.1.0
+record
+
 # ─── 긴 커밋 체인 / 다양한 깊이 / 다양한 메시지 시나리오 ──────────────────
 
 # 태그 없이 12개 커밋: VersionSourceDistance=12 기준점

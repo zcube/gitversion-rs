@@ -381,6 +381,36 @@ fn parse_merge_message(
     None
 }
 
+/// 병합 커밋 메시지에서 병합된 브랜치명을 추출해 그 설정 증분을 반환.
+///
+/// Mainline 트렁크 walk 에서 merge 커밋의 증분 floor 를 결정할 때 사용한다.
+/// 병합된 브랜치가 Minor 설정(예: TrunkBased feature)이면 Patch 기본값 대신
+/// Minor 로 올려준다. Inherit/None 은 효과 없음으로 None 반환.
+fn merge_branch_increment(config: &GitVersionConfiguration, message: &str) -> Option<VersionField> {
+    for pattern in BUILTIN_MERGE_FORMATS {
+        let Ok(re) = Regex::new(&format!("(?s){pattern}")) else {
+            continue;
+        };
+        let Some(caps) = re.captures(message) else {
+            continue;
+        };
+        let Some(sb) = caps.name("SourceBranch") else {
+            continue;
+        };
+        let branch = sb.as_str();
+        let (_, bc) = crate::config::effective::find_branch_config(config, branch)?;
+        let increment = bc.increment.unwrap_or(IncrementStrategy::Inherit);
+        if matches!(
+            increment,
+            IncrementStrategy::Inherit | IncrementStrategy::None
+        ) {
+            return None;
+        }
+        return Some(strategy_to_field(increment));
+    }
+    None
+}
+
 /// 브랜치명이 release 브랜치 설정(is-release-branch)에 매칭되는지.
 fn is_release_branch(config: &GitVersionConfiguration, branch_name: &str) -> bool {
     let short = branch_name.rsplit('/').next().unwrap_or(branch_name);
@@ -668,6 +698,15 @@ fn mainline_calculate(
             if let Some(f) = increment_from_message(&ic.message, trunk_eff) {
                 if f > field {
                     field = f;
+                }
+            }
+        }
+        // 병합 커밋이면 병합된 브랜치의 설정 증분도 floor 로 적용.
+        // (예: TrunkBased feature = Minor → main Patch 보다 높으면 Minor 적용)
+        if c.parents.len() >= 2 {
+            if let Some(branch_field) = merge_branch_increment(config, &c.message) {
+                if branch_field > field {
+                    field = branch_field;
                 }
             }
         }
