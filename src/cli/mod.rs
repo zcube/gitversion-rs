@@ -98,6 +98,10 @@ pub struct Cli {
     #[arg(long, short = 'b')]
     pub branch: Option<String>,
 
+    /// 출력 언어(ko/en/ja/zh). 생략 시 LANG/LC_ALL 환경변수 사용.
+    #[arg(long, value_name = "LANG")]
+    pub lang: Option<String>,
+
     /// 로그 상세도.
     #[arg(long, value_enum, default_value = "normal")]
     pub verbosity: Verbosity,

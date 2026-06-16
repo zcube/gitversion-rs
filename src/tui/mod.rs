@@ -11,6 +11,7 @@ use crate::output::{generator, VersionVariables};
 use crate::remote::{self, DynamicRepoOptions};
 use crate::version::calculation;
 use anyhow::Result;
+use rust_i18n::t;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
@@ -24,7 +25,14 @@ use std::io;
 use std::path::PathBuf;
 use std::time::Duration;
 
-const TAB_TITLES: [&str; 5] = ["변수", "설정", "커밋", "브랜치", "액션"];
+/// 탭 제목 번역 키(렌더 시점에 t! 로 해석).
+const TAB_KEYS: [&str; 5] = [
+    "tui.tab.variables",
+    "tui.tab.config",
+    "tui.tab.commits",
+    "tui.tab.branches",
+    "tui.tab.actions",
+];
 
 /// 텍스트 입력이 필요한 액션.
 #[derive(Clone, Copy, PartialEq)]
@@ -40,12 +48,12 @@ enum InputAction {
 impl InputAction {
     fn prompt(&self) -> &'static str {
         match self {
-            InputAction::CreateTag => "HEAD 에 태그 생성 — 버전 입력(예: v1.2.0)",
-            InputAction::CreateBranch => "HEAD 에 브랜치 생성 — 이름 입력",
-            InputAction::SetNextVersion => "next-version 설정 — 버전 입력(예: 2.0.0)",
-            InputAction::DynamicClone => "동적 clone — 'URL 브랜치' 입력",
-            InputAction::EditExecHook => "exec 훅 편집 — '이름=명령' (이름: verify/prepare/publish/success/fail/version, 빈 명령은 삭제)",
-            InputAction::EditConfig => "전역 설정 편집",
+            InputAction::CreateTag => "tui.prompt.create_tag",
+            InputAction::CreateBranch => "tui.prompt.create_branch",
+            InputAction::SetNextVersion => "tui.prompt.set_next_version",
+            InputAction::DynamicClone => "tui.prompt.dynamic_clone",
+            InputAction::EditExecHook => "tui.prompt.edit_exec_hook",
+            InputAction::EditConfig => "tui.prompt.edit_config",
         }
     }
 }
@@ -83,21 +91,22 @@ struct App {
 }
 
 /// 설정 탭에서 편집 가능한 전역 설정 키(overrideconfig 와 동일 의미).
+/// (설정 키, 힌트 번역 키). 힌트는 렌더 시점에 t! 로 해석한다.
 const EDITABLE_CONFIG: [(&str, &str); 14] = [
-    ("increment", "None/Major/Minor/Patch/Inherit"),
-    ("mode", "ContinuousDelivery/ContinuousDeployment/ManualDeployment"),
-    ("label", "pre-release label"),
-    ("tag-prefix", "예: [vV]?"),
-    ("next-version", "예: 2.0.0"),
-    ("commit-message-convention", "Default/ConventionalCommits"),
-    ("semantic-version-format", "Strict/Loose"),
-    ("tag-pre-release-weight", "정수"),
-    ("update-build-number", "true/false"),
-    ("commit-date-format", "예: yyyy-MM-dd"),
-    ("major-version-bump-message", "정규식"),
-    ("minor-version-bump-message", "정규식"),
-    ("patch-version-bump-message", "정규식"),
-    ("no-bump-message", "정규식"),
+    ("increment", "tui.hint.increment"),
+    ("mode", "tui.hint.mode"),
+    ("label", "tui.hint.prerelease_label"),
+    ("tag-prefix", "tui.hint.tag_prefix"),
+    ("next-version", "tui.hint.version_example"),
+    ("commit-message-convention", "tui.hint.convention"),
+    ("semantic-version-format", "tui.hint.semver_format"),
+    ("tag-pre-release-weight", "tui.hint.integer"),
+    ("update-build-number", "tui.hint.bool"),
+    ("commit-date-format", "tui.hint.date_example"),
+    ("major-version-bump-message", "tui.hint.regex"),
+    ("minor-version-bump-message", "tui.hint.regex"),
+    ("patch-version-bump-message", "tui.hint.regex"),
+    ("no-bump-message", "tui.hint.regex"),
 ];
 
 /// 문자열을 YAML 스칼라(bool/int/문자열)로 변환.
@@ -157,19 +166,20 @@ pub fn run(repo: GitRepo, config: GitVersionConfiguration, work_dir: PathBuf) ->
         searching: false,
         input: None,
         input_buf: String::new(),
-        status: "준비 완료".into(),
+        status: t!("tui.status.ready").to_string(),
+        // 액션 라벨 번역 키(렌더 시점에 t! 로 해석). 순서는 run_action 의 인덱스와 일치.
         actions: vec![
-            "태그 생성 (HEAD)",
-            "브랜치 생성 (HEAD)",
-            "next-version 설정",
-            "Conventional Commits 토글",
-            "exec 훅 편집",
-            "exec 훅 실행 (prepare 등)",
-            "설정 저장 (GitVersion.yml)",
-            "캐시 삭제",
-            "동적 원격 clone",
-            "재계산",
-            "기준 브랜치로 초기화",
+            "tui.action.create_tag",
+            "tui.action.create_branch",
+            "tui.action.set_next_version",
+            "tui.action.toggle_conventional",
+            "tui.action.edit_exec_hook",
+            "tui.action.run_exec_hook",
+            "tui.action.save_config",
+            "tui.action.clear_cache",
+            "tui.action.dynamic_clone",
+            "tui.action.recompute",
+            "tui.action.reset_base",
         ],
         pending_run_hooks: false,
         edit_config_key: None,
@@ -195,7 +205,7 @@ pub fn run(repo: GitRepo, config: GitVersionConfiguration, work_dir: PathBuf) ->
             .downcast_ref::<&str>()
             .map(|s| s.to_string())
             .or_else(|| info.payload().downcast_ref::<String>().cloned())
-            .unwrap_or_else(|| "알 수 없는 패닉".into());
+            .unwrap_or_else(|| t!("tui.panic.unknown").to_string());
         let loc = info.location().map(|l| format!(" ({}:{})", l.file(), l.line())).unwrap_or_default();
         *captured.lock().unwrap() = Some(format!("{msg}{loc}"));
     }));
@@ -213,10 +223,10 @@ pub fn run(repo: GitRepo, config: GitVersionConfiguration, work_dir: PathBuf) ->
     match result {
         Ok(r) => r,
         Err(_) => {
-            let msg = panic_msg.lock().unwrap().clone().unwrap_or_else(|| "내부 오류".into());
+            let msg = panic_msg.lock().unwrap().clone().unwrap_or_else(|| t!("tui.panic.internal").to_string());
             // 패닉을 크래시가 아니라 일반 에러로 변환(터미널은 이미 복구됨).
-            log::error!("TUI 내부 패닉을 방어했습니다: {msg}");
-            Err(anyhow::anyhow!("TUI 가 내부 오류로 안전하게 종료되었습니다: {msg}"))
+            log::error!("{}", t!("tui.panic.defended", msg = msg));
+            Err(anyhow::anyhow!("{}", t!("tui.panic.exit", msg = msg)))
         }
     }
 }
@@ -230,26 +240,29 @@ impl App {
         }
         match calculation::calculate(&self.repo, &cfg, self.branch_override.clone()) {
             Ok(mut v) => {
+                let mut hook_applied = false;
                 // version exec 훅이 있으면 그 출력으로 버전을 수정해 재계산(CLI 와 동일).
                 if let Some(cmd) = cfg.exec.get("version").cloned() {
                     if let Ok(Some(nv)) = exec::run_version_hook(&cmd, &v, &self.work_dir, false) {
                         cfg.next_version = Some(nv.clone());
                         if let Ok(v2) = calculation::calculate(&self.repo, &cfg, self.branch_override.clone()) {
                             v = v2;
-                            self.status = format!("version 훅 적용: next-version={nv}");
+                            self.status = t!("tui.status.version_hook_applied", nv = nv).to_string();
+                            hook_applied = true;
                         }
                     }
                 }
                 self.json = generator::to_json(&v).unwrap_or_default();
                 self.vars = v;
-                if !self.status.starts_with("version 훅") {
-                    self.status = format!(
-                        "재계산 완료 ({})",
-                        self.branch_override.as_deref().unwrap_or(&self.base_branch)
-                    );
+                if !hook_applied {
+                    self.status = t!(
+                        "tui.status.recompute_done",
+                        branch = self.branch_override.as_deref().unwrap_or(&self.base_branch)
+                    )
+                    .to_string();
                 }
             }
-            Err(e) => self.status = format!("계산 오류: {e}"),
+            Err(e) => self.status = t!("tui.status.calc_error", error = format!("{e}")).to_string(),
         }
         // 커밋 목록 갱신(대상 브랜치 기준).
         let target = self.branch_override.clone().unwrap_or_else(|| self.base_branch.clone());
@@ -277,8 +290,8 @@ impl App {
 
     fn copy(&mut self, text: &str) {
         match arboard::Clipboard::new().and_then(|mut c| c.set_text(text.to_string())) {
-            Ok(_) => self.status = format!("복사됨: {}", truncate(text, 40)),
-            Err(e) => self.status = format!("클립보드 실패: {e}"),
+            Ok(_) => self.status = t!("tui.status.copied", text = truncate(text, 40)).to_string(),
+            Err(e) => self.status = t!("tui.status.clipboard_failed", error = format!("{e}")).to_string(),
         }
     }
 
@@ -287,49 +300,49 @@ impl App {
         let buf = std::mem::take(&mut self.input_buf);
         let buf = buf.trim().to_string();
         if buf.is_empty() {
-            self.status = "입력 취소(빈 값)".into();
+            self.status = t!("tui.status.input_cancelled").to_string();
             return;
         }
         match action {
             Some(InputAction::CreateTag) => match self.repo.create_tag(&buf, None) {
                 Ok(_) => {
-                    self.status = format!("태그 생성: {buf}");
+                    self.status = t!("tui.status.tag_created", name = buf).to_string();
                     self.recompute();
                     self.reload_lists();
                 }
-                Err(e) => self.status = format!("태그 생성 실패: {e}"),
+                Err(e) => self.status = t!("git.tag_create_failed", name = format!("{e}")).to_string(),
             },
             Some(InputAction::CreateBranch) => match self.repo.create_branch(&buf, None) {
                 Ok(_) => {
-                    self.status = format!("브랜치 생성: {buf}");
+                    self.status = t!("tui.status.branch_created", name = buf).to_string();
                     self.reload_lists();
                 }
-                Err(e) => self.status = format!("브랜치 생성 실패: {e}"),
+                Err(e) => self.status = t!("git.branch_create_failed", name = format!("{e}")).to_string(),
             },
             Some(InputAction::SetNextVersion) => {
                 self.next_version_override = Some(buf.clone());
-                self.status = format!("next-version = {buf}");
+                self.status = t!("tui.status.next_version_set", version = buf).to_string();
                 self.recompute();
             }
             Some(InputAction::DynamicClone) => self.do_dynamic_clone(&buf),
             Some(InputAction::EditExecHook) => {
                 let Some((name, cmd)) = buf.split_once('=') else {
-                    self.status = "형식: 이름=명령".into();
+                    self.status = t!("tui.status.format_name_cmd").to_string();
                     return;
                 };
                 let (name, cmd) = (name.trim().to_string(), cmd.trim().to_string());
                 const VALID: [&str; 6] =
                     ["verify", "prepare", "publish", "success", "fail", "version"];
                 if !VALID.contains(&name.as_str()) {
-                    self.status = format!("알 수 없는 훅 이름: {name} (verify/prepare/publish/success/fail/version)");
+                    self.status = t!("tui.status.hook_unknown_name", name = name).to_string();
                     return;
                 }
                 if cmd.is_empty() {
                     self.config.exec.remove(&name);
-                    self.status = format!("exec 훅 삭제: {name}");
+                    self.status = t!("tui.status.hook_removed", name = name).to_string();
                 } else {
                     self.config.exec.insert(name.clone(), cmd);
-                    self.status = format!("exec 훅 설정: {name}");
+                    self.status = t!("tui.status.hook_set", name = name).to_string();
                 }
                 // version 훅 변경은 버전에 영향 → 재계산 후 저장.
                 self.recompute();
@@ -338,7 +351,7 @@ impl App {
             Some(InputAction::EditConfig) => {
                 if let Some(key) = self.edit_config_key.take() {
                     self.apply_global_edit(&key, &buf);
-                    self.status = format!("{key} = {buf} (저장됨)");
+                    self.status = t!("tui.status.config_saved_key", key = key, value = buf).to_string();
                 }
             }
             None => {}
@@ -349,7 +362,7 @@ impl App {
         let mut parts = spec.split_whitespace();
         let (url, branch) = (parts.next(), parts.next());
         let Some(url) = url else {
-            self.status = "URL 이 필요합니다".into();
+            self.status = t!("tui.status.url_required").to_string();
             return;
         };
         let opts = DynamicRepoOptions {
@@ -360,7 +373,7 @@ impl App {
             commit: None,
             location: None,
         };
-        self.status = "clone 중...".into();
+        self.status = t!("tui.status.cloning").to_string();
         match remote::prepare(&opts) {
             Ok(dest) => match GitRepo::discover(&dest) {
                 Ok(repo) => {
@@ -374,11 +387,11 @@ impl App {
                     self.next_version_override = None;
                     self.recompute();
                     self.reload_lists();
-                    self.status = format!("clone 완료: {url}");
+                    self.status = t!("tui.status.clone_done", url = url).to_string();
                 }
-                Err(e) => self.status = format!("clone 저장소 열기 실패: {e}"),
+                Err(e) => self.status = t!("tui.status.clone_open_failed", error = format!("{e}")).to_string(),
             },
-            Err(e) => self.status = format!("clone 실패: {e}"),
+            Err(e) => self.status = t!("tui.status.clone_failed", error = format!("{e}")).to_string(),
         }
     }
 
@@ -402,14 +415,14 @@ impl App {
                 self.tui_overrides.insert("commit-message-convention".into(), val.clone());
                 self.recompute();
                 self.save_config();
-                self.status = format!("commit-message-convention = {val} (저장됨)");
+                self.status = t!("tui.status.convention_toggled", value = val).to_string();
             }
             4 => self.start_input(InputAction::EditExecHook),
             5 => self.pending_run_hooks = true, // 이벤트 루프가 터미널을 빠져나가 실행.
             6 => self.save_config(),
             7 => match self.repo.clear_cache() {
-                Ok(n) => self.status = format!("캐시 삭제: {n}개 파일"),
-                Err(e) => self.status = format!("캐시 삭제 실패: {e}"),
+                Ok(n) => self.status = t!("tui.status.cache_cleared", count = n).to_string(),
+                Err(e) => self.status = t!("tui.status.cache_clear_failed", error = format!("{e}")).to_string(),
             },
             8 => self.start_input(InputAction::DynamicClone),
             9 => self.recompute(),
@@ -417,7 +430,7 @@ impl App {
                 self.branch_override = None;
                 self.next_version_override = None;
                 self.recompute();
-                self.status = format!("기준 브랜치({})로 초기화", self.base_branch);
+                self.status = t!("tui.status.reset_base", branch = self.base_branch.clone()).to_string();
             }
             _ => {}
         }
@@ -449,8 +462,8 @@ impl App {
         match serde_yaml::to_string(&doc).map_err(anyhow::Error::from).and_then(|y| {
             std::fs::write(&path, y).map_err(anyhow::Error::from)
         }) {
-            Ok(_) => self.status = format!("설정 저장: {}", path.display()),
-            Err(e) => self.status = format!("설정 저장 실패: {e}"),
+            Ok(_) => self.status = t!("tui.status.config_saved", path = path.display()).to_string(),
+            Err(e) => self.status = t!("tui.status.config_save_failed", error = format!("{e}")).to_string(),
         }
     }
 
@@ -524,11 +537,11 @@ fn event_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<(
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
             KeyCode::Tab | KeyCode::Right => {
-                app.tab = (app.tab + 1) % TAB_TITLES.len();
+                app.tab = (app.tab + 1) % TAB_KEYS.len();
                 app.selected = 0;
             }
             KeyCode::Left => {
-                app.tab = (app.tab + TAB_TITLES.len() - 1) % TAB_TITLES.len();
+                app.tab = (app.tab + TAB_KEYS.len() - 1) % TAB_KEYS.len();
                 app.selected = 0;
             }
             KeyCode::Char(c @ '1'..='5') => {
@@ -567,22 +580,22 @@ fn event_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<(
 /// 터미널을 일시 복구해 exec side-effect 훅을 실행하고 다시 진입한다.
 fn run_hooks_suspended<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
     if app.config.exec.is_empty() {
-        app.status = "설정된 exec 훅이 없습니다(액션 'exec 훅 편집'으로 추가)".into();
+        app.status = t!("tui.status.no_exec_hooks").to_string();
         return Ok(());
     }
     // 일반 화면으로 복귀.
     let _ = disable_raw_mode();
     let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
-    println!("\n=== exec 훅 실행 ===");
+    println!("\n=== {} ===", t!("tui.exec_run_header"));
     let result = exec::run_hooks(&app.config.exec, None, &app.vars, &app.work_dir, false);
     app.status = match &result {
-        Ok(_) => "exec 훅 실행 완료".into(),
-        Err(e) => format!("exec 훅 실패: {e}"),
+        Ok(_) => t!("tui.status.exec_done").to_string(),
+        Err(e) => t!("tui.status.exec_failed", error = format!("{e}")).to_string(),
     };
     if let Err(e) = &result {
-        println!("오류: {e}");
+        println!("{}", t!("error.generic", error = format!("{e}")));
     }
-    println!("\n[Enter] 를 누르면 TUI 로 돌아갑니다...");
+    println!("\n{}", t!("tui.press_enter_return"));
     let mut line = String::new();
     let _ = io::stdin().read_line(&mut line);
     // TUI 재진입.
@@ -638,10 +651,10 @@ impl App {
     fn input_prompt(&self) -> String {
         match (&self.input, &self.edit_config_key) {
             (Some(InputAction::EditConfig), Some(key)) => {
-                let hint = EDITABLE_CONFIG.iter().find(|(k, _)| k == key).map(|(_, h)| *h).unwrap_or("");
-                format!("{key} 설정 — {hint}")
+                let hint_key = EDITABLE_CONFIG.iter().find(|(k, _)| k == key).map(|(_, h)| *h).unwrap_or("");
+                t!("tui.config_edit_prompt", key = key, hint = t!(hint_key)).to_string()
             }
-            (Some(a), _) => a.prompt().to_string(),
+            (Some(a), _) => t!(a.prompt()).to_string(),
             _ => String::new(),
         }
     }
@@ -664,7 +677,7 @@ fn ui(f: &mut Frame, app: &App) {
         Span::styled(" GitVersion ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::raw("  "),
         Span::styled(&app.vars.full_sem_ver, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-        Span::raw("   브랜치: "),
+        Span::raw(format!("   {}: ", t!("tui.header.branch"))),
         Span::styled(target, Style::default().fg(Color::Yellow)),
     ];
     if app.next_version_override.is_some() {
@@ -673,7 +686,7 @@ fn ui(f: &mut Frame, app: &App) {
     f.render_widget(Paragraph::new(Line::from(header_spans)).block(Block::default().borders(Borders::ALL)), chunks[0]);
 
     // 탭.
-    let tabs = Tabs::new(TAB_TITLES.iter().enumerate().map(|(i, t)| format!("{}:{t}", i + 1)).collect::<Vec<_>>())
+    let tabs = Tabs::new(TAB_KEYS.iter().enumerate().map(|(i, k)| format!("{}:{}", i + 1, t!(*k))).collect::<Vec<_>>())
         .select(app.tab)
         .block(Block::default().borders(Borders::ALL))
         .highlight_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
@@ -689,16 +702,16 @@ fn ui(f: &mut Frame, app: &App) {
 
     // 푸터(상태 + 도움말).
     let help = match app.tab {
-        0 => "[/]검색 [c]값복사 [C]JSON복사 [↑↓]이동 [1-5]탭 [q]종료",
-        1 => "[Enter]설정 편집(저장됨) [↑↓]이동 [1-5]탭 [q]종료",
-        3 => "[Enter]해당 브랜치로 재계산 [↑↓]이동 [q]종료",
-        4 => "[Enter]실행 [↑↓]이동 [q]종료",
-        _ => "[↑↓]스크롤/이동 [1-5]탭 [C]JSON복사 [q]종료",
+        0 => t!("tui.help.variables"),
+        1 => t!("tui.help.config"),
+        3 => t!("tui.help.branches"),
+        4 => t!("tui.help.actions"),
+        _ => t!("tui.help.default"),
     };
     let footer = Line::from(vec![
         Span::styled(format!(" {} ", app.status), Style::default().fg(Color::Black).bg(Color::Gray)),
         Span::raw("  "),
-        Span::styled(help, Style::default().fg(Color::DarkGray)),
+        Span::styled(help.to_string(), Style::default().fg(Color::DarkGray)),
     ]);
     f.render_widget(Paragraph::new(footer), chunks[3]);
 
@@ -724,12 +737,12 @@ fn render_variables(f: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
     let title = if app.searching || !app.search.is_empty() {
-        format!(" 변수  검색: {}_ ", app.search)
+        t!("tui.title.variables_search", query = app.search).to_string()
     } else {
-        format!(" 변수 ({}개) ", items.len())
+        t!("tui.title.variables_count", count = items.len()).to_string()
     };
     let table = Table::new(rows, [Constraint::Percentage(38), Constraint::Percentage(62)])
-        .header(Row::new(vec!["변수", "값"]).style(Style::default().add_modifier(Modifier::BOLD).fg(Color::Yellow)))
+        .header(Row::new(vec![t!("tui.col.variable").to_string(), t!("tui.col.value").to_string()]).style(Style::default().add_modifier(Modifier::BOLD).fg(Color::Yellow)))
         .block(Block::default().borders(Borders::ALL).title(title));
     f.render_widget(table, area);
 }
@@ -746,7 +759,7 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
         .enumerate()
         .map(|(i, (key, _))| {
             let val = global_value(&app.config, key);
-            let shown = if val.is_empty() { "(미설정)".to_string() } else { val };
+            let shown = if val.is_empty() { t!("tui.unset").to_string() } else { val };
             let style = if i == app.selected {
                 Style::default().fg(Color::Black).bg(Color::Cyan)
             } else {
@@ -757,23 +770,24 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
         .collect();
     f.render_widget(
         List::new(edit_items)
-            .block(Block::default().borders(Borders::ALL).title(" 전역 설정 (Enter=편집, 변경 시 GitVersion.yml 저장) ")),
+            .block(Block::default().borders(Borders::ALL).title(format!(" {} ", t!("tui.title.global_config")))),
         halves[0],
     );
 
     let eff = EffectiveConfiguration::resolve(&app.config, app.branch_override.as_deref().unwrap_or(&app.base_branch));
     let strategies: Vec<String> = if app.config.strategies.is_empty() {
-        vec!["(기본)".into()]
+        vec![t!("tui.default_paren").to_string()]
     } else {
         app.config.strategies.iter().map(|s| format!("{s:?}")).collect()
     };
+    let none_paren = t!("tui.none_paren").to_string();
     let exec_hooks: String = if app.config.exec.is_empty() {
-        "(없음)".into()
+        none_paren.clone()
     } else {
         app.config.exec.keys().cloned().collect::<Vec<_>>().join(", ")
     };
     let lines = vec![
-        kv("매칭 브랜치 키", &eff.branch_key),
+        kv(&t!("tui.kv.matched_branch_key"), &eff.branch_key),
         kv("increment", &format!("{:?}", eff.increment)),
         kv("mode(deployment)", &format!("{:?}", eff.deployment_mode)),
         kv("label", &eff.label),
@@ -792,11 +806,11 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
         kv("semantic-version-format", &format!("{:?}", eff.semantic_version_format)),
         kv("source-branches", &eff.source_branches.join(", ")),
         kv("strategies", &strategies.join(", ")),
-        kv("exec 훅", &exec_hooks),
-        kv("next-version", app.next_version_override.as_deref().or(app.config.next_version.as_deref()).unwrap_or("(없음)")),
+        kv(&t!("tui.kv.exec_hooks"), &exec_hooks),
+        kv("next-version", app.next_version_override.as_deref().or(app.config.next_version.as_deref()).unwrap_or(&none_paren)),
     ];
     let para = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL).title(" 유효 설정(effective) — 위 설정이 이 브랜치에 해석된 결과 "));
+        .block(Block::default().borders(Borders::ALL).title(format!(" {} ", t!("tui.title.effective"))));
     f.render_widget(para, halves[1]);
 }
 
@@ -826,7 +840,7 @@ fn render_commits(f: &mut Frame, app: &App, area: Rect) {
             ListItem::new(line).style(style)
         })
         .collect();
-    let title = format!(" 커밋 (first-parent, {}개)  ◆=버전 소스 ", app.commits.len());
+    let title = t!("tui.title.commits", count = app.commits.len()).to_string();
     f.render_widget(List::new(items).block(Block::default().borders(Borders::ALL).title(title)), area);
 }
 
@@ -848,7 +862,7 @@ fn render_branches(f: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
     f.render_widget(
-        List::new(items).block(Block::default().borders(Borders::ALL).title(" 브랜치 (Enter=재계산, ●현재 ○기준) ")),
+        List::new(items).block(Block::default().borders(Borders::ALL).title(format!(" {} ", t!("tui.title.branches")))),
         area,
     );
 }
@@ -864,11 +878,11 @@ fn render_actions(f: &mut Frame, app: &App, area: Rect) {
             } else {
                 Style::default().fg(Color::White)
             };
-            ListItem::new(format!("  {a}")).style(style)
+            ListItem::new(format!("  {}", t!(*a))).style(style)
         })
         .collect();
     f.render_widget(
-        List::new(items).block(Block::default().borders(Borders::ALL).title(" 액션 (Enter=실행) ")),
+        List::new(items).block(Block::default().borders(Borders::ALL).title(format!(" {} ", t!("tui.title.actions")))),
         area,
     );
 }
@@ -876,7 +890,7 @@ fn render_actions(f: &mut Frame, app: &App, area: Rect) {
 fn render_input_modal(f: &mut Frame, prompt: &str, buf: &str) {
     let area = centered_rect(70, 20, f.area());
     f.render_widget(Clear, area);
-    let block = Block::default().borders(Borders::ALL).title(" 입력 (Enter 확인, Esc 취소) ").border_style(Style::default().fg(Color::Magenta));
+    let block = Block::default().borders(Borders::ALL).title(format!(" {} ", t!("tui.title.input_modal"))).border_style(Style::default().fg(Color::Magenta));
     let text = vec![
         Line::from(Span::styled(prompt, Style::default().fg(Color::Yellow))),
         Line::from(""),

@@ -3,6 +3,7 @@
 //! 원본 `GitVersion.Output/OutputGenerator` 대응.
 
 use super::variables::VersionVariables;
+use rust_i18n::t;
 use anyhow::{bail, Result};
 use regex::Regex;
 
@@ -27,7 +28,7 @@ pub fn show_variable(vars: &VersionVariables, name: &str) -> Result<String> {
         Some(v) => Ok(v.clone()),
         None => {
             let known: Vec<_> = map.keys().cloned().collect();
-            bail!("알 수 없는 변수 '{name}'. 사용 가능: {}", known.join(", "))
+            bail!("{}", t!("output.unknown_variable", name = name, known = known.join(", ")))
         }
     }
 }
@@ -51,7 +52,7 @@ pub fn format_template(vars: &VersionVariables, template: &str) -> Result<String
         })
         .into_owned();
     if let Some(m) = missing {
-        bail!("포맷 문자열에 알 수 없는 변수: {m}");
+        bail!("{}", t!("output.unknown_token", token = m));
     }
     Ok(result)
 }

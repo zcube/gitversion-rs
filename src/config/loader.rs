@@ -4,6 +4,7 @@
 //! `ConfigurationProvider.cs` 대응.
 
 use super::{defaults, model::*};
+use rust_i18n::t;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
@@ -47,14 +48,14 @@ pub fn load(
     };
 
     let text = std::fs::read_to_string(&path)
-        .with_context(|| format!("설정 파일을 읽을 수 없습니다: {}", path.display()))?;
+        .with_context(|| t!("config.read_failed", path = path.display()))?;
     let overrides: GitVersionConfiguration = serde_yaml::from_str(&text)
-        .with_context(|| format!("설정 파일 YAML 파싱 실패: {}", path.display()))?;
+        .with_context(|| t!("config.yaml_parse_failed", path = path.display()))?;
 
     let mut base = defaults::for_workflow(overrides.workflow.as_deref());
     merge(&mut base, overrides);
     apply_source_branch_mappings(&mut base);
-    validate(&base).with_context(|| format!("설정 검증 실패: {}", path.display()))?;
+    validate(&base).with_context(|| t!("config.validate_failed", path = path.display()))?;
     Ok(base)
 }
 

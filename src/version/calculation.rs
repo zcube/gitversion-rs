@@ -406,7 +406,7 @@ pub fn calculate(
                 if let Some(nv) = &eff.next_version {
                     if let Some(v) = parse_version(nv, &eff) {
                         candidates.push(BaseVersion::new(
-                            "설정 next-version",
+                            "ConfiguredNextVersion",
                             v,
                             None,
                             VersionField::None,
@@ -424,7 +424,7 @@ pub fn calculate(
                         extract_version(&branch_name, &eff.version_in_branch_pattern, &eff.tag_prefix)
                     {
                         candidates.push(BaseVersion::new(
-                            "브랜치명 버전",
+                            "VersionInBranchName",
                             v,
                             None,
                             VersionField::None,
@@ -654,7 +654,7 @@ fn gather_tagged(
             determine_increment(repo, from, &head.sha, true, eff, ignore)?
         };
         let mut bv = BaseVersion::new(
-            format!("태그 {}", tag.name),
+            format!("Tag {}", tag.name),
             version,
             base_src,
             field,
@@ -697,7 +697,7 @@ fn gather_merge_messages(
         } else {
             determine_increment(repo, Some(&base_src), &head.sha, true, eff, ignore)?
         };
-        let mut bv = BaseVersion::new("merge 메시지", v, Some(base_src), field, Some(eff.label.clone()));
+        let mut bv = BaseVersion::new("MergeMessage", v, Some(base_src), field, Some(eff.label.clone()));
         bv.source_when = Some(c.when);
         out.push(bv);
     }
@@ -734,7 +734,7 @@ fn gather_track_release(
         if let Some(v) = extract_version(&rb, &eff.version_in_branch_pattern, &eff.tag_prefix) {
             let base_src = repo.merge_base(branch_name, &rb)?;
             out.push(BaseVersion::new(
-                format!("release 브랜치 추적: {rb}"),
+                format!("TrackReleaseBranches: {rb}"),
                 v,
                 base_src.or(Some(head.sha.clone())),
                 VersionField::None,

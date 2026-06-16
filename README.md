@@ -1,101 +1,114 @@
-# gitversion (Rust 포트)
+# gitversion (Rust port)
 
-[GitVersion](https://gitversion.net) (.NET) 을 Rust 로 포팅한 구현입니다. Git 히스토리로부터
-의미론적 버전(SemVer)을 계산합니다.
+**English** · [한국어](README.ko.md) · [日本語](README.ja.md) · [中文](README.zh.md)
 
-## 특징
+A Rust port of [GitVersion](https://gitversion.net) (.NET). It computes a Semantic
+Version (SemVer) from your Git history.
 
-- **순수 Rust git 접근**: [`gix`](https://github.com/GitoxideLabs/gitoxide) (gitoxide) 사용 — libgit2 등 C 의존성 없음
+> **Project goal: run GitVersion in environments without .NET, with minimal effort.**
+> A single self-contained native binary — no .NET runtime, no global tool install.
+> Pure-Rust Git access (no libgit2/C dependency), differentially verified against the
+> real GitVersion binary.
+
+The CLI, the interactive TUI, and all internal messages are **fully internationalized**
+(English / Korean / Japanese / Chinese) via [`rust-i18n`](https://github.com/longbridge/rust-i18n).
+English is the default; override with `--lang ko|ja|zh` or the `LANG`/`LC_ALL` environment
+variable.
+
+## Features
+
+- **Pure-Rust Git access**: [`gix`](https://github.com/GitoxideLabs/gitoxide) (gitoxide) — no libgit2/C dependency
 - **CLI**: [`clap`](https://docs.rs/clap)
-- **로깅**: [`env_logger`](https://docs.rs/env_logger) (`RUST_LOG` 또는 `--verbosity`/`--diag`)
-- **TUI**: [`ratatui`](https://ratatui.rs) (`--tui`) — 5개 탭(변수/설정/커밋/브랜치/액션).
-  변수 검색·복사, **설정 탭에서 전역 설정 편집**(Enter)하면 그 아래 effective 결과가 즉시
-  갱신되고 **GitVersion.yml 에 최소 diff 로 저장되어 유지**됨, first-parent 커밋과 버전 소스
-  표시, 브랜치 선택 재계산, 액션(태그·브랜치 생성, next-version 설정, **Conventional Commits
-  토글(저장됨)**, **exec 훅 편집·실행**, 설정 저장, 캐시 삭제, 동적 clone, 재계산).
-  version 훅은 즉시 재계산에 반영. 패닉이 나도 터미널을 복구하고 우아하게 종료(catch_unwind)
-- **워크플로**: GitFlow / GitHubFlow / TrunkBased(Mainline)
-- **버전 전략**: ConfiguredNextVersion, TaggedCommit, MergeMessage, VersionInBranchName,
-  TrackReleaseBranches, Fallback, (Mainline 단순화)
-- **증분 규약**: GitVersion `+semver:` 방식과 **Conventional Commits**(`feat`→minor,
-  `fix`/`perf`→patch, `feat!`·`BREAKING CHANGE:`→major)를 선택
-  (`commit-message-convention: ConventionalCommits`). semantic-release 검토에서 차용
-- **배포 모드**: ManualDeployment / ContinuousDelivery / ContinuousDeployment
-- **출력**: JSON, dot-env, build-server, 단일 변수(`-v`), 포맷 문자열(`--format`)
-- **빌드에이전트 통합**: TeamCity, Azure Pipelines, GitHub Actions, GitLab CI, Jenkins,
+- **Logging**: [`env_logger`](https://docs.rs/env_logger) (`RUST_LOG`, or `--verbosity`/`--diag`)
+- **i18n**: [`rust-i18n`](https://github.com/longbridge/rust-i18n), default English, `--lang`/`LANG`, locales in `locales/app.yml`
+- **TUI**: [`ratatui`](https://ratatui.rs) (`--tui`) — 5 tabs (Variables/Config/Commits/Branches/Actions).
+  Variable search & copy, **edit global config in the Config tab** (Enter) with the effective
+  result refreshed instantly and **saved to GitVersion.yml as a minimal diff**, first-parent
+  commits with the version source marked, per-branch recompute, and actions (create tag/branch,
+  set next-version, **toggle Conventional Commits (persisted)**, **edit/run exec hooks**, save
+  config, clear cache, dynamic clone, recompute). The version hook is reflected immediately.
+  Panics are caught (`catch_unwind`), the terminal is restored, and it exits gracefully
+- **Workflows**: GitFlow / GitHubFlow / TrunkBased (Mainline)
+- **Version strategies**: ConfiguredNextVersion, TaggedCommit, MergeMessage, VersionInBranchName,
+  TrackReleaseBranches, Fallback, Mainline
+- **Increment conventions**: GitVersion `+semver:` and **Conventional Commits** (`feat`→minor,
+  `fix`/`perf`→patch, `feat!`/`BREAKING CHANGE:`→major), selectable via
+  `commit-message-convention: ConventionalCommits` (borrowed from a semantic-release review)
+- **Deployment modes**: ManualDeployment / ContinuousDelivery / ContinuousDeployment
+- **Output**: JSON, dot-env, build-server, single variable (`-v`), format string (`--format`)
+- **Build-agent integration**: TeamCity, Azure Pipelines, GitHub Actions, GitLab CI, Jenkins,
   AppVeyor, TravisCI, Drone, CodeBuild, ContinuaCI, EnvRun, MyGet, BitBucket, BuildKite,
-  SpaceAutomation — 환경변수로 감지해 각 CI 형식으로 출력(`--output build-server`)
-- **파일 출력**: AssemblyInfo 갱신/생성(`--updateassemblyinfo [파일] [--ensureassemblyinfo]`),
-  프로젝트 파일 갱신(`--updateprojectfiles`, 정규식이 아닌 실제 XML 파싱으로 안전하게
-  갱신·삽입), Wix 버전 파일(`--updatewixversionfile`)
-- **패키지 매니페스트**: `--updatepackagefiles` 로 `package.json`(Node.js),
-  `Cargo.toml`(Rust), `pyproject.toml`(Python, PEP 621/Poetry)의 version 을 각 형식의
-  포맷 보존 파서(serde_json/toml_edit)로 갱신
-- **외부 명령 훅(exec)**: semantic-release 의 exec 플러그인처럼 라이프사이클 훅
-  (`verify`/`prepare`/`publish`/`success`/`fail`)에서 쉘 명령 실행. 버전 변수를
-  `GitVersion_*` 환경변수와 `{Variable}`/`{env:VAR}` 템플릿으로 노출. `version` 훅은
-  명령의 표준출력으로 버전을 수정(next-version 적용 후 재계산). `--exec`/`--exec-version`/
-  `--dry-run` 지원
-- **결과 캐싱**: 계산 결과를 `<.git>/gitversion_cache/<키>.json` 에 저장해 재사용. 키는
-  refs·HEAD·설정파일·overrideconfig 의 SHA1 해시라 저장소 상태가 바뀌면 자동 무효화.
-  `--nocache` 로 비활성화
-- **동적 원격 저장소**: `--url <repo> --branch <b>` 로 원격을 clone 해 계산(`-u`/`-p` 인증,
-  `-c` 커밋 지정, `--dynamicRepoLocation` 위치 지정). gix 순수 Rust clone 으로 https/file 및
-  SSH(`ssh://`·scp-like `git@host:path`, 시스템 ssh 사용) 지원
-  - **자격증명 helper / OS 키링**: https 인증 시 git 의 credential helper 프로토콜을 그대로
-    사용한다. `-u`/`-p` 미지정 시 git 설정(`credential.helper`)을 호출하므로 macOS
-    Keychain(`osxkeychain`)·GCM·libsecret 등에 저장된 자격증명을 자동 사용한다(get/erase
-    전체 프로토콜). helper 에 없으면 TTY 프롬프트 가능
+  SpaceAutomation — auto-detected via environment, emitted in each CI's format (`--output build-server`)
+- **File output**: update/create AssemblyInfo (`--updateassemblyinfo [file] [--ensureassemblyinfo]`),
+  update project files (`--updateprojectfiles`, real XML parsing rather than regex),
+  Wix version file (`--updatewixversionfile`)
+- **Package manifests**: `--updatepackagefiles` updates the version in `package.json` (Node.js),
+  `Cargo.toml` (Rust), and `pyproject.toml` (Python, PEP 621/Poetry) using format-preserving
+  parsers (serde_json/toml_edit)
+- **External command hooks (exec)**: like semantic-release's exec plugin, run shell commands in
+  lifecycle hooks (`verify`/`prepare`/`publish`/`success`/`fail`). Version variables are exposed
+  as `GitVersion_*` env vars and `{Variable}`/`{env:VAR}` templates. The `version` hook modifies
+  the version from the command's stdout (apply next-version, then recompute). Supports
+  `--exec`/`--exec-version`/`--dry-run`
+- **Result caching**: results stored at `<.git>/gitversion_cache/<key>.json`. The key is a SHA1
+  of refs·HEAD·config file·overrideconfig, so it auto-invalidates when repo state changes.
+  Disable with `--nocache`
+- **Dynamic remote repository**: `--url <repo> --branch <b>` clones and computes (`-u`/`-p` auth,
+  `-c` commit, `--dynamicRepoLocation`). Pure-Rust gix clone over https/file and SSH
+  (`ssh://`, scp-like `git@host:path`, using system ssh)
+  - **Credential helper / OS keyring**: for https auth it speaks git's credential-helper protocol.
+    Without `-u`/`-p` it invokes the configured `credential.helper`, so credentials stored in macOS
+    Keychain (`osxkeychain`), GCM, libsecret, etc. are used automatically (full get/erase protocol)
 
-## 빌드
+## Build
 
 ```bash
 cargo build --release
 ```
 
-## 사용
+## Usage
 
 ```bash
-# 현재 디렉터리 저장소의 전체 변수를 JSON 으로 출력
+# Print all variables of the current repo as JSON
 gitversion
 
-# 단일 변수
+# Single variable
 gitversion -v FullSemVer
-gitversion -v SemVer
 
-# 포맷 문자열
+# Format string
 gitversion --format "v{Major}.{Minor}.{Patch} ({EscapedBranchName})"
 
-# 출력 형식
+# Output formats
 gitversion --output json
 gitversion --output dot-env
 gitversion --output build-server
 
-# 설정/오버라이드
+# Config / overrides
 gitversion --config GitVersion.yml
 gitversion --overrideconfig next-version=2.0.0
-gitversion --overrideconfig commit-message-convention=ConventionalCommits
 gitversion --showconfig
 
-# 외부 명령 훅(exec) — 버전 변수가 env/템플릿으로 노출
+# External command hooks (exec) — version variables exposed as env/templates
 gitversion --exec 'npm version {SemVer} --no-git-tag-version'
-# 외부 명령 출력으로 버전 수정(재계산)
 gitversion --exec-version './scripts/decide-version.sh'
-# 실행 없이 미리보기
 gitversion --exec 'make release' --dry-run
 
-# 대화형 TUI
+# Interactive TUI
 gitversion --tui
 
-# 특정 브랜치 기준 계산
+# Language (default English)
+gitversion --lang ko
+gitversion --lang ja
+gitversion --lang zh
+
+# Compute for a specific branch
 gitversion -b release/2.0.0
 ```
 
-## 설정 파일
+## Configuration file
 
-작업 디렉터리(및 저장소 루트)에서 `GitVersion.yml`, `GitVersion.yaml`,
-`.GitVersion.yml`, `.GitVersion.yaml` 을 탐색합니다. 키는 원본 GitVersion 과 동일한
-kebab-case 입니다.
+Searches `GitVersion.yml`, `GitVersion.yaml`, `.GitVersion.yml`, `.GitVersion.yaml` in the
+working directory (and repo root). Keys use the same kebab-case as upstream GitVersion.
 
 ```yaml
 workflow: GitFlow/v1
@@ -107,89 +120,47 @@ branches:
     label: alpha
 ```
 
-## 프로젝트 구조
+## Project structure
 
-| 모듈 | 역할 | 원본 대응 |
+| Module | Role | Upstream counterpart |
 |---|---|---|
-| `src/git` | gix 기반 저장소 접근 | `GitVersion.LibGit2Sharp` |
-| `src/config` | 설정 모델 / 워크플로 기본값 / 로더 / effective | `GitVersion.Configuration` |
-| `src/version` | SemanticVersion 및 계산 엔진 | `GitVersion.Core` |
-| `src/output` | 출력 변수 / 포맷터 | `GitVersion.Output` |
-| `src/cli` | clap 인자 | `GitVersion.App` |
-| `src/tui` | ratatui UI | (신규) |
+| `src/git` | gix-based repository access | `GitVersion.LibGit2Sharp` |
+| `src/config` | config model / workflow defaults / loader / effective | `GitVersion.Configuration` |
+| `src/version` | SemanticVersion and calculation engine | `GitVersion.Core` |
+| `src/output` | output variables / formatters | `GitVersion.Output` |
+| `src/cli` | clap arguments | `GitVersion.App` |
+| `src/tui` | ratatui UI | (new) |
+| `src/i18n.rs` + `locales/` | rust-i18n locale handling | (new) |
 
-> 참고: `refs/gitversion` 는 포팅 기준이 된 .NET 원본 소스이며 `.gitignore` 로 추적에서 제외됩니다.
+> Note: `refs/gitversion` is the .NET source this port was based on; it is excluded from
+> tracking via `.gitignore`.
 
-## 테스트
+## Testing
 
-실제 GitVersion 6.x 바이너리를 golden 기준으로 삼는 **차등(differential) 테스트**를 사용합니다.
+Uses **differential testing** with the real GitVersion 6.x binary as the golden reference.
 
 ```bash
-# 전체 테스트 (유닛 + fixture 통합)
+# Full test suite (unit + fixture integration)
 cargo test
 
-# fixture 재생성 (실제 gitversion 바이너리 필요)
+# Regenerate fixtures (requires the real gitversion binary)
 GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
 ```
 
-- `tests/build_fixtures.sh`: 시나리오별 git 저장소를 만들고 실제 GitVersion 을 돌려
-  golden 기대값(`expected.json`)을 기록한 뒤 `testdata/fixtures.tar.gz` 로 압축.
-- `tests/fixtures.rs`: 압축을 임시 디렉터리로 풀어 우리 엔진 출력을 golden 값과
-  필드 단위로 비교. 테스트 시점에는 git/gitversion 이 불필요(재현 가능).
-- 현재 **27개 시나리오 × 22개 출력 필드**가 실제 GitVersion 6.7.0 과 일치
-  (main/develop/release/feature/hotfix/support, +semver 메시지, GitHubFlow,
-  next-version, custom tag-prefix, pre-release 태그, 다중 태그, ignore.sha,
-  custom commit-date-format, semantic-version-format Strict/Loose,
-  assembly 커스텀 포맷, feature off main 의 increment 상속, tag-pre-release-weight 등).
+- `tests/build_fixtures.sh`: builds per-scenario git repos, runs real GitVersion to record the
+  golden `expected.json`, then packs them into `testdata/fixtures.tar.gz`.
+- `tests/fixtures.rs`: unpacks into a temp dir and compares our engine's output field-by-field
+  against the golden values. No git/gitversion needed at test time (reproducible).
 
-## 설정 반영 현황
+## Known simplifications / not implemented
 
-다음 설정은 실제 GitVersion 과 동일하게 **반영**됩니다:
-`workflow`, `tag-prefix`, `version-in-branch-pattern`, `next-version`, `increment`,
-`mode`, `label`, `regex`, `strategies`, `commit-message-incrementing`,
-`major/minor/patch/no-bump-version-bump-message`, `source-branches`,
-`tracks-release-branches`, `is-release-branch`, `pre-release-weight`,
-`tag-pre-release-weight`, `prevent-increment.*`, `track-merge-message`,
-`ignore`(sha·commits-before), `commit-date-format`, `semantic-version-format`,
-`assembly-versioning-scheme`/`-format`, `assembly-file-versioning-scheme`/`-format`,
-`assembly-informational-format`, `merge-message-formats`, `is-source-branch-for`.
+- `track-merge-target`: a flag consumed only by upstream's `MainlineVersionStrategy` and
+  `GetTaggedSemanticVersion()`. This port already considers all tags reachable from HEAD, so
+  reachable merge-target tags are covered; unreachable ones (mainly Mainline) are not.
+- Log file output (`/l`) is not implemented. `/nofetch /nonormalize /allowshallow` are recognized
+  but are honest no-ops given this port's structure (dynamic clone performs fetch/normalize directly).
+- `GitVersionInformation` source-file generation is handled by an MSBuild task (not the CLI) upstream,
+  so it is out of scope for this CLI port.
 
-- `Inherit` 증분은 git 조상을 추적해 실제로 분기한 source 브랜치의 증분을 상속합니다.
-- merge 메시지는 8종 내장 포맷(Default/SmartGit/BitBucket/GitHub/AzureDevOps/RemoteTracking 등)과
-  사용자 정의 포맷을 인식하며, 병합된 브랜치가 release 브랜치일 때만 버전을 사용합니다.
-- 라벨은 정규식 named capture 외에 `{env:VAR}` 환경변수와 `{X ?? "기본값"}` 폴백을 지원합니다.
-- `is-source-branch-for` 는 대상 브랜치의 `source-branches` 로 역매핑됩니다.
-- 설정 검증: 각 브랜치에 `regex` 필수, `source-branches` 는 설정된 브랜치만 참조 가능
-  (원본과 동일한 메시지로 에러).
-
-## 알려진 단순화 / 미구현
-
-- Mainline 전략은 first-parent 트렁크를 순회하며 각 step 의 증분을 누적하고, 도입된
-  커밋의 태그(stable·pre-release)를 inline 으로 확정한다. 선형/merge/중간태그/pre-release
-  확정/중첩 병합과 3개 배포 모드(ContinuousDeployment·ContinuousDelivery·ManualDeployment,
-  pre-release 번호=distance 규칙)까지 실제 GitVersion 과 일치한다. 워크플로 문자열
-  `TrunkBased` 는 실제 6.7 도 미지원(설정은 `strategies: [Mainline]` 로).
-- `update-build-number`: `--output build-server` 시 빌드에이전트의 build number 설정
-  출력을 제어합니다(false 면 생략). 계산되는 버전 변수에는 영향이 없습니다(원본과 동일).
-- `track-merge-target`: 원본에서 `MainlineVersionStrategy` 와
-  `GetTaggedSemanticVersion()`(태그 후보에 *merge target* 태그를 추가) 에서만 소비되는
-  플래그입니다. 본 포트는 이미 HEAD 에서 도달 가능한 모든 태그를 후보로 보므로 도달
-  가능한 merge-target 태그는 포괄되며, 도달 불가한 경우(주로 Mainline)는 미반영입니다.
-- 로그 파일 출력(`/l`)은 미구현입니다. `/nofetch /nonormalize /allowshallow` 는 인식하지만
-  이 포트의 구조상 무효과인 정직한 no-op 입니다(원격 clone 은 fetch/normalize 를 직접 수행).
-- `GitVersionInformation` 소스 파일 생성은 원본에서도 CLI 가 아닌 MSBuild 태스크가
-  담당하므로 본 CLI 포트의 범위 밖입니다.
-
-## 원본 대비 커버리지 요약
-
-| 영역 | 상태 |
-|---|---|
-| CLI 옵션 27종 | 핵심 18종 구현 + no-op 4종 + 원격/로그 5종 미구현 |
-| 설정(config schema) | 전 필드 파싱, 대부분 동작 반영(위 "설정 반영 현황") |
-| 버전 전략 | ConfiguredNextVersion·TaggedCommit·MergeMessage·VersionInBranchName·TrackReleaseBranches·Fallback·Mainline 구현 |
-| 배포 모드 | Manual / ContinuousDelivery / ContinuousDeployment 구현 |
-| 출력 | JSON·dot-env·build-server(에이전트 15종)·showvariable·format·파일(AssemblyInfo/proj/Wix) |
-| 워크플로 | GitFlow·GitHubFlow 구현, TrunkBased 는 strategies+mode 로 대체 |
-
-검증은 실제 GitVersion 6.7.0 바이너리와의 차등 테스트(31 시나리오 × 22 필드, 빌드에이전트
-5종, 파일 출력)로 보장됩니다.
+Verification is guaranteed by differential tests against the real GitVersion 6.7.0 binary
+(scenarios × output fields, 5 build agents, file output).

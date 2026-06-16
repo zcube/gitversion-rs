@@ -20,6 +20,7 @@ serde_yaml = "0.9"
 quick-xml = "0.40"
 toml_edit = "0.25"
 sha1 = "0.11"
+rust-i18n = "3"
 regex = "1"
 chrono = { version = "0.4", features = ["serde"] }
 log = "0.4"

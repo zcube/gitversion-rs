@@ -6,6 +6,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, FixedOffset, TimeZone};
 use gix::ObjectId;
+use rust_i18n::t;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -47,7 +48,7 @@ impl GitRepo {
     /// `path` 또는 상위에서 `.git` 을 탐색해 연다.
     pub fn discover(path: &Path) -> Result<Self> {
         let repo = gix::discover(path)
-            .with_context(|| format!("git 저장소를 찾을 수 없습니다: {}", path.display()))?;
+            .with_context(|| t!("git.repo_not_found", path = path.display()))?;
         Ok(Self { repo })
     }
 
@@ -109,7 +110,7 @@ impl GitRepo {
 
     /// HEAD 가 가리키는 커밋.
     pub fn head_commit(&self) -> Result<CommitInfo> {
-        let commit = self.repo.head_commit().context("HEAD 커밋을 읽을 수 없습니다")?;
+        let commit = self.repo.head_commit().with_context(|| t!("git.head_read").to_string())?;
         Self::commit_info(&commit)
     }
 
@@ -171,7 +172,7 @@ impl GitRepo {
     pub fn commits_between(&self, from: Option<&str>, to: &str) -> Result<Vec<CommitInfo>> {
         let to_oid = self
             .resolve(to)
-            .with_context(|| format!("커밋을 찾을 수 없습니다: {to}"))?;
+            .with_context(|| t!("git.commit_not_found", commit = to))?;
 
         let mut platform = self.repo.rev_walk([to_oid]);
         if let Some(f) = from {
@@ -195,7 +196,7 @@ impl GitRepo {
     pub fn first_parent_between(&self, from: Option<&str>, to: &str) -> Result<Vec<CommitInfo>> {
         let to_oid = self
             .resolve(to)
-            .with_context(|| format!("커밋을 찾을 수 없습니다: {to}"))?;
+            .with_context(|| t!("git.commit_not_found", commit = to))?;
         let mut platform = self.repo.rev_walk([to_oid]).first_parent_only();
         if let Some(f) = from {
             if let Some(f_oid) = self.resolve(f) {
@@ -266,7 +267,7 @@ impl GitRepo {
     /// 지정 커밋(기본 HEAD)에 lightweight 태그 생성.
     pub fn create_tag(&self, name: &str, target_spec: Option<&str>) -> Result<()> {
         let target = match target_spec {
-            Some(s) => self.resolve(s).context("대상 커밋을 찾을 수 없습니다")?,
+            Some(s) => self.resolve(s).with_context(|| t!("git.target_commit_not_found").to_string())?,
             None => self.repo.head_commit()?.id,
         };
         self.repo
@@ -276,14 +277,14 @@ impl GitRepo {
                 gix::refs::transaction::PreviousValue::MustNotExist,
                 format!("gitversion: create tag {name}"),
             )
-            .with_context(|| format!("태그 생성 실패: {name}"))?;
+            .with_context(|| t!("git.tag_create_failed", name = name))?;
         Ok(())
     }
 
     /// 지정 커밋(기본 HEAD)에 브랜치 ref 생성(작업 트리는 변경하지 않음).
     pub fn create_branch(&self, name: &str, target_spec: Option<&str>) -> Result<()> {
         let target = match target_spec {
-            Some(s) => self.resolve(s).context("대상 커밋을 찾을 수 없습니다")?,
+            Some(s) => self.resolve(s).with_context(|| t!("git.target_commit_not_found").to_string())?,
             None => self.repo.head_commit()?.id,
         };
         self.repo
@@ -293,7 +294,7 @@ impl GitRepo {
                 gix::refs::transaction::PreviousValue::MustNotExist,
                 format!("gitversion: create branch {name}"),
             )
-            .with_context(|| format!("브랜치 생성 실패: {name}"))?;
+            .with_context(|| t!("git.branch_create_failed", name = name))?;
         Ok(())
     }
 
@@ -304,7 +305,7 @@ impl GitRepo {
             return Ok(0);
         }
         let count = std::fs::read_dir(&dir).map(|d| d.count()).unwrap_or(0);
-        std::fs::remove_dir_all(&dir).with_context(|| format!("캐시 삭제 실패: {}", dir.display()))?;
+        std::fs::remove_dir_all(&dir).with_context(|| t!("git.cache_clear_failed", path = dir.display()))?;
         Ok(count)
     }
 

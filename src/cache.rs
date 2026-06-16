@@ -6,6 +6,7 @@
 //! 바뀌면 키가 달라져 자동으로 무효화된다.
 
 use crate::git::GitRepo;
+use rust_i18n::t;
 use crate::output::VersionVariables;
 use sha1::{Digest, Sha1};
 use std::path::{Path, PathBuf};
@@ -56,16 +57,16 @@ fn cache_file(repo: &GitRepo, key: &str) -> PathBuf {
 pub fn load(repo: &GitRepo, key: &str) -> Option<VersionVariables> {
     let path = cache_file(repo, key);
     if !path.is_file() {
-        log::debug!("캐시 미스: {}", path.display());
+        log::debug!("cache miss: {}", path.display());
         return None;
     }
     match std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str(&s).ok()) {
         Some(vars) => {
-            log::info!("캐시 적중: {}", path.display());
+            log::info!("{}", t!("cache.hit", path = path.display()));
             Some(vars)
         }
         None => {
-            log::warn!("캐시 파일이 손상되어 삭제합니다: {}", path.display());
+            log::warn!("{}", t!("cache.corrupt", path = path.display()));
             let _ = std::fs::remove_file(&path);
             None
         }
@@ -83,11 +84,11 @@ pub fn store(repo: &GitRepo, key: &str, vars: &VersionVariables) {
     match serde_json::to_string_pretty(vars) {
         Ok(json) => {
             if let Err(e) = std::fs::write(&path, json) {
-                log::warn!("캐시 기록 실패 {}: {e}", path.display());
+                log::warn!("{}", t!("cache.write_failed", path = path.display(), error = e));
             } else {
-                log::debug!("캐시 기록: {}", path.display());
+                log::debug!("cache write: {}", path.display());
             }
         }
-        Err(e) => log::warn!("캐시 직렬화 실패: {e}"),
+        Err(e) => log::warn!("{}", t!("cache.serialize_failed", error = e)),
     }
 }

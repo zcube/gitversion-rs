@@ -1,0 +1,580 @@
+_version: 2
+
+# ── 공통/상태 ──────────────────────────────────────────────
+status.ready:
+  en: Ready
+  ko: 준비 완료
+  ja: 準備完了
+  zh: 就绪
+error.generic:
+  en: "Error: %{error}"
+  ko: "오류: %{error}"
+  ja: "エラー: %{error}"
+  zh: "错误: %{error}"
+
+# ── main / 계산 ────────────────────────────────────────────
+error.git_open:
+  en: "Cannot open git repository (run 'git init' and make a commit first)"
+  ko: "git 저장소를 열 수 없습니다 (먼저 'git init' 후 커밋이 필요합니다)"
+  ja: "gitリポジトリを開けません（先に 'git init' とコミットが必要です）"
+  zh: "无法打开 git 仓库（请先执行 'git init' 并提交）"
+error.calc_failed:
+  en: Version calculation failed
+  ko: 버전 계산에 실패했습니다
+  ja: バージョン計算に失敗しました
+  zh: 版本计算失败
+error.dynamic_repo:
+  en: Failed to prepare dynamic remote repository
+  ko: 동적 원격 저장소 준비에 실패했습니다
+  ja: 動的リモートリポジトリの準備に失敗しました
+  zh: 准备动态远程仓库失败
+error.version_hook_recalc:
+  en: Recalculation after applying version hook failed
+  ko: version 훅 적용 후 재계산 실패
+  ja: versionフック適用後の再計算に失敗しました
+  zh: 应用 version 钩子后重新计算失败
+error.output_file:
+  en: "Failed to create output file: %{path}"
+  ko: "출력 파일 생성 실패: %{path}"
+  ja: "出力ファイルの作成に失敗: %{path}"
+  zh: "创建输出文件失败: %{path}"
+log.version_hook_modified:
+  en: "version hook modified version to '%{ver}' -> recalculating"
+  ko: "version 훅이 버전을 '%{ver}' 로 수정 -> 재계산"
+  ja: "versionフックがバージョンを '%{ver}' に変更 -> 再計算"
+  zh: "version 钩子将版本修改为 '%{ver}' -> 重新计算"
+log.assemblyinfo_updated:
+  en: "AssemblyInfo updated: %{path}"
+  ko: "AssemblyInfo 갱신: %{path}"
+  ja: "AssemblyInfo 更新: %{path}"
+  zh: "已更新 AssemblyInfo: %{path}"
+log.projectfile_updated:
+  en: "Project file updated: %{path}"
+  ko: "프로젝트 파일 갱신: %{path}"
+  ja: "プロジェクトファイル更新: %{path}"
+  zh: "已更新项目文件: %{path}"
+log.wix_created:
+  en: "Wix version file created: %{path}"
+  ko: "Wix 버전 파일 생성: %{path}"
+  ja: "Wixバージョンファイル作成: %{path}"
+  zh: "已创建 Wix 版本文件: %{path}"
+log.package_updated:
+  en: "Package manifest updated: %{path}"
+  ko: "패키지 매니페스트 갱신: %{path}"
+  ja: "パッケージマニフェスト更新: %{path}"
+  zh: "已更新包清单: %{path}"
+log.agent_detected:
+  en: "Detected build agent: %{name}"
+  ko: "감지된 빌드에이전트: %{name}"
+  ja: "検出されたビルドエージェント: %{name}"
+  zh: "检测到构建代理: %{name}"
+log.result_written:
+  en: "Result written to %{path}"
+  ko: "결과를 %{path} 에 기록했습니다"
+  ja: "結果を %{path} に書き込みました"
+  zh: "结果已写入 %{path}"
+
+# ── git ───────────────────────────────────────────────────
+git.repo_not_found:
+  en: "Cannot find a git repository: %{path}"
+  ko: "git 저장소를 찾을 수 없습니다: %{path}"
+  ja: "gitリポジトリが見つかりません: %{path}"
+  zh: "找不到 git 仓库: %{path}"
+git.head_read:
+  en: Cannot read HEAD commit
+  ko: HEAD 커밋을 읽을 수 없습니다
+  ja: HEADコミットを読めません
+  zh: 无法读取 HEAD 提交
+git.commit_not_found:
+  en: "Commit not found: %{commit}"
+  ko: "커밋을 찾을 수 없습니다: %{commit}"
+  ja: "コミットが見つかりません: %{commit}"
+  zh: "找不到提交: %{commit}"
+git.target_commit_not_found:
+  en: Target commit not found
+  ko: 대상 커밋을 찾을 수 없습니다
+  ja: 対象コミットが見つかりません
+  zh: 找不到目标提交
+git.tag_create_failed:
+  en: "Failed to create tag: %{name}"
+  ko: "태그 생성 실패: %{name}"
+  ja: "タグ作成に失敗: %{name}"
+  zh: "创建标签失败: %{name}"
+git.branch_create_failed:
+  en: "Failed to create branch: %{name}"
+  ko: "브랜치 생성 실패: %{name}"
+  ja: "ブランチ作成に失敗: %{name}"
+  zh: "创建分支失败: %{name}"
+git.cache_clear_failed:
+  en: "Failed to clear cache: %{path}"
+  ko: "캐시 삭제 실패: %{path}"
+  ja: "キャッシュ削除に失敗: %{path}"
+  zh: "清除缓存失败: %{path}"
+
+# ── exec ──────────────────────────────────────────────────
+exec.dry_run:
+  en: "[dry-run] skipped: %{cmd}"
+  ko: "[dry-run] 실행 생략: %{cmd}"
+  ja: "[dry-run] 実行省略: %{cmd}"
+  zh: "[dry-run] 跳过执行: %{cmd}"
+exec.running:
+  en: "Running: %{cmd}"
+  ko: "실행: %{cmd}"
+  ja: "実行: %{cmd}"
+  zh: "执行: %{cmd}"
+exec.run_failed:
+  en: "Failed to run command: %{cmd}"
+  ko: "명령 실행 실패: %{cmd}"
+  ja: "コマンド実行に失敗: %{cmd}"
+  zh: "运行命令失败: %{cmd}"
+exec.cmd_failed:
+  en: "Command failed (code %{code}): %{cmd}"
+  ko: "명령이 실패했습니다(코드 %{code}): %{cmd}"
+  ja: "コマンドが失敗しました(コード %{code}): %{cmd}"
+  zh: "命令失败(代码 %{code}): %{cmd}"
+exec.hook_failed:
+  en: "%{name} hook failed"
+  ko: "%{name} 훅 실패"
+  ja: "%{name} フック失敗"
+  zh: "%{name} 钩子失败"
+exec.exec_prepare_failed:
+  en: "--exec (prepare) failed"
+  ko: "--exec(prepare) 실패"
+  ja: "--exec(prepare) 失敗"
+  zh: "--exec(prepare) 失败"
+exec.running_fail_hook:
+  en: "hook failed -> running fail hook"
+  ko: "훅 실패 → fail 훅 실행"
+  ja: "フック失敗 → fail フック実行"
+  zh: "钩子失败 → 运行 fail 钩子"
+
+# ── cache ─────────────────────────────────────────────────
+cache.hit:
+  en: "Cache hit: %{path}"
+  ko: "캐시 적중: %{path}"
+  ja: "キャッシュヒット: %{path}"
+  zh: "缓存命中: %{path}"
+cache.corrupt:
+  en: "Cache file corrupted, deleting: %{path}"
+  ko: "캐시 파일이 손상되어 삭제합니다: %{path}"
+  ja: "キャッシュファイルが破損、削除します: %{path}"
+  zh: "缓存文件损坏，删除: %{path}"
+cache.write_failed:
+  en: "Failed to write cache %{path}: %{error}"
+  ko: "캐시 기록 실패 %{path}: %{error}"
+  ja: "キャッシュ書き込み失敗 %{path}: %{error}"
+  zh: "写入缓存失败 %{path}: %{error}"
+cache.serialize_failed:
+  en: "Failed to serialize cache: %{error}"
+  ko: "캐시 직렬화 실패: %{error}"
+  ja: "キャッシュのシリアライズ失敗: %{error}"
+  zh: "缓存序列化失败: %{error}"
+
+# ── remote ────────────────────────────────────────────────
+remote.branch_required:
+  en: "--branch is required when using --url"
+  ko: "/url 사용 시 /b(브랜치)가 필요합니다"
+  ja: "--url 使用時は --branch が必要です"
+  zh: "使用 --url 时需要 --branch"
+remote.remove_failed:
+  en: "Failed to remove existing clone: %{path}"
+  ko: "기존 clone 제거 실패: %{path}"
+  ja: "既存cloneの削除に失敗: %{path}"
+  zh: "删除已有克隆失败: %{path}"
+remote.cloning:
+  en: "Cloning remote: %{url} (branch %{branch}) -> %{dest}"
+  ko: "원격 저장소 clone: %{url} (브랜치 %{branch}) -> %{dest}"
+  ja: "リモートをclone: %{url} (ブランチ %{branch}) -> %{dest}"
+  zh: "克隆远程: %{url} (分支 %{branch}) -> %{dest}"
+remote.clone_prepare_failed:
+  en: "Failed to prepare clone: %{url}"
+  ko: "clone 준비 실패: %{url}"
+  ja: "cloneの準備に失敗: %{url}"
+  zh: "准备克隆失败: %{url}"
+remote.set_ref_failed:
+  en: Failed to set branch ref
+  ko: 브랜치 ref 설정 실패
+  ja: ブランチrefの設定に失敗
+  zh: 设置分支 ref 失败
+remote.fetch_failed:
+  en: Remote fetch failed
+  ko: 원격 fetch 실패
+  ja: リモートfetchに失敗
+  zh: 远程 fetch 失败
+remote.checkout_failed:
+  en: Worktree checkout failed
+  ko: 작업 트리 체크아웃 실패
+  ja: ワークツリーのチェックアウトに失敗
+  zh: 工作树检出失败
+remote.open_failed:
+  en: Failed to open cloned repository
+  ko: clone 된 저장소 열기 실패
+  ja: cloneしたリポジトリを開けません
+  zh: 打开克隆的仓库失败
+remote.head_write_failed:
+  en: "Failed to write HEAD: %{path}"
+  ko: "HEAD 기록 실패: %{path}"
+  ja: "HEADの書き込みに失敗: %{path}"
+  zh: "写入 HEAD 失败: %{path}"
+remote.head_set:
+  en: "Set HEAD to commit %{sha}"
+  ko: "HEAD 를 커밋 %{sha} 로 설정"
+  ja: "HEADをコミット %{sha} に設定"
+  zh: "将 HEAD 设为提交 %{sha}"
+
+# ── config ────────────────────────────────────────────────
+config.read_failed:
+  en: "Cannot read config file: %{path}"
+  ko: "설정 파일을 읽을 수 없습니다: %{path}"
+  ja: "設定ファイルを読めません: %{path}"
+  zh: "无法读取配置文件: %{path}"
+config.yaml_parse_failed:
+  en: "Failed to parse config YAML: %{path}"
+  ko: "설정 파일 YAML 파싱 실패: %{path}"
+  ja: "設定YAMLの解析に失敗: %{path}"
+  zh: "解析配置 YAML 失败: %{path}"
+config.validate_failed:
+  en: "Config validation failed: %{path}"
+  ko: "설정 검증 실패: %{path}"
+  ja: "設定検証に失敗: %{path}"
+  zh: "配置验证失败: %{path}"
+
+# ── file output ───────────────────────────────────────────
+file.read_failed:
+  en: "Read failed: %{path}"
+  ko: "읽기 실패: %{path}"
+  ja: "読み込み失敗: %{path}"
+  zh: "读取失败: %{path}"
+file.xml_update_failed:
+  en: "XML update failed: %{path}"
+  ko: "XML 갱신 실패: %{path}"
+  ja: "XML更新に失敗: %{path}"
+  zh: "XML 更新失败: %{path}"
+file.xml_parse_error:
+  en: "XML parse error: %{error}"
+  ko: "XML 파싱 오류: %{error}"
+  ja: "XML解析エラー: %{error}"
+  zh: "XML 解析错误: %{error}"
+file.json_parse_failed:
+  en: Failed to parse package.json
+  ko: package.json 파싱 실패
+  ja: package.json の解析に失敗
+  zh: 解析 package.json 失败
+file.cargo_parse_failed:
+  en: Failed to parse Cargo.toml
+  ko: Cargo.toml 파싱 실패
+  ja: Cargo.toml の解析に失敗
+  zh: 解析 Cargo.toml 失败
+file.pyproject_parse_failed:
+  en: Failed to parse pyproject.toml
+  ko: pyproject.toml 파싱 실패
+  ja: pyproject.toml の解析に失敗
+  zh: 解析 pyproject.toml 失败
+
+# ── output ────────────────────────────────────────────────
+output.unknown_variable:
+  en: "Unknown variable '%{name}'. Available: %{known}"
+  ko: "알 수 없는 변수 '%{name}'. 사용 가능: %{known}"
+  ja: "不明な変数 '%{name}'。利用可能: %{known}"
+  zh: "未知变量 '%{name}'。可用: %{known}"
+output.unknown_token:
+  en: "Unknown variable in format string: %{token}"
+  ko: "포맷 문자열에 알 수 없는 변수: %{token}"
+  ja: "フォーマット文字列に不明な変数: %{token}"
+  zh: "格式字符串中有未知变量: %{token}"
+
+# ── TUI: tabs ─────────────────────────────────────────────
+tui.tab.variables: { en: Variables, ko: 변수, ja: 変数, zh: 变量 }
+tui.tab.config: { en: Config, ko: 설정, ja: 設定, zh: 配置 }
+tui.tab.commits: { en: Commits, ko: 커밋, ja: コミット, zh: 提交 }
+tui.tab.branches: { en: Branches, ko: 브랜치, ja: ブランチ, zh: 分支 }
+tui.tab.actions: { en: Actions, ko: 액션, ja: アクション, zh: 操作 }
+
+# ── TUI: prompts ──────────────────────────────────────────
+tui.prompt.create_tag:
+  en: "Create tag on HEAD — enter version (e.g. v1.2.0)"
+  ko: "HEAD 에 태그 생성 — 버전 입력(예: v1.2.0)"
+  ja: "HEADにタグ作成 — バージョン入力(例: v1.2.0)"
+  zh: "在 HEAD 创建标签 — 输入版本(例: v1.2.0)"
+tui.prompt.create_branch:
+  en: "Create branch on HEAD — enter name"
+  ko: "HEAD 에 브랜치 생성 — 이름 입력"
+  ja: "HEADにブランチ作成 — 名前入力"
+  zh: "在 HEAD 创建分支 — 输入名称"
+tui.prompt.set_next_version:
+  en: "Set next-version — enter version (e.g. 2.0.0)"
+  ko: "next-version 설정 — 버전 입력(예: 2.0.0)"
+  ja: "next-version 設定 — バージョン入力(例: 2.0.0)"
+  zh: "设置 next-version — 输入版本(例: 2.0.0)"
+tui.prompt.dynamic_clone:
+  en: "Dynamic clone — enter 'URL branch'"
+  ko: "동적 clone — 'URL 브랜치' 입력"
+  ja: "動的clone — 'URL ブランチ' 入力"
+  zh: "动态克隆 — 输入 'URL 分支'"
+tui.prompt.edit_exec_hook:
+  en: "Edit exec hook — 'name=command' (name: verify/prepare/publish/success/fail/version, empty command deletes)"
+  ko: "exec 훅 편집 — '이름=명령' (이름: verify/prepare/publish/success/fail/version, 빈 명령은 삭제)"
+  ja: "exec フック編集 — '名前=コマンド' (名前: verify/prepare/publish/success/fail/version, 空コマンドは削除)"
+  zh: "编辑 exec 钩子 — '名称=命令' (名称: verify/prepare/publish/success/fail/version, 空命令则删除)"
+tui.prompt.edit_config:
+  en: Edit global config
+  ko: 전역 설정 편집
+  ja: グローバル設定編集
+  zh: 编辑全局配置
+
+# ── TUI: hints ────────────────────────────────────────────
+tui.hint.increment: { en: None/Major/Minor/Patch/Inherit, ko: None/Major/Minor/Patch/Inherit, ja: None/Major/Minor/Patch/Inherit, zh: None/Major/Minor/Patch/Inherit }
+tui.hint.mode: { en: ContinuousDelivery/ContinuousDeployment/ManualDeployment, ko: ContinuousDelivery/ContinuousDeployment/ManualDeployment, ja: ContinuousDelivery/ContinuousDeployment/ManualDeployment, zh: ContinuousDelivery/ContinuousDeployment/ManualDeployment }
+tui.hint.convention: { en: Default/ConventionalCommits, ko: Default/ConventionalCommits, ja: Default/ConventionalCommits, zh: Default/ConventionalCommits }
+tui.hint.semver_format: { en: Strict/Loose, ko: Strict/Loose, ja: Strict/Loose, zh: Strict/Loose }
+tui.hint.bool: { en: true/false, ko: true/false, ja: true/false, zh: true/false }
+tui.hint.prerelease_label: { en: pre-release label, ko: 프리릴리스 라벨, ja: プレリリースラベル, zh: 预发布标签 }
+tui.hint.tag_prefix: { en: "e.g. [vV]?", ko: "예: [vV]?", ja: "例: [vV]?", zh: "例: [vV]?" }
+tui.hint.version_example: { en: "e.g. 2.0.0", ko: "예: 2.0.0", ja: "例: 2.0.0", zh: "例: 2.0.0" }
+tui.hint.date_example: { en: "e.g. yyyy-MM-dd", ko: "예: yyyy-MM-dd", ja: "例: yyyy-MM-dd", zh: "例: yyyy-MM-dd" }
+tui.hint.integer: { en: integer, ko: 정수, ja: 整数, zh: 整数 }
+tui.hint.regex: { en: regex, ko: 정규식, ja: 正規表現, zh: 正则表达式 }
+
+# ── TUI: actions ──────────────────────────────────────────
+tui.action.create_tag: { en: "Create tag (HEAD)", ko: "태그 생성 (HEAD)", ja: "タグ作成 (HEAD)", zh: "创建标签 (HEAD)" }
+tui.action.create_branch: { en: "Create branch (HEAD)", ko: "브랜치 생성 (HEAD)", ja: "ブランチ作成 (HEAD)", zh: "创建分支 (HEAD)" }
+tui.action.set_next_version: { en: Set next-version, ko: next-version 설정, ja: next-version 設定, zh: 设置 next-version }
+tui.action.toggle_conventional: { en: Toggle Conventional Commits, ko: Conventional Commits 토글, ja: Conventional Commits 切替, zh: 切换 Conventional Commits }
+tui.action.edit_exec_hook: { en: Edit exec hook, ko: exec 훅 편집, ja: exec フック編集, zh: 编辑 exec 钩子 }
+tui.action.run_exec_hook: { en: "Run exec hooks (prepare etc.)", ko: "exec 훅 실행 (prepare 등)", ja: "exec フック実行 (prepare など)", zh: "运行 exec 钩子 (prepare 等)" }
+tui.action.save_config: { en: "Save config (GitVersion.yml)", ko: "설정 저장 (GitVersion.yml)", ja: "設定保存 (GitVersion.yml)", zh: "保存配置 (GitVersion.yml)" }
+tui.action.clear_cache: { en: Clear cache, ko: 캐시 삭제, ja: キャッシュ削除, zh: 清除缓存 }
+tui.action.dynamic_clone: { en: Dynamic remote clone, ko: 동적 원격 clone, ja: 動的リモートclone, zh: 动态远程克隆 }
+tui.action.recompute: { en: Recompute, ko: 재계산, ja: 再計算, zh: 重新计算 }
+tui.action.reset_base: { en: Reset to base branch, ko: 기준 브랜치로 초기화, ja: 基準ブランチにリセット, zh: 重置到基准分支 }
+
+# ── TUI: status ───────────────────────────────────────────
+tui.status.ready: { en: Ready, ko: 준비 완료, ja: 準備完了, zh: 就绪 }
+tui.status.input_cancelled: { en: Input cancelled (empty), ko: 입력 취소(빈 값), ja: 入力取消(空値), zh: 输入取消(空值) }
+tui.status.version_hook_applied:
+  en: "version hook applied: next-version=%{nv}"
+  ko: "version 훅 적용: next-version=%{nv}"
+  ja: "version フック適用: next-version=%{nv}"
+  zh: "已应用 version 钩子: next-version=%{nv}"
+tui.status.recompute_done:
+  en: "Recomputed (%{branch})"
+  ko: "재계산 완료 (%{branch})"
+  ja: "再計算完了 (%{branch})"
+  zh: "重新计算完成 (%{branch})"
+tui.status.calc_error:
+  en: "Calculation error: %{error}"
+  ko: "계산 오류: %{error}"
+  ja: "計算エラー: %{error}"
+  zh: "计算错误: %{error}"
+tui.status.copied:
+  en: "Copied: %{text}"
+  ko: "복사됨: %{text}"
+  ja: "コピー: %{text}"
+  zh: "已复制: %{text}"
+tui.status.clipboard_failed:
+  en: "Clipboard failed: %{error}"
+  ko: "클립보드 실패: %{error}"
+  ja: "クリップボード失敗: %{error}"
+  zh: "剪贴板失败: %{error}"
+tui.status.tag_created:
+  en: "Tag created: %{name}"
+  ko: "태그 생성: %{name}"
+  ja: "タグ作成: %{name}"
+  zh: "创建标签: %{name}"
+tui.status.branch_created:
+  en: "Branch created: %{name}"
+  ko: "브랜치 생성: %{name}"
+  ja: "ブランチ作成: %{name}"
+  zh: "创建分支: %{name}"
+tui.status.next_version_set:
+  en: "next-version = %{version}"
+  ko: "next-version = %{version}"
+  ja: "next-version = %{version}"
+  zh: "next-version = %{version}"
+tui.status.format_name_cmd:
+  en: "Format: name=command"
+  ko: "형식: 이름=명령"
+  ja: "形式: 名前=コマンド"
+  zh: "格式: 名称=命令"
+tui.status.hook_unknown_name:
+  en: "Unknown hook name: %{name} (verify/prepare/publish/success/fail/version)"
+  ko: "알 수 없는 훅 이름: %{name} (verify/prepare/publish/success/fail/version)"
+  ja: "不明なフック名: %{name} (verify/prepare/publish/success/fail/version)"
+  zh: "未知钩子名称: %{name} (verify/prepare/publish/success/fail/version)"
+tui.status.hook_removed:
+  en: "exec hook removed: %{name}"
+  ko: "exec 훅 삭제: %{name}"
+  ja: "exec フック削除: %{name}"
+  zh: "删除 exec 钩子: %{name}"
+tui.status.hook_set:
+  en: "exec hook set: %{name}"
+  ko: "exec 훅 설정: %{name}"
+  ja: "exec フック設定: %{name}"
+  zh: "设置 exec 钩子: %{name}"
+tui.status.config_saved_key:
+  en: "%{key} = %{value} (saved)"
+  ko: "%{key} = %{value} (저장됨)"
+  ja: "%{key} = %{value} (保存済み)"
+  zh: "%{key} = %{value} (已保存)"
+tui.status.url_required: { en: URL is required, ko: URL 이 필요합니다, ja: URLが必要です, zh: 需要 URL }
+tui.status.cloning: { en: Cloning..., ko: clone 중..., ja: clone 中..., zh: 克隆中... }
+tui.status.clone_done:
+  en: "Clone done: %{url}"
+  ko: "clone 완료: %{url}"
+  ja: "clone 完了: %{url}"
+  zh: "克隆完成: %{url}"
+tui.status.clone_open_failed:
+  en: "Failed to open cloned repo: %{error}"
+  ko: "clone 저장소 열기 실패: %{error}"
+  ja: "cloneリポジトリを開けません: %{error}"
+  zh: "打开克隆仓库失败: %{error}"
+tui.status.clone_failed:
+  en: "Clone failed: %{error}"
+  ko: "clone 실패: %{error}"
+  ja: "clone 失敗: %{error}"
+  zh: "克隆失败: %{error}"
+tui.status.convention_toggled:
+  en: "commit-message-convention = %{value} (saved)"
+  ko: "commit-message-convention = %{value} (저장됨)"
+  ja: "commit-message-convention = %{value} (保存済み)"
+  zh: "commit-message-convention = %{value} (已保存)"
+tui.status.cache_cleared:
+  en: "Cache cleared: %{count} files"
+  ko: "캐시 삭제: %{count}개 파일"
+  ja: "キャッシュ削除: %{count}個のファイル"
+  zh: "清除缓存: %{count} 个文件"
+tui.status.cache_clear_failed:
+  en: "Cache clear failed: %{error}"
+  ko: "캐시 삭제 실패: %{error}"
+  ja: "キャッシュ削除失敗: %{error}"
+  zh: "清除缓存失败: %{error}"
+tui.status.reset_base:
+  en: "Reset to base branch (%{branch})"
+  ko: "기준 브랜치(%{branch})로 초기화"
+  ja: "基準ブランチ(%{branch})にリセット"
+  zh: "重置到基准分支 (%{branch})"
+tui.status.config_saved:
+  en: "Config saved: %{path}"
+  ko: "설정 저장: %{path}"
+  ja: "設定保存: %{path}"
+  zh: "配置已保存: %{path}"
+tui.status.config_save_failed:
+  en: "Config save failed: %{error}"
+  ko: "설정 저장 실패: %{error}"
+  ja: "設定保存失敗: %{error}"
+  zh: "配置保存失败: %{error}"
+tui.status.no_exec_hooks:
+  en: "No exec hooks configured (add via action 'Edit exec hook')"
+  ko: "설정된 exec 훅이 없습니다(액션 'exec 훅 편집'으로 추가)"
+  ja: "exec フックが未設定です(アクション 'exec フック編集' で追加)"
+  zh: "未配置 exec 钩子(通过操作 '编辑 exec 钩子' 添加)"
+tui.status.exec_done: { en: exec hooks done, ko: exec 훅 실행 완료, ja: exec フック実行完了, zh: exec 钩子执行完成 }
+tui.status.exec_failed:
+  en: "exec hooks failed: %{error}"
+  ko: "exec 훅 실패: %{error}"
+  ja: "exec フック失敗: %{error}"
+  zh: "exec 钩子失败: %{error}"
+
+# ── TUI: panic ────────────────────────────────────────────
+tui.panic.unknown: { en: unknown panic, ko: 알 수 없는 패닉, ja: 不明なパニック, zh: 未知 panic }
+tui.panic.internal: { en: internal error, ko: 내부 오류, ja: 内部エラー, zh: 内部错误 }
+tui.panic.defended:
+  en: "Defended internal TUI panic: %{msg}"
+  ko: "TUI 내부 패닉을 방어했습니다: %{msg}"
+  ja: "TUI内部パニックを防ぎました: %{msg}"
+  zh: "已防御 TUI 内部 panic: %{msg}"
+tui.panic.exit:
+  en: "TUI exited safely due to an internal error: %{msg}"
+  ko: "TUI 가 내부 오류로 안전하게 종료되었습니다: %{msg}"
+  ja: "TUIが内部エラーで安全に終了しました: %{msg}"
+  zh: "TUI 因内部错误已安全退出: %{msg}"
+
+# ── TUI: misc ─────────────────────────────────────────────
+tui.exec_run_header: { en: exec hooks run, ko: exec 훅 실행, ja: exec フック実行, zh: 运行 exec 钩子 }
+tui.press_enter_return:
+  en: "Press [Enter] to return to the TUI..."
+  ko: "[Enter] 를 누르면 TUI 로 돌아갑니다..."
+  ja: "[Enter] を押すとTUIに戻ります..."
+  zh: "按 [Enter] 返回 TUI..."
+tui.config_edit_prompt:
+  en: "%{key} setting — %{hint}"
+  ko: "%{key} 설정 — %{hint}"
+  ja: "%{key} 設定 — %{hint}"
+  zh: "%{key} 设置 — %{hint}"
+tui.header.branch: { en: branch, ko: 브랜치, ja: ブランチ, zh: 分支 }
+tui.unset: { en: "(unset)", ko: "(미설정)", ja: "(未設定)", zh: "(未设置)" }
+tui.default_paren: { en: "(default)", ko: "(기본)", ja: "(既定)", zh: "(默认)" }
+tui.none_paren: { en: "(none)", ko: "(없음)", ja: "(なし)", zh: "(无)" }
+tui.col.variable: { en: Variable, ko: 변수, ja: 変数, zh: 变量 }
+tui.col.value: { en: Value, ko: 값, ja: 値, zh: 值 }
+tui.kv.matched_branch_key: { en: matched branch key, ko: 매칭 브랜치 키, ja: マッチしたブランチキー, zh: 匹配的分支键 }
+tui.kv.exec_hooks: { en: exec hooks, ko: exec 훅, ja: exec フック, zh: exec 钩子 }
+
+# ── TUI: titles ───────────────────────────────────────────
+tui.title.variables_search:
+  en: " Variables  search: %{query}_ "
+  ko: " 변수  검색: %{query}_ "
+  ja: " 変数  検索: %{query}_ "
+  zh: " 变量  搜索: %{query}_ "
+tui.title.variables_count:
+  en: " Variables (%{count}) "
+  ko: " 변수 (%{count}개) "
+  ja: " 変数 (%{count}件) "
+  zh: " 变量 (%{count}个) "
+tui.title.global_config:
+  en: "Global config (Enter=edit, saves GitVersion.yml on change)"
+  ko: "전역 설정 (Enter=편집, 변경 시 GitVersion.yml 저장)"
+  ja: "グローバル設定 (Enter=編集, 変更時 GitVersion.yml 保存)"
+  zh: "全局配置 (Enter=编辑, 更改时保存 GitVersion.yml)"
+tui.title.effective:
+  en: "Effective config — how the above resolves on this branch"
+  ko: "유효 설정(effective) — 위 설정이 이 브랜치에 해석된 결과"
+  ja: "有効設定(effective) — 上の設定がこのブランチで解決された結果"
+  zh: "有效配置(effective) — 上述配置在此分支的解析结果"
+tui.title.commits:
+  en: " Commits (first-parent, %{count})  ◆=version source "
+  ko: " 커밋 (first-parent, %{count}개)  ◆=버전 소스 "
+  ja: " コミット (first-parent, %{count}件)  ◆=バージョンソース "
+  zh: " 提交 (first-parent, %{count}个)  ◆=版本来源 "
+tui.title.branches:
+  en: "Branches (Enter=recompute, ●current ○base)"
+  ko: "브랜치 (Enter=재계산, ●현재 ○기준)"
+  ja: "ブランチ (Enter=再計算, ●現在 ○基準)"
+  zh: "分支 (Enter=重新计算, ●当前 ○基准)"
+tui.title.actions:
+  en: "Actions (Enter=run)"
+  ko: "액션 (Enter=실행)"
+  ja: "アクション (Enter=実行)"
+  zh: "操作 (Enter=运行)"
+tui.title.input_modal:
+  en: "Input (Enter to confirm, Esc to cancel)"
+  ko: "입력 (Enter 확인, Esc 취소)"
+  ja: "入力 (Enter 確認, Esc キャンセル)"
+  zh: "输入 (Enter 确认, Esc 取消)"
+
+# ── TUI: help footers ─────────────────────────────────────
+tui.help.variables:
+  en: "[/]search [c]copy value [C]copy JSON [↑↓]move [1-5]tab [q]quit"
+  ko: "[/]검색 [c]값복사 [C]JSON복사 [↑↓]이동 [1-5]탭 [q]종료"
+  ja: "[/]検索 [c]値コピー [C]JSONコピー [↑↓]移動 [1-5]タブ [q]終了"
+  zh: "[/]搜索 [c]复制值 [C]复制JSON [↑↓]移动 [1-5]标签 [q]退出"
+tui.help.config:
+  en: "[Enter]edit setting(saved) [↑↓]move [1-5]tab [q]quit"
+  ko: "[Enter]설정 편집(저장됨) [↑↓]이동 [1-5]탭 [q]종료"
+  ja: "[Enter]設定編集(保存済み) [↑↓]移動 [1-5]タブ [q]終了"
+  zh: "[Enter]编辑设置(已保存) [↑↓]移动 [1-5]标签 [q]退出"
+tui.help.branches:
+  en: "[Enter]recompute on branch [↑↓]move [q]quit"
+  ko: "[Enter]해당 브랜치로 재계산 [↑↓]이동 [q]종료"
+  ja: "[Enter]該当ブランチで再計算 [↑↓]移動 [q]終了"
+  zh: "[Enter]在该分支重新计算 [↑↓]移动 [q]退出"
+tui.help.actions:
+  en: "[Enter]run [↑↓]move [q]quit"
+  ko: "[Enter]실행 [↑↓]이동 [q]종료"
+  ja: "[Enter]実行 [↑↓]移動 [q]終了"
+  zh: "[Enter]运行 [↑↓]移动 [q]退出"
+tui.help.default:
+  en: "[↑↓]scroll/move [1-5]tab [C]copy JSON [q]quit"
+  ko: "[↑↓]스크롤/이동 [1-5]탭 [C]JSON복사 [q]종료"
+  ja: "[↑↓]スクロール/移動 [1-5]タブ [C]JSONコピー [q]終了"
+  zh: "[↑↓]滚动/移动 [1-5]标签 [C]复制JSON [q]退出"

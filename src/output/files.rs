@@ -3,6 +3,7 @@
 //! 원본 `GitVersion.Output/AssemblyInfo/*`, `WixUpdater/*` 대응.
 
 use super::variables::VersionVariables;
+use rust_i18n::t;
 use anyhow::{Context, Result};
 use quick_xml::events::{BytesText, Event};
 use quick_xml::reader::Reader;
@@ -67,7 +68,7 @@ pub fn update_assembly_info(
     for path in targets {
         if path.exists() {
             let content = std::fs::read_to_string(&path)
-                .with_context(|| format!("읽기 실패: {}", path.display()))?;
+                .with_context(|| t!("file.read_failed", path = path.display()).to_string())?;
             let new = replace_assembly_attributes(&content, vars);
             std::fs::write(&path, new)?;
             updated.push(path);
@@ -146,9 +147,9 @@ pub fn update_project_files(
             continue;
         }
         let content = std::fs::read_to_string(&path)
-            .with_context(|| format!("읽기 실패: {}", path.display()))?;
+            .with_context(|| t!("file.read_failed", path = path.display()).to_string())?;
         let new = replace_project_elements(&content, vars)
-            .with_context(|| format!("XML 갱신 실패: {}", path.display()))?;
+            .with_context(|| t!("file.xml_update_failed", path = path.display()).to_string())?;
         std::fs::write(&path, new)?;
         updated.push(path);
     }
@@ -182,7 +183,7 @@ fn replace_project_elements(content: &str, vars: &VersionVariables) -> Result<St
         match reader.read_event() {
             Ok(Event::Eof) => break,
             Ok(ev) => events.push(ev.into_owned()),
-            Err(e) => return Err(anyhow::anyhow!("XML 파싱 오류: {e}")),
+            Err(e) => return Err(anyhow::anyhow!("{}", t!("file.xml_parse_error", error = e))),
         }
     }
 
@@ -312,7 +313,7 @@ pub fn update_package_files(
         }
         let name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
         let content = std::fs::read_to_string(&path)
-            .with_context(|| format!("읽기 실패: {}", path.display()))?;
+            .with_context(|| t!("file.read_failed", path = path.display()).to_string())?;
         // 패키지 매니페스트에는 SemVer(빌드 메타데이터 제외)를 사용한다.
         let version = &vars.sem_ver;
         let new = match name.as_str() {
@@ -332,7 +333,7 @@ pub fn update_package_files(
 /// package.json 의 최상위 "version" 갱신(키 순서 보존, 2-space 들여쓰기).
 fn update_package_json(content: &str, version: &str) -> Result<Option<String>> {
     let mut value: serde_json::Value =
-        serde_json::from_str(content).context("package.json 파싱 실패")?;
+        serde_json::from_str(content).with_context(|| t!("file.json_parse_failed").to_string())?;
     let serde_json::Value::Object(map) = &mut value else { return Ok(None) };
     if !map.contains_key("version") {
         return Ok(None);
@@ -345,7 +346,7 @@ fn update_package_json(content: &str, version: &str) -> Result<Option<String>> {
 
 /// Cargo.toml 의 [package] version 갱신(포맷 보존).
 fn update_cargo_toml(content: &str, version: &str) -> Result<Option<String>> {
-    let mut doc = content.parse::<toml_edit::DocumentMut>().context("Cargo.toml 파싱 실패")?;
+    let mut doc = content.parse::<toml_edit::DocumentMut>().with_context(|| t!("file.cargo_parse_failed").to_string())?;
     let Some(pkg) = doc.get_mut("package").and_then(|p| p.as_table_mut()) else {
         return Ok(None);
     };
@@ -358,7 +359,7 @@ fn update_cargo_toml(content: &str, version: &str) -> Result<Option<String>> {
 
 /// pyproject.toml 의 [project] 또는 [tool.poetry] version 갱신(포맷 보존).
 fn update_pyproject_toml(content: &str, version: &str) -> Result<Option<String>> {
-    let mut doc = content.parse::<toml_edit::DocumentMut>().context("pyproject.toml 파싱 실패")?;
+    let mut doc = content.parse::<toml_edit::DocumentMut>().with_context(|| t!("file.pyproject_parse_failed").to_string())?;
     let mut changed = false;
     // PEP 621: [project] version
     if let Some(project) = doc.get_mut("project").and_then(|p| p.as_table_mut()) {

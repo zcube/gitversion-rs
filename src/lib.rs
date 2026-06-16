@@ -6,6 +6,12 @@
 // 않는 헬퍼(예: tags_on_commit, format_short)도 의도적으로 포함한다.
 #![allow(dead_code)]
 
+// 다국어: 영어 기본, ko/ja/zh 는 locales/ 의 YAML 에서 로드.
+rust_i18n::i18n!("locales", fallback = "en");
+
+pub mod i18n;
+
+pub mod app;
 pub mod buildagent;
 pub mod cache;
 pub mod cli;

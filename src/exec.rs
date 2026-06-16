@@ -5,6 +5,7 @@
 //! 버전 정보를 수정(next-version 덮어쓰기 후 재계산)할 수 있다.
 
 use crate::output::VersionVariables;
+use rust_i18n::t;
 use anyhow::{bail, Context, Result};
 use regex::Regex;
 use std::collections::BTreeMap;
@@ -45,11 +46,11 @@ fn run_command(
 ) -> Result<Option<String>> {
     let rendered = render(cmd, &vars.to_map());
     if dry_run {
-        log::info!("[dry-run] 실행 생략: {rendered}");
+        log::info!("{}", t!("exec.dry_run", cmd = rendered));
         eprintln!("[dry-run] {rendered}");
         return Ok(None);
     }
-    log::info!("실행: {rendered}");
+    log::info!("{}", t!("exec.running", cmd = rendered));
 
     let (program, flag) = if cfg!(windows) { ("cmd", "/C") } else { ("sh", "-c") };
     let mut command = Command::new(program);
@@ -60,16 +61,16 @@ fn run_command(
 
     if capture {
         let output =
-            command.output().with_context(|| format!("명령 실행 실패: {rendered}"))?;
+            command.output().with_context(|| t!("exec.run_failed", cmd = rendered))?;
         if !output.status.success() {
-            bail!("명령이 실패했습니다(코드 {:?}): {rendered}", output.status.code());
+            bail!("{}", t!("exec.cmd_failed", code = format!("{:?}", output.status.code()), cmd = rendered));
         }
         Ok(Some(String::from_utf8_lossy(&output.stdout).into_owned()))
     } else {
         let status =
-            command.status().with_context(|| format!("명령 실행 실패: {rendered}"))?;
+            command.status().with_context(|| t!("exec.run_failed", cmd = rendered))?;
         if !status.success() {
-            bail!("명령이 실패했습니다(코드 {:?}): {rendered}", status.code());
+            bail!("{}", t!("exec.cmd_failed", code = format!("{:?}", status.code()), cmd = rendered));
         }
         Ok(None)
     }
@@ -101,14 +102,14 @@ pub fn run_hooks(
     'outer: for &name in &HOOK_ORDER {
         if let Some(cmd) = hooks.get(name) {
             if let Err(e) = run_command(cmd, vars, work_dir, false, dry_run) {
-                result = Err(e.context(format!("{name} 훅 실패")));
+                result = Err(e.context(t!("exec.hook_failed", name = name).to_string()));
                 break 'outer;
             }
         }
         if name == "prepare" {
             if let Some(cmd) = extra_prepare {
                 if let Err(e) = run_command(cmd, vars, work_dir, false, dry_run) {
-                    result = Err(e.context("--exec(prepare) 실패"));
+                    result = Err(e.context(t!("exec.exec_prepare_failed").to_string()));
                     break 'outer;
                 }
             }
@@ -117,7 +118,7 @@ pub fn run_hooks(
 
     if result.is_err() {
         if let Some(fail_cmd) = hooks.get("fail") {
-            log::warn!("훅 실패 → fail 훅 실행");
+            log::warn!("{}", t!("exec.running_fail_hook"));
             let _ = run_command(fail_cmd, vars, work_dir, false, dry_run);
         }
     }
