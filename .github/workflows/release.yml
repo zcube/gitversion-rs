@@ -39,6 +39,19 @@ jobs:
           v="$(./target/release/gitversion -v SemVer)"
           echo "Computed version: $v"
           echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Ensure GitHub Release exists
+        # taiki-e/upload-rust-binary-action 은 기존 Release 에 자산을 올린다.
+        # 병렬 build 잡들이 업로드할 수 있도록 여기서 먼저 Release 를 만들어 둔다.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          GV: ${{ steps.gv.outputs.version }}
+        run: |
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" --notes "gitversion $GV"
+          fi
 
   build:
     name: ${{ matrix.target }}
