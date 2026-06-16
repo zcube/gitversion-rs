@@ -13,6 +13,11 @@ fn git(dir: &Path, args: &[&str]) {
         .args(args)
         .env("GIT_AUTHOR_DATE", "1609459200 +0000")
         .env("GIT_COMMITTER_DATE", "1609459200 +0000")
+        // CI 러너에는 전역 git 신원이 없으므로 명시한다.
+        .env("GIT_AUTHOR_NAME", "test")
+        .env("GIT_AUTHOR_EMAIL", "test@example.com")
+        .env("GIT_COMMITTER_NAME", "test")
+        .env("GIT_COMMITTER_EMAIL", "test@example.com")
         .status()
         .expect("git 실행 실패");
     assert!(status.success(), "git {args:?} 실패");
