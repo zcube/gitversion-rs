@@ -46,13 +46,27 @@ fn run() -> Result<()> {
     } else {
         args.verbosity.to_level()
     };
-    // 로그는 항상 stderr 로(stdout 은 버전 결과 전용 → `$(gitversion ...)` 캡처가 깨끗하게 유지됨).
-    env_logger::Builder::new()
-        .filter_level(level)
-        .parse_default_env()
-        .format_timestamp(None)
-        .target(env_logger::Target::Stderr)
-        .init();
+    // 로그 대상: --log <FILE> 이면 파일(append), 아니면 stderr.
+    // stdout 은 항상 버전 결과 전용으로 비워 둔다(`$(gitversion ...)` 캡처가 깨끗하게 유지됨).
+    let mut builder = env_logger::Builder::new();
+    builder.filter_level(level).parse_default_env();
+    match &args.log_file {
+        Some(path) => {
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .with_context(|| t!("error.log_open", path = path.display()))?;
+            // 파일 로그에는 타임스탬프를 남긴다(원본 GitVersion 로그 파일과 동일한 성격).
+            builder.target(env_logger::Target::Pipe(Box::new(file)));
+        }
+        None => {
+            builder
+                .format_timestamp(None)
+                .target(env_logger::Target::Stderr);
+        }
+    }
+    builder.init();
 
     // --url 이 주어지면 원격 저장소를 동적으로 clone 해 그 경로를 대상으로 사용.
     let target = if let Some(url) = &args.url {

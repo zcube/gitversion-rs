@@ -35,6 +35,8 @@ CLI、交互式 TUI 以及所有内部消息均通过 [`rust-i18n`](https://gith
   `commit-message-convention: ConventionalCommits` 选择（借鉴自 semantic-release 的方案）
 - **部署模式**：ManualDeployment / ContinuousDelivery / ContinuousDeployment
 - **输出**：JSON、dot-env、build-server、单个变量（`-v`）、格式化字符串（`--format`）
+- **日志文件**：`--log`/`-l <FILE>`（原版 `/l`）将带时间戳的日志追加写入文件，stdout 保持干净，
+  专用于版本结果
 - **构建代理集成**：TeamCity、Azure Pipelines、GitHub Actions、GitLab CI、Jenkins、
   AppVeyor、TravisCI、Drone、CodeBuild、ContinuaCI、EnvRun、MyGet、BitBucket、BuildKite、
   SpaceAutomation——通过环境自动检测，并以各 CI 的格式输出（`--output build-server`）
@@ -156,8 +158,8 @@ GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
 - `track-merge-target`：一个仅被上游的 `MainlineVersionStrategy` 和
   `GetTaggedSemanticVersion()` 使用的标志。本移植版已经考虑了从 HEAD 可达的所有标签，
   因此可达的 merge-target 标签已被覆盖；不可达的（主要是 Mainline 场景）则未覆盖。
-- 日志文件输出（`/l`）未实现。`/nofetch /nonormalize /allowshallow` 会被识别，
-  但鉴于本移植版的结构，它们是诚实的空操作（动态克隆直接执行 fetch/normalize）。
+- `/nofetch /nonormalize /allowshallow` 会被识别，但鉴于本移植版的结构，它们是诚实的空操作
+  （动态克隆直接执行 fetch/normalize）。
 - `GitVersionInformation` 源文件生成在上游是由 MSBuild 任务（而非 CLI）处理的，
   因此超出了本 CLI 移植版的范围。
 

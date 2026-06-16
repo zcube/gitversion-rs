@@ -760,3 +760,13 @@ cli.override_unsupported:
   ko: "지원하지 않는 overrideconfig 키(무시): %{key}"
   ja: "サポートされない overrideconfig キー(無視): %{key}"
   zh: "不支持的 overrideconfig 键(已忽略): %{key}"
+cli.help.log_file:
+  en: "Write log output to a file (upstream `/l`). Logs append; stdout stays clean."
+  ko: "로그 출력을 파일에 기록(원본 `/l`). 로그는 추가되며 stdout 은 깨끗하게 유지."
+  ja: "ログ出力をファイルに書き込む(原本 `/l`)。ログは追記され、stdout はクリーンなまま。"
+  zh: "将日志输出写入文件(原版 `/l`)。日志为追加，stdout 保持干净。"
+error.log_open:
+  en: "Cannot open log file: %{path}"
+  ko: "로그 파일을 열 수 없습니다: %{path}"
+  ja: "ログファイルを開けません: %{path}"
+  zh: "无法打开日志文件: %{path}"

@@ -35,6 +35,8 @@ CLI、対話型 TUI、およびすべての内部メッセージは [`rust-i18n`
   `commit-message-convention: ConventionalCommits` で選択可能（semantic-release のレビューから借用）
 - **デプロイモード**: ManualDeployment / ContinuousDelivery / ContinuousDeployment
 - **出力**: JSON, dot-env, build-server, 単一変数（`-v`）, フォーマット文字列（`--format`）
+- **ログファイル**: `--log`/`-l <FILE>`（原本 `/l`）でタイムスタンプ付きログをファイルに追記。
+  stdout はバージョン結果専用にクリーンなまま
 - **ビルドエージェント連携**: TeamCity, Azure Pipelines, GitHub Actions, GitLab CI, Jenkins,
   AppVeyor, TravisCI, Drone, CodeBuild, ContinuaCI, EnvRun, MyGet, BitBucket, BuildKite,
   SpaceAutomation — 環境から自動検出され、各 CI のフォーマットで出力されます（`--output build-server`）
@@ -159,9 +161,8 @@ GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
   消費されるフラグです。この移植版は HEAD から到達可能なすべてのタグをすでに考慮しているため、
   到達可能なマージターゲットのタグはカバーされますが、到達不可能なもの（主に Mainline）は
   カバーされません。
-- ログファイル出力（`/l`）は実装されていません。`/nofetch /nonormalize /allowshallow` は認識
-  されますが、この移植版の構造上、正直なところ no-op です（動的クローンが fetch/normalize を
-  直接実行します）。
+- `/nofetch /nonormalize /allowshallow` は認識されますが、この移植版の構造上、正直なところ
+  no-op です（動的クローンが fetch/normalize を直接実行します）。
 - `GitVersionInformation` のソースファイル生成は、上流では CLI ではなく MSBuild タスクで処理されるため、
   この CLI 移植版の範囲外です。
 

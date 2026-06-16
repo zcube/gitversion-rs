@@ -36,6 +36,8 @@ variable.
   `commit-message-convention: ConventionalCommits` (borrowed from a semantic-release review)
 - **Deployment modes**: ManualDeployment / ContinuousDelivery / ContinuousDeployment
 - **Output**: JSON, dot-env, build-server, single variable (`-v`), format string (`--format`)
+- **Log file**: `--log`/`-l <FILE>` (upstream `/l`) appends timestamped log output to a file while
+  keeping stdout clean for the version result
 - **Build-agent integration**: TeamCity, Azure Pipelines, GitHub Actions, GitLab CI, Jenkins,
   AppVeyor, TravisCI, Drone, CodeBuild, ContinuaCI, EnvRun, MyGet, BitBucket, BuildKite,
   SpaceAutomation — auto-detected via environment, emitted in each CI's format (`--output build-server`)
@@ -157,8 +159,8 @@ GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
 - `track-merge-target`: a flag consumed only by upstream's `MainlineVersionStrategy` and
   `GetTaggedSemanticVersion()`. This port already considers all tags reachable from HEAD, so
   reachable merge-target tags are covered; unreachable ones (mainly Mainline) are not.
-- Log file output (`/l`) is not implemented. `/nofetch /nonormalize /allowshallow` are recognized
-  but are honest no-ops given this port's structure (dynamic clone performs fetch/normalize directly).
+- `/nofetch /nonormalize /allowshallow` are recognized but are honest no-ops given this port's
+  structure (dynamic clone performs fetch/normalize directly).
 - `GitVersionInformation` source-file generation is handled by an MSBuild task (not the CLI) upstream,
   so it is out of scope for this CLI port.
 

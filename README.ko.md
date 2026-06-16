@@ -33,6 +33,8 @@ CLI·대화형 TUI·모든 내부 메시지가 [`rust-i18n`](https://github.com/
   (`commit-message-convention: ConventionalCommits`). semantic-release 검토에서 차용
 - **배포 모드**: ManualDeployment / ContinuousDelivery / ContinuousDeployment
 - **출력**: JSON, dot-env, build-server, 단일 변수(`-v`), 포맷 문자열(`--format`)
+- **로그 파일**: `--log`/`-l <FILE>`(원본 `/l`)로 타임스탬프 로그를 파일에 append. stdout 은 버전
+  결과 전용으로 깨끗하게 유지
 - **빌드에이전트 통합**: TeamCity, Azure Pipelines, GitHub Actions, GitLab CI, Jenkins,
   AppVeyor, TravisCI, Drone, CodeBuild, ContinuaCI, EnvRun, MyGet, BitBucket, BuildKite,
   SpaceAutomation — 환경변수로 감지해 각 CI 형식으로 출력(`--output build-server`)
@@ -138,8 +140,8 @@ GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh
 - `track-merge-target`: 원본의 `MainlineVersionStrategy` 와 `GetTaggedSemanticVersion()` 에서만
   소비되는 플래그입니다. 본 포트는 이미 HEAD 에서 도달 가능한 모든 태그를 후보로 보므로 도달
   가능한 merge-target 태그는 포괄되며, 도달 불가한 경우(주로 Mainline)는 미반영입니다.
-- 로그 파일 출력(`/l`)은 미구현입니다. `/nofetch /nonormalize /allowshallow` 는 인식하지만
-  이 포트의 구조상 무효과인 정직한 no-op 입니다(원격 clone 은 fetch/normalize 를 직접 수행).
+- `/nofetch /nonormalize /allowshallow` 는 인식하지만 이 포트의 구조상 무효과인 정직한 no-op
+  입니다(원격 clone 은 fetch/normalize 를 직접 수행).
 - `GitVersionInformation` 소스 파일 생성은 원본에서도 CLI 가 아닌 MSBuild 태스크가 담당하므로
   본 CLI 포트의 범위 밖입니다.
 
