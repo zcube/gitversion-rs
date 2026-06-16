@@ -469,6 +469,7 @@ pub fn calculate(
     }
 
     let mut candidates: Vec<BaseVersion> = Vec::new();
+    let mut tag_alternatives: Vec<SemanticVersion> = Vec::new();
     let strategies = if config.strategies.is_empty() {
         vec![
             VersionStrategy::Fallback,
@@ -503,7 +504,14 @@ pub fn calculate(
                 }
             }
             VersionStrategy::TaggedCommit | VersionStrategy::Mainline => {
-                gather_tagged(repo, &eff, &head, &ignore, &mut candidates)?;
+                gather_tagged(
+                    repo,
+                    &eff,
+                    &head,
+                    &ignore,
+                    &mut candidates,
+                    &mut tag_alternatives,
+                )?;
             }
             VersionStrategy::VersionInBranchName => {
                 if eff.is_release_branch {
@@ -574,12 +582,18 @@ pub fn calculate(
         .collect();
 
     // 최고 IncrementedVersion 후보 선택.
-    let max_idx = (0..next.len())
-        .max_by(|&a, &b| next[a].incremented.cmp(&next[b].incremented))
-        .unwrap();
+    // 동률인 경우 .NET 과 마찬가지로 앞선(먼저 수집된) 후보 우선(TaggedCommit > VersionInBranchName).
+    let max_idx = next.iter().enumerate().fold(0usize, |acc, (i, n)| {
+        if n.incremented.cmp(&next[acc].incremented) == std::cmp::Ordering::Greater {
+            i
+        } else {
+            acc
+        }
+    });
 
     // base version source 는 "source 를 가진 후보 중 가장 최신" 에서 가져온다
     // (원본 NextVersionCalculator 의 LatestBaseVersionSource 규칙).
+    // VSSV 는 선택된(max) 후보의 base semantic_version 에서 가져온다.
     let latest_source = next
         .iter()
         .filter(|n| n.base.base_version_source.is_some())
@@ -587,13 +601,12 @@ pub fn calculate(
     let base_source = latest_source
         .and_then(|n| n.base.base_version_source.clone())
         .or_else(|| next[max_idx].base.base_version_source.clone());
-    let source_semver = latest_source
-        .map(|n| n.base.semantic_version.clone())
-        .unwrap_or_else(|| next[max_idx].base.semantic_version.clone());
 
     let chosen = next.into_iter().nth(max_idx).unwrap();
+    // VSSV = 선택된 base version 의 semantic_version (증분 전)
+    let source_semver = chosen.base.semantic_version.clone();
 
-    let final_semver = apply_deployment_mode(
+    let mut final_semver = apply_deployment_mode(
         repo,
         &eff,
         &branch_name,
@@ -602,6 +615,16 @@ pub fn calculate(
         base_source.as_deref(),
         &ignore,
     )?;
+    // AlternativeSemanticVersion 조정: 브랜치에 label 불일치 태그가 있고 그 코어가 더 높으면
+    // 최종 버전의 major.minor.patch 를 그 태그 코어로 교체한다.
+    // (.NET NextVersionCalculator.Calculate() alternativeSemanticVersion 동작)
+    if let Some(alt) = tag_alternatives.iter().max_by(|a, b| a.cmp_core(b)) {
+        if alt.cmp_core(&final_semver) == std::cmp::Ordering::Greater {
+            final_semver.major = alt.major;
+            final_semver.minor = alt.minor;
+            final_semver.patch = alt.patch;
+        }
+    }
     let variables = build_variables(&eff, &branch_name, &head, &final_semver, &source_semver)?;
     Ok(variables)
 }
@@ -673,7 +696,10 @@ fn mainline_calculate(
 
     let mut version = SemanticVersion::new(0, 0, 0);
     let mut highest_tag = SemanticVersion::new(0, 0, 0);
+    // VSSV 계산용: 마지막 커밋 처리 전의 trunk 버전
+    let mut prev_trunk_version = SemanticVersion::new(0, 0, 0);
     for c in &trunk {
+        prev_trunk_version = version.clone();
         // 이 step 이 도입한 커밋들. merge 면 병합된 브랜치(두 번째 부모 계열), 아니면 자신.
         let introduced: Vec<CommitInfo> = if c.parents.len() >= 2 {
             ignore.filter(
@@ -734,7 +760,8 @@ fn mainline_calculate(
         }
         version = version.increment(field, None, true);
     }
-    let base = highest_tag;
+    // VSSV 계산용: trunk walk 이후 버전 (feature increment 전에 저장해야 함)
+    let trunk_version_end = version.clone();
 
     // distance / source_sha 계산.
     let (mut version, source_sha, distance) = if let Some(ref mb_sha) = merge_base_sha {
@@ -811,16 +838,56 @@ fn mainline_calculate(
         other_metadata: None,
     };
 
-    build_variables(eff, branch_name, head, &version, &base)
+    // VersionSourceSemVer 계산:
+    // source_sha 커밋에 태그가 있으면 그 코어 버전, 없으면 trunk 해당 시점 버전 + "-1".
+    // 브랜치: trunk_version_end = feature increment 전 trunk walk 직후 버전.
+    // 트렁크: prev_trunk_version = HEAD 처리 직전 버전.
+    let version_at_source = if merge_base_sha.is_some() {
+        trunk_version_end
+    } else {
+        prev_trunk_version.clone()
+    };
+    let source_semver = match version.build_metadata.version_source_sha.as_deref() {
+        None => SemanticVersion::new(0, 0, 0),
+        Some(sha) => {
+            if let Some(tv) = tags_by_sha.get(sha) {
+                tv.clone()
+            } else {
+                let mut sv = version_at_source;
+                sv.pre_release_tag = PreReleaseTag::new("", Some(1), true);
+                sv
+            }
+        }
+    };
+
+    build_variables(eff, branch_name, head, &version, &source_semver)
+}
+
+/// 브랜치 label 매칭 여부 확인.
+///
+/// .NET `SemanticVersion.IsMatchForBranchSpecificLabel`:
+/// `(Name.Length == 0 && Number is null) || IsLabeledWith(value)`
+fn is_match_for_branch_label(version: &SemanticVersion, label: &str) -> bool {
+    let pre = &version.pre_release_tag;
+    // 릴리스 버전 (name="" and number=None): 항상 매칭
+    if pre.name.is_empty() && pre.number.is_none() {
+        return true;
+    }
+    // pre-release 있음: name이 label과 일치해야 함 (has_tag() && name == label)
+    pre.has_tag() && pre.name == label
 }
 
 /// HEAD 에서 도달 가능한 버전 태그를 후보로 수집.
+///
+/// `alternatives`: AlternativeSemanticVersion 조정에 쓸 전체 파싱된 태그 버전.
+/// 브랜치 label 과 일치하지 않는 태그는 `out` 에 넣지 않고 `alternatives` 에만 넣는다.
 fn gather_tagged(
     repo: &GitRepo,
     eff: &EffectiveConfiguration,
     head: &CommitInfo,
     ignore: &IgnoreSet,
     out: &mut Vec<BaseVersion>,
+    alternatives: &mut Vec<SemanticVersion>,
 ) -> Result<()> {
     for tag in repo.tags()? {
         if ignore.is_ignored(&tag.target_sha, &tag.when) {
@@ -838,6 +905,12 @@ fn gather_tagged(
         let Some(version) = parse_version(&tag.name, eff) else {
             continue;
         };
+        // AlternativeSemanticVersion 조정용 전체 태그 버전 수집 (label 매칭 무관)
+        alternatives.push(version.clone());
+        // 브랜치 label 과 일치하지 않는 태그는 후보에서 제외
+        if !is_match_for_branch_label(&version, &eff.label) {
+            continue;
+        }
         let is_current = tag.target_sha == head.sha;
         let exact = is_current && eff.prevent_increment_when_current_commit_tagged;
         // named pre-release 태그(예: 1.0.0-beta.1)는 아직 "릴리스" 가 아니므로
@@ -1126,7 +1199,7 @@ fn build_variables(
             .version_source_increment
             .as_str()
             .to_string(),
-        version_source_sem_ver: source_semver.major_minor_patch(),
+        version_source_sem_ver: source_semver.to_string(),
         version_source_sha: sv
             .build_metadata
             .version_source_sha

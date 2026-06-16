@@ -36,6 +36,7 @@ const COMPARED_KEYS: &[&str] = &[
     "WeightedPreReleaseNumber",
     "VersionSourceDistance",
     "VersionSourceIncrement",
+    "VersionSourceSemVer",
     "Sha",
     "ShortSha",
     // 주의: UncommittedChanges 는 작업트리의 untracked/수정 파일에 의존하는
