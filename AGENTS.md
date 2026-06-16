@@ -75,6 +75,13 @@ cargo clippy --all-targets -- -D warnings   # 린트(경고 0 유지)
      GitHub Release 에 업로드한다.
 5. 결과: GitHub Release 에 플랫폼별 바이너리가 첨부되고, 각 바이너리 `gitversion --version`
    은 태그 버전을 보고한다.
+6. **Homebrew tap 자동 갱신**: 빌드가 끝나면 `homebrew` 잡이 자산의 SHA256 을 계산해
+   `zcube/homebrew-tap` 의 `Formula/gitversion.rb` 를 새 버전으로 덮어쓰고 커밋·푸시한다.
+   - 필요 시크릿: **`HOMEBREW_TAP_TOKEN`** — `zcube/homebrew-tap` 에 contents:write 권한이
+     있는 PAT(또는 fine-grained 토큰). gitversion-rs 저장소 Secrets 에 등록한다.
+   - 시크릿이 없으면 이 잡은 조용히 건너뛴다(릴리스 자체에는 영향 없음).
+   - 사전 릴리스(버전에 `-` 포함, 예: `0.1.0-rc.1`)에는 tap 을 갱신하지 않는다.
+   - 설치: `brew install zcube/tap/gitversion`.
 
 > 수동 재빌드가 필요하면 Actions 의 `Release` 워크플로를 `workflow_dispatch` 로 실행하고
 > 태그명을 입력한다.

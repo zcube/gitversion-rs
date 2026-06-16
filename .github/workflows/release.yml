@@ -105,3 +105,94 @@ jobs:
           # 태그 푸시는 ref 태그를, workflow_dispatch 는 입력 태그를 빌드한다.
           ref: refs/tags/${{ github.event.inputs.tag || github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  # 빌드/업로드가 끝나면 zcube/homebrew-tap 의 포뮬러를 자동 갱신한다.
+  # 필요 시크릿: HOMEBREW_TAP_TOKEN (homebrew-tap 에 contents:write 권한이 있는 PAT).
+  # 시크릿이 없으면 잡을 건너뛴다(릴리스 자체는 영향 없음). 사전 릴리스(0.1.0-rc.1 등)도 건너뜀.
+  homebrew:
+    name: Update Homebrew tap
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    if: ${{ !contains(needs.version.outputs.version, '-') }}
+    steps:
+      - name: Render and push formula
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          VERSION: ${{ needs.version.outputs.version }}
+          SRC_REPO: ${{ github.repository }}
+          TAP_REPO: zcube/homebrew-tap
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "HOMEBREW_TAP_TOKEN 시크릿이 없어 tap 갱신을 건너뜁니다."
+            exit 0
+          fi
+          base="https://github.com/$SRC_REPO/releases/download/$TAG"
+          mkdir -p /tmp/dl
+          sha() {
+            gh release download "$TAG" --repo "$SRC_REPO" --pattern "$1" --dir /tmp/dl --clobber
+            sha256sum "/tmp/dl/$1" | awk '{print $1}'
+          }
+          export SHA_MAC_ARM="$(sha "gitversion-$TAG-aarch64-apple-darwin.tar.gz")"
+          export SHA_MAC_X86="$(sha "gitversion-$TAG-x86_64-apple-darwin.tar.gz")"
+          export SHA_LIN_ARM="$(sha "gitversion-$TAG-aarch64-unknown-linux-gnu.tar.gz")"
+          export SHA_LIN_X86="$(sha "gitversion-$TAG-x86_64-unknown-linux-gnu.tar.gz")"
+          export BASE="$base"
+
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/$TAP_REPO.git" tap
+          python3 - <<'PY'
+          import os
+          v   = os.environ["VERSION"]
+          tag = os.environ["TAG"]
+          base = os.environ["BASE"]
+          f = f'''class Gitversion < Formula
+            desc "Rust port of GitVersion - semantic versioning from Git history"
+            homepage "https://github.com/zcube/gitversion-rs"
+            version "{v}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "{base}/gitversion-{tag}-aarch64-apple-darwin.tar.gz"
+                sha256 "{os.environ["SHA_MAC_ARM"]}"
+              else
+                url "{base}/gitversion-{tag}-x86_64-apple-darwin.tar.gz"
+                sha256 "{os.environ["SHA_MAC_X86"]}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "{base}/gitversion-{tag}-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "{os.environ["SHA_LIN_ARM"]}"
+              else
+                url "{base}/gitversion-{tag}-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "{os.environ["SHA_LIN_X86"]}"
+              end
+            end
+
+            def install
+              bin.install "gitversion"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{{bin}}/gitversion --version")
+            end
+          end
+          '''
+          open("tap/Formula/gitversion.rb", "w", encoding="utf-8").write(f)
+          print(f"rendered formula for {v}")
+          PY
+
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/gitversion.rb
+          if git diff --cached --quiet; then
+            echo "포뮬러 변경 없음."
+            exit 0
+          fi
+          git commit -m "chore: gitversion $VERSION 업데이트"
+          git push
