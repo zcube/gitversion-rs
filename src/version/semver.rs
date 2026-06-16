@@ -364,4 +364,109 @@ mod tests {
         assert_eq!(v.major_minor_patch(), "2.0.0");
         assert_eq!(v.to_string(), "2.0.0-1");
     }
+
+    #[test]
+    fn prerelease_tag_parse_empty_returns_default() {
+        let t = PreReleaseTag::parse("");
+        assert!(!t.has_tag());
+        assert_eq!(t.name, "");
+        assert_eq!(t.number, None);
+    }
+
+    #[test]
+    fn prerelease_tag_format_number_only() {
+        // name 이 비어 있고 number 만 있는 경우 → 숫자 문자열 반환.
+        let t = PreReleaseTag::new("", Some(3), true);
+        assert_eq!(t.format(false), "3");
+    }
+
+    #[test]
+    fn prerelease_tag_format_name_and_number() {
+        let t = PreReleaseTag::new("rc", Some(2), false);
+        assert_eq!(t.format(false), "rc.2");
+    }
+
+    #[test]
+    fn prerelease_tag_ordering_both_without_tag() {
+        // 둘 다 태그 없음 → Equal.
+        let a = PreReleaseTag::default();
+        let b = PreReleaseTag::default();
+        assert_eq!(a.cmp(&b), std::cmp::Ordering::Equal);
+        assert_eq!(a.partial_cmp(&b), Some(std::cmp::Ordering::Equal));
+    }
+
+    #[test]
+    fn prerelease_tag_ordering_with_vs_without() {
+        let stable = PreReleaseTag::default();
+        let pre = PreReleaseTag::new("alpha", Some(1), false);
+        assert!(stable > pre);
+        assert!(pre < stable);
+    }
+
+    #[test]
+    fn build_metadata_format_short_none() {
+        let meta = BuildMetaData::default();
+        assert_eq!(meta.format_short(), "");
+    }
+
+    #[test]
+    fn build_metadata_format_short_value() {
+        let meta = BuildMetaData {
+            commits_since_tag: Some(5),
+            ..Default::default()
+        };
+        assert_eq!(meta.format_short(), "5");
+    }
+
+    #[test]
+    fn build_metadata_format_full_all_fields() {
+        let meta = BuildMetaData {
+            commits_since_tag: Some(3),
+            branch: Some("feature/foo".into()),
+            sha: Some("abc1234".into()),
+            other_metadata: Some("extra!info".into()),
+            ..Default::default()
+        };
+        let full = meta.format_full();
+        assert!(full.contains("3"), "commits: {full}");
+        assert!(
+            full.contains("Branch.feature-foo"),
+            "branch sanitize: {full}"
+        );
+        assert!(full.contains("Sha.abc1234"), "sha: {full}");
+        assert!(full.contains("extra-info"), "other sanitize: {full}");
+    }
+
+    #[test]
+    fn build_metadata_format_full_empty_other_omitted() {
+        let meta = BuildMetaData {
+            commits_since_tag: Some(1),
+            other_metadata: Some(String::new()),
+            ..Default::default()
+        };
+        let full = meta.format_full();
+        // 빈 other_metadata 는 출력에 포함되지 않아야 함.
+        assert_eq!(full, "1");
+    }
+
+    #[test]
+    fn semver_display_no_prerelease() {
+        let v = SemanticVersion::new(1, 2, 3);
+        assert_eq!(v.to_string(), "1.2.3");
+    }
+
+    #[test]
+    fn semver_partial_ord() {
+        let a = SemanticVersion::new(1, 0, 0);
+        let b = SemanticVersion::new(2, 0, 0);
+        assert!(a < b);
+        assert!(a.partial_cmp(&b) == Some(std::cmp::Ordering::Less));
+    }
+
+    #[test]
+    fn increment_major_resets_minor_patch() {
+        let base = SemanticVersion::new(1, 2, 3);
+        let v = base.increment(VersionField::Major, None, true);
+        assert_eq!((v.major, v.minor, v.patch), (2, 0, 0));
+    }
 }

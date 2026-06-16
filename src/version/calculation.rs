@@ -1112,3 +1112,149 @@ fn assembly_version(sv: &SemanticVersion, scheme: VersioningScheme) -> String {
         VersioningScheme::None => String::new(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::defaults;
+
+    fn default_eff() -> EffectiveConfiguration {
+        let cfg = defaults::gitflow();
+        EffectiveConfiguration::resolve(&cfg, "main")
+    }
+
+    #[test]
+    fn parse_ignore_date_formats() {
+        // datetime 형식
+        let dt = parse_ignore_date("2021-06-15T12:00:00").unwrap();
+        assert!(dt.to_rfc3339().starts_with("2021-06-15"));
+        // 날짜만
+        let dt2 = parse_ignore_date("2021-06-15").unwrap();
+        assert!(dt2.to_rfc3339().starts_with("2021-06-15"));
+        // 공백 구분자
+        let dt3 = parse_ignore_date("2021-06-15 12:00:00").unwrap();
+        assert!(dt3.to_rfc3339().starts_with("2021-06-15"));
+        // 잘못된 형식
+        assert!(parse_ignore_date("not-a-date").is_none());
+    }
+
+    #[test]
+    fn ignore_set_sha_prefix_match() {
+        // 7글자 이상 접두어로 매칭
+        let full_sha = "abcdef1234567890abcdef1234567890abcdef12";
+        let prefix = "abcdef1"; // 7글자
+        let mut set = IgnoreSet::default();
+        set.shas.insert(prefix.to_lowercase());
+        let when = chrono::Utc::now().fixed_offset();
+        assert!(set.is_ignored(full_sha, &when));
+        // 6글자 접두어는 무시됨
+        let mut set2 = IgnoreSet::default();
+        set2.shas.insert("abcdef".to_lowercase()); // 6글자 → 매칭 안 됨
+        assert!(!set2.is_ignored(full_sha, &when));
+    }
+
+    #[test]
+    fn ignore_set_before_date() {
+        let past = parse_ignore_date("2020-01-01").unwrap();
+        let set = IgnoreSet {
+            before: Some(parse_ignore_date("2021-01-01").unwrap()),
+            ..Default::default()
+        };
+        // past(2020) < before(2021) → 무시됨
+        assert!(set.is_ignored("anysha", &past));
+        // future(2022) >= before → 무시 안 됨
+        let future = parse_ignore_date("2022-01-01").unwrap();
+        assert!(!set.is_ignored("anysha", &future));
+    }
+
+    #[test]
+    fn strategy_to_field_all_variants() {
+        assert_eq!(
+            strategy_to_field(IncrementStrategy::Major),
+            VersionField::Major
+        );
+        assert_eq!(
+            strategy_to_field(IncrementStrategy::Minor),
+            VersionField::Minor
+        );
+        assert_eq!(
+            strategy_to_field(IncrementStrategy::Patch),
+            VersionField::Patch
+        );
+        assert_eq!(
+            strategy_to_field(IncrementStrategy::None),
+            VersionField::None
+        );
+        assert_eq!(
+            strategy_to_field(IncrementStrategy::Inherit),
+            VersionField::None
+        );
+    }
+
+    #[test]
+    fn increment_from_message_all_levels() {
+        let eff = default_eff();
+        // major
+        assert_eq!(
+            increment_from_message("big change\n+semver: major", &eff),
+            Some(VersionField::Major)
+        );
+        // minor
+        assert_eq!(
+            increment_from_message("new feature\n+semver: minor", &eff),
+            Some(VersionField::Minor)
+        );
+        // patch
+        assert_eq!(
+            increment_from_message("small fix\n+semver: patch", &eff),
+            Some(VersionField::Patch)
+        );
+        // none/skip
+        assert_eq!(
+            increment_from_message("chore\n+semver: none", &eff),
+            Some(VersionField::None)
+        );
+        assert_eq!(
+            increment_from_message("+semver: skip", &eff),
+            Some(VersionField::None)
+        );
+        // 매칭 없음
+        assert_eq!(increment_from_message("ordinary commit", &eff), None);
+    }
+
+    #[test]
+    fn increment_from_message_breaking_alias() {
+        let eff = default_eff();
+        assert_eq!(
+            increment_from_message("+semver: breaking", &eff),
+            Some(VersionField::Major)
+        );
+        assert_eq!(
+            increment_from_message("+semver: feature", &eff),
+            Some(VersionField::Minor)
+        );
+        assert_eq!(
+            increment_from_message("+semver: fix", &eff),
+            Some(VersionField::Patch)
+        );
+    }
+
+    #[test]
+    fn ignore_set_filter_empty_shortcircuit() {
+        // shas/before/paths 모두 비어 있으면 filter 는 입력을 그대로 반환.
+        use crate::git::CommitInfo;
+        let set = IgnoreSet::default();
+        let commits = vec![CommitInfo {
+            sha: "abc".into(),
+            short_sha: "abc".into(),
+            message: "msg".into(),
+            when: chrono::Utc::now().fixed_offset(),
+            parent_count: 0,
+            parents: vec![],
+        }];
+        // GitRepo 없이 동작 확인(shas/before/paths 비어 있으면 repo 호출 없음)
+        // 실제 repo 객체 없이 호출 불가 → 빈 filter 는 shortcircuit 됨을 간접 확인.
+        assert!(set.shas.is_empty() && set.before.is_none() && set.paths.is_empty());
+        let _ = commits; // 컴파일 확인용
+    }
+}

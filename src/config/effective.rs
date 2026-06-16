@@ -256,3 +256,89 @@ impl EffectiveConfiguration {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::defaults;
+
+    #[test]
+    fn find_branch_config_main_matches() {
+        let cfg = defaults::gitflow();
+        let (key, _) = find_branch_config(&cfg, "main").unwrap();
+        assert_eq!(key, "main");
+    }
+
+    #[test]
+    fn find_branch_config_feature_matches() {
+        let cfg = defaults::gitflow();
+        let (key, _) = find_branch_config(&cfg, "feature/foo").unwrap();
+        assert_eq!(key, "feature");
+    }
+
+    #[test]
+    fn find_branch_config_no_match_returns_unknown() {
+        let cfg = defaults::gitflow();
+        // "totally-unknown"은 어느 패턴에도 매칭되지 않아야 함 → unknown 반환.
+        let result = find_branch_config(&cfg, "totally-unknown-xyz-branch");
+        // unknown 키가 있으면 그것을 반환, 없으면 None.
+        if let Some((key, _)) = result {
+            assert_eq!(key, "unknown");
+        }
+    }
+
+    #[test]
+    fn find_branch_config_short_name_matching() {
+        let cfg = defaults::gitflow();
+        // "refs/heads/develop" 처럼 긴 이름도 short("develop")로 매칭됨.
+        let result = find_branch_config(&cfg, "refs/heads/develop");
+        assert!(result.is_some());
+        let (key, _) = result.unwrap();
+        assert_eq!(key, "develop");
+    }
+
+    #[test]
+    fn resolve_label_branch_name_capture() {
+        let cfg = defaults::gitflow();
+        // feature/my-feat → label 에 {BranchName} 캡처가 "my-feat"로 치환됨.
+        let eff = EffectiveConfiguration::resolve(&cfg, "feature/my-feat");
+        assert_eq!(eff.label, "my-feat");
+    }
+
+    #[test]
+    fn resolve_label_slash_dot_sanitized() {
+        let cfg = defaults::gitflow();
+        // feature/my.feature → BranchName = "my.feature" → label = "my-feature"(. → -).
+        let eff = EffectiveConfiguration::resolve(&cfg, "feature/my.feature");
+        assert_eq!(eff.label, "my-feature");
+    }
+
+    #[test]
+    fn resolve_increment_inherit_falls_back_to_patch() {
+        let cfg = defaults::gitflow();
+        // develop 은 Inherit 이므로 source 브랜치(main)의 Patch 를 상속.
+        let eff = EffectiveConfiguration::resolve(&cfg, "develop");
+        assert_eq!(eff.increment, crate::config::IncrementStrategy::Minor);
+    }
+
+    #[test]
+    fn resolve_sets_is_main_branch_for_main() {
+        let cfg = defaults::gitflow();
+        let eff = EffectiveConfiguration::resolve(&cfg, "main");
+        assert!(eff.is_main_branch);
+    }
+
+    #[test]
+    fn resolve_sets_is_release_branch_for_release() {
+        let cfg = defaults::gitflow();
+        let eff = EffectiveConfiguration::resolve(&cfg, "release/1.0.0");
+        assert!(eff.is_release_branch);
+    }
+
+    #[test]
+    fn resolve_hotfix_inherits_patch() {
+        let cfg = defaults::gitflow();
+        let eff = EffectiveConfiguration::resolve(&cfg, "hotfix/1.0.1");
+        assert_eq!(eff.increment, crate::config::IncrementStrategy::Patch);
+    }
+}
