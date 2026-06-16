@@ -76,6 +76,10 @@ This project computes its own version with itself (dogfooding).
      READMEs + LICENSE included) to the GitHub Release.
 5. Result: per-platform binaries are attached to the GitHub Release, and each binary's
    `gitversion-rs --version` reports the tag version.
+   - **checksums job**: generates `checksums.txt` (SHA256 of all binaries), keyless-signs it with
+     cosign (Sigstore, via GitHub Actions OIDC — no key/secret needed) producing
+     `checksums.txt.sigstore.json`, uploads both, and writes verification instructions into the
+     release notes. Verify with `sha256sum -c` and `cosign verify-blob`.
 6. **Homebrew tap auto-update**: after the build, the `homebrew` job computes the assets' SHA256
    and overwrites `Formula/gitversion-rs.rb` in `zcube/homebrew-tap` with the new version, then
    commits and pushes.

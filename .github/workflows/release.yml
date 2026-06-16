@@ -202,3 +202,62 @@ jobs:
           fi
           git commit -m "chore: gitversion-rs $VERSION 업데이트"
           git push
+
+  # 모든 바이너리 업로드 후 SHA256 체크섬을 만들고 cosign 으로 keyless 서명(Sigstore)한다.
+  # GitHub Actions OIDC(id-token)를 사용하므로 별도 키/시크릿이 필요 없다.
+  checksums:
+    name: Checksums & cosign signature
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Release 에 자산 업로드
+      id-token: write # cosign keyless 서명(Sigstore OIDC)
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Download release binaries
+        run: |
+          mkdir -p dist
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --dir dist --pattern 'gitversion-rs-*'
+      - name: Generate SHA256 checksums
+        working-directory: dist
+        run: sha256sum gitversion-rs-* > checksums.txt
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4.1.2
+      - name: Sign checksums (keyless)
+        working-directory: dist
+        run: |
+          # 서명·인증서가 포함된 Sigstore bundle 생성.
+          cosign sign-blob --yes checksums.txt --bundle checksums.txt.sigstore.json
+      - name: Upload checksums and signature
+        run: |
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            dist/checksums.txt dist/checksums.txt.sigstore.json
+      - name: Add verification notes to the release
+        run: |
+          NOTES="$(cat <<EOF
+          ## Install
+
+          \`\`\`bash
+          brew install zcube/tap/gitversion-rs
+          \`\`\`
+
+          Or download a prebuilt binary below. Archives are named \`gitversion-rs-${TAG}-<target>\`.
+
+          ## Integrity verification
+
+          \`\`\`bash
+          # checksums
+          sha256sum -c checksums.txt --ignore-missing
+
+          # Sigstore signature (cosign)
+          cosign verify-blob checksums.txt \\
+            --bundle checksums.txt.sigstore.json \\
+            --certificate-identity-regexp 'https://github.com/${GITHUB_REPOSITORY}/' \\
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          \`\`\`
+          EOF
+          )"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "$NOTES"
