@@ -317,6 +317,7 @@ pub fn trunkbased() -> GitVersionConfiguration {
             mode: Some(DeploymentMode::ContinuousDeployment),
             label: Some(String::new()),
             source_branches: vec![],
+            prevent_increment: Some(prevent(Some(true), None, None)),
             is_main_branch: Some(true),
             pre_release_weight: Some(55000),
             ..branch(MAIN_REGEX)
@@ -366,6 +367,7 @@ pub fn trunkbased() -> GitVersionConfiguration {
             mode: Some(DeploymentMode::ContinuousDelivery),
             label: Some("{BranchName}".into()),
             source_branches: vec!["main".into()],
+            prevent_increment: Some(prevent(None, None, Some(false))),
             pre_release_weight: Some(30000),
             ..branch(UNKNOWN_REGEX)
         },
