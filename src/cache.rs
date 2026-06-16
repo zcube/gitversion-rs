@@ -62,7 +62,7 @@ pub fn load(repo: &GitRepo, key: &str) -> Option<VersionVariables> {
     }
     match std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str(&s).ok()) {
         Some(vars) => {
-            log::info!("{}", t!("cache.hit", path = path.display()));
+            log::debug!("{}", t!("cache.hit", path = path.display()));
             Some(vars)
         }
         None => {

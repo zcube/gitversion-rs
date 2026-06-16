@@ -24,10 +24,12 @@ fn run() -> Result<()> {
 
     // 로깅 초기화: RUST_LOG 가 있으면 우선, 없으면 verbosity/diag 기반.
     let level = if args.diag { log::LevelFilter::Trace } else { args.verbosity.to_level() };
+    // 로그는 항상 stderr 로(stdout 은 버전 결과 전용 → `$(gitversion ...)` 캡처가 깨끗하게 유지됨).
     env_logger::Builder::new()
         .filter_level(level)
         .parse_default_env()
         .format_timestamp(None)
+        .target(env_logger::Target::Stderr)
         .init();
 
     // --url 이 주어지면 원격 저장소를 동적으로 clone 해 그 경로를 대상으로 사용.
