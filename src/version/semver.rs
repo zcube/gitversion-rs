@@ -106,6 +106,9 @@ pub struct BuildMetaData {
 
 impl BuildMetaData {
     /// 안전 문자만 남기기: `[^0-9A-Za-z-.]` => `-`.
+    /// InformationalVersion 의 Branch 부분은 점(.)을 허용한다.
+    /// 원본 .NET GitVersion 의 BuildMetaData 에서 branch 를 sanitize 할 때
+    /// 슬래시 등 특수문자는 치환하지만 점은 유지한다.
     fn sanitize(s: &str) -> String {
         let re = regex::Regex::new(r"[^0-9A-Za-z\-.]").unwrap();
         re.replace_all(s, "-").into_owned()

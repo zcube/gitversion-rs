@@ -698,6 +698,43 @@ checkout main
 merge release-2.0.0 "Merge branch 'release-2.0.0' into main"
 record
 
+# ─── 갭 검증: label 매칭 / CD 번호 누적 / 브랜치명 sanitize / semanticVersionThreshold ────
+
+# label 불일치 pre-release 태그: develop(alpha)에 beta 태그가 있을 때
+# GetBranchSpecificTag 갭 확인 — 원본이 beta 태그를 무시하고 alpha 기반으로 계산하는지
+newrepo label_mismatch_prerelease main
+tagcommit v1.0.0
+branch develop
+commit d1
+git -C "$CUR" tag v2.0.0-beta.1   # beta label, develop label=alpha → 불일치
+commit d2; commit d3
+record
+
+# ContinuousDelivery + 기존 높은 pre-release 번호 태그: alpha.5 이후 3커밋
+# → CD 모드에서 pre-release 번호가 alpha.8이 되어야 하는지 검증
+newrepo cd_prerelease_numbered_tag main
+commit init
+git -C "$CUR" tag v1.0.0-alpha.5
+commit a; commit b; commit c
+record
+
+# 브랜치명에 점(.)이 포함된 경우: InformationalVersion의 Branch sanitize 확인
+newrepo branch_dot_in_name main
+tagcommit v1.0.0
+branch feature/1.0-fix
+commit f1; commit f2
+record
+
+# semantic-version-threshold 설정 키 존재 여부 검증:
+# v0.5.0 태그 후 커밋, threshold=1.0.0 → 원본이 threshold 로 낮은 태그를 필터하면
+# Fallback 기반 결과, 무시하면 v0.5.0 기반 결과
+newrepo semantic_threshold main
+writeconfig 'semantic-version-threshold: "1.0.0"'
+commit init
+git -C "$CUR" tag v0.5.0
+commit a; commit b
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"
