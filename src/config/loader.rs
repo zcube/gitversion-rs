@@ -35,6 +35,32 @@ pub fn locate(dir: &Path, repo_root: Option<&Path>) -> Option<PathBuf> {
     None
 }
 
+/// 워크플로 값이 외부 파일 경로인지 판단.
+///
+/// `./`, `../`, `/` 로 시작하거나 `.yml`/`.yaml` 로 끝나면 파일 경로로 간주한다.
+fn is_workflow_file_path(s: &str) -> bool {
+    s.starts_with("./")
+        || s.starts_with("../")
+        || s.starts_with('/')
+        || s.ends_with(".yml")
+        || s.ends_with(".yaml")
+}
+
+/// 외부 워크플로 파일을 로드해 기본 설정으로 반환.
+///
+/// 상대 경로는 `config_dir`(설정 파일이 있는 디렉토리) 기준으로 해석한다.
+fn load_workflow_file(wf_path: &str, config_dir: &Path) -> Result<GitVersionConfiguration> {
+    let abs = if Path::new(wf_path).is_absolute() {
+        Path::new(wf_path).to_path_buf()
+    } else {
+        config_dir.join(wf_path)
+    };
+    let text = std::fs::read_to_string(&abs)
+        .with_context(|| t!("config.read_failed", path = abs.display()))?;
+    serde_yaml::from_str(&text)
+        .with_context(|| t!("config.yaml_parse_failed", path = abs.display()))
+}
+
 /// 명시 경로 또는 탐색으로 설정을 로드하고 워크플로 기본값과 병합.
 pub fn load(
     explicit_path: Option<&Path>,
@@ -56,7 +82,12 @@ pub fn load(
     let overrides: GitVersionConfiguration = serde_yaml::from_str(&text)
         .with_context(|| t!("config.yaml_parse_failed", path = path.display()))?;
 
-    let mut base = defaults::for_workflow(overrides.workflow.as_deref());
+    // workflow 값이 파일 경로이면 해당 파일을 기본 설정으로 사용.
+    let config_dir = path.parent().unwrap_or(work_dir);
+    let mut base = match overrides.workflow.as_deref() {
+        Some(wf) if is_workflow_file_path(wf) => load_workflow_file(wf, config_dir)?,
+        wf => defaults::for_workflow(wf),
+    };
     merge(&mut base, overrides);
     apply_source_branch_mappings(&mut base);
     validate(&base).with_context(|| t!("config.validate_failed", path = path.display()))?;
@@ -149,6 +180,7 @@ pub fn merge(base: &mut GitVersionConfiguration, over: GitVersionConfiguration) 
     ov!(is_release_branch);
     ov!(is_main_branch);
     ov!(pre_release_weight);
+    ov!(label_number_pattern);
 
     if !over.strategies.is_empty() {
         base.strategies = over.strategies;
@@ -200,6 +232,7 @@ fn merge_branch(base: &mut BranchConfiguration, over: BranchConfiguration) {
     ov!(is_release_branch);
     ov!(is_main_branch);
     ov!(pre_release_weight);
+    ov!(label_number_pattern);
     if !over.source_branches.is_empty() {
         base.source_branches = over.source_branches;
     }
@@ -255,5 +288,29 @@ mod tests {
         assert!(c.branches["main"]
             .source_branches
             .contains(&"myfeat".to_string()));
+    }
+
+    #[test]
+    fn label_number_pattern_yaml_roundtrip() {
+        // label-number-pattern 은 YAML 에서 파싱되고 브랜치에 적용됨.
+        let c = config_from(
+            "branches:\n  main:\n    regex: '^main$'\n    label-number-pattern: '[0-9]+'\n",
+        );
+        assert_eq!(
+            c.branches["main"].label_number_pattern.as_deref(),
+            Some("[0-9]+")
+        );
+    }
+
+    #[test]
+    fn workflow_file_path_detection() {
+        assert!(is_workflow_file_path("./my-workflow.yml"));
+        assert!(is_workflow_file_path("../shared/gitversion.yaml"));
+        assert!(is_workflow_file_path("/absolute/path.yml"));
+        assert!(is_workflow_file_path("some-file.yml"));
+        assert!(is_workflow_file_path("some-file.yaml"));
+        assert!(!is_workflow_file_path("GitFlow/v1"));
+        assert!(!is_workflow_file_path("GitHubFlow/v1"));
+        assert!(!is_workflow_file_path("TrunkBased/preview1"));
     }
 }

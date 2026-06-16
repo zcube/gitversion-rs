@@ -146,6 +146,8 @@ pub struct EffectiveConfiguration {
     pub assembly_file_versioning_format: Option<String>,
     pub merge_message_formats: std::collections::BTreeMap<String, String>,
     pub source_branches: Vec<String>,
+    /// pre-release label 에서 번호를 추출하는 정규식.
+    pub label_number_pattern: String,
 }
 
 impl EffectiveConfiguration {
@@ -252,6 +254,11 @@ impl EffectiveConfiguration {
             assembly_file_versioning_format: config.assembly_file_versioning_format.clone(),
             merge_message_formats: config.merge_message_formats.clone(),
             source_branches: bc.source_branches.clone(),
+            label_number_pattern: bc
+                .label_number_pattern
+                .clone()
+                .or_else(|| config.label_number_pattern.clone())
+                .unwrap_or_else(|| r"(?<name>.*?)\.?(?<number>\d+)?$".into()),
             branch_key,
         }
     }

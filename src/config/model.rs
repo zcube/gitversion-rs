@@ -121,6 +121,11 @@ pub struct BranchConfiguration {
     pub source_branches: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub is_source_branch_for: Vec<String>,
+    /// pre-release label 에서 번호를 추출하는 정규식.
+    /// 원본 `BranchConfiguration.LabelNumberPattern` 대응.
+    /// 기본 None 이면 내장 고정 패턴을 사용한다.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label_number_pattern: Option<String>,
 }
 
 /// 루트 GitVersion 설정.
@@ -193,6 +198,9 @@ pub struct GitVersionConfiguration {
     pub source_branches: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub is_source_branch_for: Vec<String>,
+    /// 브랜치 전역 기본 `label-number-pattern`. 브랜치별 설정으로 오버라이드 가능.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label_number_pattern: Option<String>,
 
     #[serde(default)]
     pub ignore: IgnoreConfig,
