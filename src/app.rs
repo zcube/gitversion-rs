@@ -3,10 +3,25 @@
 use crate::cli::{Cli, OutputFormat};
 use crate::{buildagent, cache, cli, config, exec, git, i18n, output, remote, tui, version};
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::FromArgMatches;
 use rust_i18n::t;
 use std::io::Write;
 use std::path::PathBuf;
+
+/// clap 파싱 전에 `--lang`/환경변수로 로케일을 먼저 정한다(헬프도 로케일을 따르도록).
+/// `--lang ko` 와 `--lang=ko` 두 형태를 모두 인식한다.
+fn pre_detect_lang(raw: &[String]) -> Option<String> {
+    let mut it = raw.iter();
+    while let Some(a) = it.next() {
+        if let Some(v) = a.strip_prefix("--lang=") {
+            return Some(v.to_string());
+        }
+        if a == "--lang" {
+            return it.next().cloned();
+        }
+    }
+    None
+}
 
 /// 바이너리 main: 실행하고 에러 시 메시지 출력 후 종료.
 pub fn main() {
@@ -17,10 +32,13 @@ pub fn main() {
 }
 
 fn run() -> Result<()> {
-    let args = Cli::parse();
+    // 로케일을 파싱 전에 먼저 정한다(--help/--version 출력도 로케일을 따르도록).
+    let raw: Vec<String> = std::env::args().collect();
+    i18n::init(pre_detect_lang(&raw).as_deref());
 
-    // 로케일 초기화(--lang 우선, 없으면 LANG/LC_ALL, 기본 영어).
-    i18n::init(args.lang.as_deref());
+    // 로케일이 반영된 헬프/about 으로 파싱(--help/--version 은 여기서 종료).
+    let matches = cli::localized_command().get_matches();
+    let args = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
 
     // 로깅 초기화: RUST_LOG 가 있으면 우선, 없으면 verbosity/diag 기반.
     let level = if args.diag {

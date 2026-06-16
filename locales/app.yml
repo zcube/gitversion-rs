@@ -578,3 +578,185 @@ tui.help.default:
   ko: "[↑↓]스크롤/이동 [1-5]탭 [C]JSON복사 [q]종료"
   ja: "[↑↓]スクロール/移動 [1-5]タブ [C]JSONコピー [q]終了"
   zh: "[↑↓]滚动/移动 [1-5]标签 [C]复制JSON [q]退出"
+
+# ── CLI: about & help (clap, localized_command 가 런타임 주입) ──
+cli.about:
+  en: Calculate a semantic version from Git history (GitVersion Rust port)
+  ko: Git 히스토리로부터 의미론적 버전을 계산합니다 (GitVersion Rust 포트)
+  ja: Git履歴からセマンティックバージョンを計算します (GitVersion Rust ポート)
+  zh: 从 Git 历史计算语义化版本 (GitVersion Rust 移植版)
+cli.help.path:
+  en: "Repository path (directory containing `.git`). Defaults to the current directory."
+  ko: "저장소 경로(`.git` 포함 디렉터리). 생략 시 현재 디렉터리."
+  ja: "リポジトリのパス(`.git` を含むディレクトリ)。省略時は現在のディレクトリ。"
+  zh: "仓库路径(包含 `.git` 的目录)。省略时为当前目录。"
+cli.help.target_path:
+  en: "Same as path but position-independent (upstream `/targetpath`)."
+  ko: "path 와 동일하지만 위치 무관(원본 `/targetpath`)."
+  ja: "path と同じだが位置非依存(原本 `/targetpath`)。"
+  zh: "与 path 相同但与位置无关(原版 `/targetpath`)。"
+cli.help.nofetch:
+  en: "Disable fetch (no-op: this port does not fetch)."
+  ko: "fetch 비활성화(무효과: 본 포트는 fetch 하지 않음)."
+  ja: "fetch を無効化(無効果: 本ポートは fetch しない)。"
+  zh: "禁用 fetch(无效果：本移植不执行 fetch)。"
+cli.help.nonormalize:
+  en: "Disable normalization (no-op)."
+  ko: "정규화 비활성화(무효과)."
+  ja: "正規化を無効化(無効果)。"
+  zh: "禁用规范化(无效果)。"
+cli.help.nocache:
+  en: "Disable disk cache read/write (`<.git>/gitversion_cache`)."
+  ko: "디스크 캐시 읽기·쓰기 비활성화(`<.git>/gitversion_cache`)."
+  ja: "ディスクキャッシュの読み書きを無効化(`<.git>/gitversion_cache`)。"
+  zh: "禁用磁盘缓存读写(`<.git>/gitversion_cache`)。"
+cli.help.allowshallow:
+  en: "Allow shallow clone (no-op: gix reads shallow repos too)."
+  ko: "shallow clone 허용(무효과: gix 가 shallow 도 읽음)."
+  ja: "shallow clone を許可(無効果: gix は shallow も読む)。"
+  zh: "允许 shallow clone(无效果：gix 也能读取 shallow)。"
+cli.help.output:
+  en: "Output format (json, dot-env, build-server). May be repeated."
+  ko: "출력 형식(json, dot-env, build-server). 여러 번 지정 가능."
+  ja: "出力形式(json, dot-env, build-server)。複数指定可。"
+  zh: "输出格式(json, dot-env, build-server)。可重复指定。"
+cli.help.output_file:
+  en: "Output file path (writes the result to a file when set)."
+  ko: "출력 파일 경로(지정 시 결과를 파일로 기록)."
+  ja: "出力ファイルのパス(指定時は結果をファイルに書き込む)。"
+  zh: "输出文件路径(设置时将结果写入文件)。"
+cli.help.show_variable:
+  en: "Print a single variable only (e.g. -v SemVer)."
+  ko: "단일 변수만 출력(예: -v SemVer)."
+  ja: "単一の変数のみ出力(例: -v SemVer)。"
+  zh: "仅输出单个变量(例: -v SemVer)。"
+cli.help.format:
+  en: 'Print using a format string (e.g. --format "{Major}.{Minor}").'
+  ko: '포맷 문자열로 출력(예: --format "{Major}.{Minor}").'
+  ja: 'フォーマット文字列で出力(例: --format "{Major}.{Minor}")。'
+  zh: '使用格式字符串输出(例: --format "{Major}.{Minor}")。'
+cli.help.config:
+  en: Config file path.
+  ko: 설정 파일 경로.
+  ja: 設定ファイルのパス。
+  zh: 配置文件路径。
+cli.help.show_config:
+  en: Print the effective config as YAML and exit.
+  ko: 유효 설정을 YAML 로 출력하고 종료.
+  ja: 有効な設定を YAML で出力して終了。
+  zh: 以 YAML 输出有效配置并退出。
+cli.help.override_config:
+  en: "Inline config override (key=value). May be repeated."
+  ko: "인라인 설정 오버라이드(key=value). 여러 번 지정 가능."
+  ja: "インライン設定オーバーライド(key=value)。複数指定可。"
+  zh: "内联配置覆盖(key=value)。可重复指定。"
+cli.help.branch:
+  en: "Branch to compute for (instead of the current checkout)."
+  ko: "계산 대상 브랜치명(현재 체크아웃 대신)."
+  ja: "計算対象のブランチ名(現在のチェックアウトの代わり)。"
+  zh: "用于计算的分支(替代当前检出)。"
+cli.help.lang:
+  en: "Output language (ko/en/ja/zh). Falls back to LANG/LC_ALL when omitted."
+  ko: "출력 언어(ko/en/ja/zh). 생략 시 LANG/LC_ALL 환경변수 사용."
+  ja: "出力言語(ko/en/ja/zh)。省略時は LANG/LC_ALL 環境変数を使用。"
+  zh: "输出语言(ko/en/ja/zh)。省略时使用 LANG/LC_ALL 环境变量。"
+cli.help.verbosity:
+  en: Log verbosity.
+  ko: 로그 상세도.
+  ja: ログの詳細度。
+  zh: 日志详细程度。
+cli.help.diag:
+  en: "Diagnostic mode (Trace logging)."
+  ko: "진단 모드(Trace 로깅)."
+  ja: "診断モード(Trace ロギング)。"
+  zh: "诊断模式(Trace 日志)。"
+cli.help.update_assembly_info:
+  en: "Update AssemblyInfo files (recursive search when no file is given)."
+  ko: "AssemblyInfo 파일 갱신(파일명 생략 시 재귀 탐색)."
+  ja: "AssemblyInfo ファイルを更新(ファイル名省略時は再帰探索)。"
+  zh: "更新 AssemblyInfo 文件(未指定文件时递归搜索)。"
+cli.help.ensure_assembly_info:
+  en: "Create the AssemblyInfo file if missing (with updateassemblyinfo)."
+  ko: "AssemblyInfo 파일이 없으면 생성(updateassemblyinfo 와 함께)."
+  ja: "AssemblyInfo ファイルが無ければ作成(updateassemblyinfo と併用)。"
+  zh: "若 AssemblyInfo 文件不存在则创建(与 updateassemblyinfo 一起)。"
+cli.help.update_project_files:
+  en: "Update version elements in project files (.csproj etc.; recursive when no file is given)."
+  ko: "프로젝트 파일(.csproj 등) 버전 요소 갱신(파일명 생략 시 재귀 탐색)."
+  ja: "プロジェクトファイル(.csproj 等)のバージョン要素を更新(ファイル名省略時は再帰探索)。"
+  zh: "更新项目文件(.csproj 等)中的版本元素(未指定文件时递归搜索)。"
+cli.help.update_wix_version_file:
+  en: Create GitVersion_WixVersion.wxi.
+  ko: GitVersion_WixVersion.wxi 생성.
+  ja: GitVersion_WixVersion.wxi を作成。
+  zh: 创建 GitVersion_WixVersion.wxi。
+cli.help.update_package_files:
+  en: "Update the version in package manifests (package.json/Cargo.toml/pyproject.toml). Recursive search when no file is given."
+  ko: "패키지 매니페스트의 version 갱신(package.json/Cargo.toml/pyproject.toml). 파일명 생략 시 재귀 탐색."
+  ja: "パッケージマニフェスト(package.json/Cargo.toml/pyproject.toml)の version を更新。ファイル名省略時は再帰探索。"
+  zh: "更新包清单(package.json/Cargo.toml/pyproject.toml)中的 version。未指定文件时递归搜索。"
+cli.help.url:
+  en: "Remote git repository URL (clone then compute when set). Requires `--branch`."
+  ko: "원격 git 저장소 URL(지정 시 clone 후 계산). `--branch` 필수."
+  ja: "リモート git リポジトリ URL(指定時は clone 後に計算)。`--branch` 必須。"
+  zh: "远程 git 仓库 URL(设置时先 clone 再计算)。需要 `--branch`。"
+cli.help.username:
+  en: "Remote auth username (with `--url`)."
+  ko: "원격 인증 사용자명(`--url` 과 함께)."
+  ja: "リモート認証のユーザー名(`--url` と併用)。"
+  zh: "远程认证用户名(与 `--url` 一起)。"
+cli.help.password:
+  en: "Remote auth password (with `--url`)."
+  ko: "원격 인증 비밀번호(`--url` 과 함께)."
+  ja: "リモート認証のパスワード(`--url` と併用)。"
+  zh: "远程认证密码(与 `--url` 一起)。"
+cli.help.commit:
+  en: "Commit ID to inspect (latest on the branch when omitted). With `--url`."
+  ko: "확인할 커밋 ID(생략 시 브랜치 최신). `--url` 과 함께."
+  ja: "確認するコミット ID(省略時はブランチ最新)。`--url` と併用。"
+  zh: "要检查的提交 ID(省略时为分支最新)。与 `--url` 一起。"
+cli.help.dynamic_repo_location:
+  en: "Dynamic clone location (default: a temp directory)."
+  ko: "동적 clone 위치(기본: 임시 디렉터리)."
+  ja: "動的 clone の場所(既定: 一時ディレクトリ)。"
+  zh: "动态 clone 位置(默认：临时目录)。"
+cli.help.exec:
+  en: "prepare command to run after computing (version variables exposed as GitVersion_* env and {Var})."
+  ko: "계산 후 실행할 prepare 명령(버전 변수가 GitVersion_* 환경변수와 {Var} 로 노출)."
+  ja: "計算後に実行する prepare コマンド(バージョン変数を GitVersion_* 環境変数と {Var} で公開)。"
+  zh: "计算后运行的 prepare 命令(版本变量以 GitVersion_* 环境变量和 {Var} 暴露)。"
+cli.help.exec_version:
+  en: "Version-modifying command. Its stdout is applied as next-version and recomputed."
+  ko: "버전 수정 명령. 표준출력을 next-version 으로 적용해 재계산한다."
+  ja: "バージョン修正コマンド。標準出力を next-version として適用し再計算する。"
+  zh: "版本修改命令。其标准输出作为 next-version 应用并重新计算。"
+cli.help.dry_run:
+  en: Print exec hooks without actually running them.
+  ko: exec 훅을 실제 실행하지 않고 출력만 한다.
+  ja: exec フックを実際に実行せず出力のみ行う。
+  zh: 仅输出 exec 钩子而不实际执行。
+cli.help.tui:
+  en: Launch the interactive Ratatui TUI.
+  ko: 대화형 Ratatui TUI 실행.
+  ja: 対話型 Ratatui TUI を起動。
+  zh: 启动交互式 Ratatui TUI。
+cli.help.help:
+  en: Print help
+  ko: 도움말 출력
+  ja: ヘルプを表示
+  zh: 显示帮助
+cli.help.version:
+  en: Print version
+  ko: 버전 출력
+  ja: バージョンを表示
+  zh: 显示版本
+cli.override_invalid:
+  en: "Invalid overrideconfig entry (ignored): %{entry}"
+  ko: "잘못된 overrideconfig 항목(무시): %{entry}"
+  ja: "不正な overrideconfig 項目(無視): %{entry}"
+  zh: "无效的 overrideconfig 条目(已忽略): %{entry}"
+cli.override_unsupported:
+  en: "Unsupported overrideconfig key (ignored): %{key}"
+  ko: "지원하지 않는 overrideconfig 키(무시): %{key}"
+  ja: "サポートされない overrideconfig キー(無視): %{key}"
+  zh: "不支持的 overrideconfig 键(已忽略): %{key}"

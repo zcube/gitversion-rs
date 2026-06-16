@@ -5,7 +5,8 @@
 use crate::config::{
     DeploymentMode, GitVersionConfiguration, IncrementStrategy, SemanticVersionFormat,
 };
-use clap::{Parser, ValueEnum};
+use clap::{CommandFactory, Parser, ValueEnum};
+use rust_i18n::t;
 use std::path::PathBuf;
 
 /// 출력 형식.
@@ -39,144 +40,163 @@ impl Verbosity {
     }
 }
 
-/// GitVersion (Rust 포트).
+// 헬프/about 문자열은 영어를 소스 기본값으로 두고, 런타임에 `localized_command()` 가
+// 로케일에 맞춰 `cli.about`/`cli.help.<id>` 키로 덮어쓴다. 구조체 doc(`///`)은
+// long_about 으로 쓰여 about 오버라이드를 가리므로 일반 주석(`//`)으로 둔다.
 #[derive(Debug, Parser)]
 #[command(
     name = "gitversion",
     version,
-    about = "Git 히스토리로부터 의미론적 버전을 계산합니다 (GitVersion Rust 포트)"
+    about = "Calculate a semantic version from Git history (GitVersion Rust port)"
 )]
 pub struct Cli {
-    /// 저장소 경로(`.git` 포함 디렉터리). 생략 시 현재 디렉터리.
+    /// Repository path (directory containing `.git`). Defaults to the current directory.
     #[arg(default_value = ".")]
     pub path: PathBuf,
 
-    /// path 와 동일하지만 위치 무관(원본 `/targetpath`).
+    /// Same as path but position-independent (upstream `/targetpath`).
     #[arg(long = "targetpath", value_name = "DIR")]
     pub target_path: Option<PathBuf>,
 
     // nofetch/nonormalize/allowshallow 는 원본 CLI 호환을 위해 인식하지만, 이 포트는
     // fetch/normalize 를 하지 않으므로 동작상 무효과(no-op)다.
-    /// fetch 비활성화(무효과: 본 포트는 fetch 하지 않음).
+    /// Disable fetch (no-op: this port does not fetch).
     #[arg(long)]
     pub nofetch: bool,
-    /// 정규화 비활성화(무효과).
+    /// Disable normalization (no-op).
     #[arg(long)]
     pub nonormalize: bool,
-    /// 디스크 캐시 읽기·쓰기 비활성화(`<.git>/gitversion_cache`).
+    /// Disable disk cache read/write (`<.git>/gitversion_cache`).
     #[arg(long)]
     pub nocache: bool,
-    /// shallow clone 허용(무효과: gix 가 shallow 도 읽음).
+    /// Allow shallow clone (no-op: gix reads shallow repos too).
     #[arg(long)]
     pub allowshallow: bool,
 
-    /// 출력 형식(json, dot-env, build-server). 여러 번 지정 가능.
+    /// Output format (json, dot-env, build-server). May be repeated.
     #[arg(long, value_enum, default_value = "json")]
     pub output: Vec<OutputFormat>,
 
-    /// 출력 파일 경로(지정 시 결과를 파일로 기록).
+    /// Output file path (writes the result to a file when set).
     #[arg(long = "outputfile")]
     pub output_file: Option<PathBuf>,
 
-    /// 단일 변수만 출력(예: -v SemVer).
+    /// Print a single variable only (e.g. -v SemVer).
     #[arg(long = "showvariable", short = 'v')]
     pub show_variable: Option<String>,
 
-    /// 포맷 문자열로 출력(예: --format "{Major}.{Minor}").
+    /// Print using a format string (e.g. --format "{Major}.{Minor}").
     #[arg(long)]
     pub format: Option<String>,
 
-    /// 설정 파일 경로.
+    /// Config file path.
     #[arg(long)]
     pub config: Option<PathBuf>,
 
-    /// 유효 설정을 YAML 로 출력하고 종료.
+    /// Print the effective config as YAML and exit.
     #[arg(long = "showconfig")]
     pub show_config: bool,
 
-    /// 인라인 설정 오버라이드(key=value). 여러 번 지정 가능.
+    /// Inline config override (key=value). May be repeated.
     #[arg(long = "overrideconfig")]
     pub override_config: Vec<String>,
 
-    /// 계산 대상 브랜치명(현재 체크아웃 대신).
+    /// Branch to compute for (instead of the current checkout).
     #[arg(long, short = 'b')]
     pub branch: Option<String>,
 
-    /// 출력 언어(ko/en/ja/zh). 생략 시 LANG/LC_ALL 환경변수 사용.
+    /// Output language (ko/en/ja/zh). Falls back to LANG/LC_ALL when omitted.
     #[arg(long, value_name = "LANG")]
     pub lang: Option<String>,
 
-    /// 로그 상세도.
+    /// Log verbosity.
     #[arg(long, value_enum, default_value = "normal")]
     pub verbosity: Verbosity,
 
-    /// 진단 모드(Trace 로깅).
+    /// Diagnostic mode (Trace logging).
     #[arg(long)]
     pub diag: bool,
 
-    /// AssemblyInfo 파일 갱신(파일명 생략 시 재귀 탐색).
+    /// Update AssemblyInfo files (recursive search when no file is given).
     #[arg(long = "updateassemblyinfo", num_args = 0.., value_name = "FILE")]
     pub update_assembly_info: Option<Vec<String>>,
 
-    /// AssemblyInfo 파일이 없으면 생성(updateassemblyinfo 와 함께).
+    /// Create the AssemblyInfo file if missing (with updateassemblyinfo).
     #[arg(long = "ensureassemblyinfo")]
     pub ensure_assembly_info: bool,
 
-    /// 프로젝트 파일(.csproj 등) 버전 요소 갱신(파일명 생략 시 재귀 탐색).
+    /// Update version elements in project files (.csproj etc.; recursive when no file is given).
     #[arg(long = "updateprojectfiles", num_args = 0.., value_name = "FILE")]
     pub update_project_files: Option<Vec<String>>,
 
-    /// GitVersion_WixVersion.wxi 생성.
+    /// Create GitVersion_WixVersion.wxi.
     #[arg(long = "updatewixversionfile")]
     pub update_wix_version_file: bool,
 
-    /// 패키지 매니페스트의 version 갱신(package.json/Cargo.toml/pyproject.toml).
-    /// 파일명 생략 시 재귀 탐색.
+    /// Update the version in package manifests (package.json/Cargo.toml/pyproject.toml).
+    /// Recursive search when no file is given.
     #[arg(long = "updatepackagefiles", num_args = 0.., value_name = "FILE")]
     pub update_package_files: Option<Vec<String>>,
 
-    /// 원격 git 저장소 URL(지정 시 clone 후 계산). `--branch` 필수.
+    /// Remote git repository URL (clone then compute when set). Requires `--branch`.
     #[arg(long)]
     pub url: Option<String>,
 
-    /// 원격 인증 사용자명(`--url` 과 함께).
+    /// Remote auth username (with `--url`).
     #[arg(long = "username", short = 'u')]
     pub username: Option<String>,
 
-    /// 원격 인증 비밀번호(`--url` 과 함께).
+    /// Remote auth password (with `--url`).
     #[arg(long = "password", short = 'p')]
     pub password: Option<String>,
 
-    /// 확인할 커밋 ID(생략 시 브랜치 최신). `--url` 과 함께.
+    /// Commit ID to inspect (latest on the branch when omitted). With `--url`.
     #[arg(long = "commit", short = 'c')]
     pub commit: Option<String>,
 
-    /// 동적 clone 위치(기본: 임시 디렉터리).
+    /// Dynamic clone location (default: a temp directory).
     #[arg(long = "dynamicRepoLocation")]
     pub dynamic_repo_location: Option<PathBuf>,
 
-    /// 계산 후 실행할 prepare 명령(버전 변수가 GitVersion_* 환경변수와 {Var} 로 노출).
+    /// prepare command to run after computing (version variables exposed as GitVersion_* env and {Var}).
     #[arg(long)]
     pub exec: Option<String>,
 
-    /// 버전 수정 명령. 표준출력을 next-version 으로 적용해 재계산한다.
+    /// Version-modifying command. Its stdout is applied as next-version and recomputed.
     #[arg(long = "exec-version")]
     pub exec_version: Option<String>,
 
-    /// exec 훅을 실제 실행하지 않고 출력만 한다.
+    /// Print exec hooks without actually running them.
     #[arg(long = "dry-run")]
     pub dry_run: bool,
 
-    /// 대화형 Ratatui TUI 실행.
+    /// Launch the interactive Ratatui TUI.
     #[arg(long)]
     pub tui: bool,
+}
+
+/// 현재 로케일에 맞춰 about/각 인자 help 를 `t!` 로 덮어쓴 clap Command 를 만든다.
+/// `cli.about`, `cli.help.<arg_id>` 키가 있으면 해석값으로 교체하고, 없으면(=키 그대로
+/// 반환) 영어 소스 doc 문자열을 유지한다. 파싱 전에 로케일을 정해두고 호출해야 한다.
+pub fn localized_command() -> clap::Command {
+    Cli::command()
+        .about(t!("cli.about").to_string())
+        .mut_args(|arg| {
+            let key = format!("cli.help.{}", arg.get_id());
+            let val = t!(key.as_str()).to_string();
+            if val == key {
+                arg
+            } else {
+                arg.help(val)
+            }
+        })
 }
 
 /// `key=value` 오버라이드를 설정에 적용.
 pub fn apply_overrides(config: &mut GitVersionConfiguration, overrides: &[String]) {
     for raw in overrides {
         let Some((key, value)) = raw.split_once('=') else {
-            log::warn!("잘못된 overrideconfig 항목(무시): {raw}");
+            log::warn!("{}", t!("cli.override_invalid", entry = raw));
             continue;
         };
         let key = key.trim();
@@ -213,7 +233,7 @@ pub fn apply_overrides(config: &mut GitVersionConfiguration, overrides: &[String
                         _ => Some(crate::config::CommitMessageConvention::Default),
                     }
             }
-            other => log::warn!("지원하지 않는 overrideconfig 키(무시): {other}"),
+            other => log::warn!("{}", t!("cli.override_unsupported", key = other)),
         }
     }
 }
