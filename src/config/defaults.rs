@@ -232,6 +232,7 @@ pub fn githubflow() -> GitVersionConfiguration {
             increment: Some(IncrementStrategy::Patch),
             label: Some(String::new()),
             source_branches: vec![],
+            prevent_increment: Some(prevent(Some(true), None, None)),
             is_main_branch: Some(true),
             pre_release_weight: Some(55000),
             ..branch(MAIN_REGEX)
@@ -288,6 +289,7 @@ pub fn githubflow() -> GitVersionConfiguration {
                 "feature".into(),
                 "pull-request".into(),
             ],
+            prevent_increment: Some(prevent(None, None, Some(false))),
             track_merge_message: Some(false),
             ..branch(UNKNOWN_REGEX)
         },
