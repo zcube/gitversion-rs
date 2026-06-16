@@ -20,7 +20,11 @@ const MINOR_BUMP: &str = r"\+semver:\s?(feature|minor)";
 const PATCH_BUMP: &str = r"\+semver:\s?(fix|patch)";
 const NO_BUMP: &str = r"\+semver:\s?(none|skip)";
 
-fn prevent(of_merged: Option<bool>, when_merged: Option<bool>, when_tagged: Option<bool>) -> PreventIncrement {
+fn prevent(
+    of_merged: Option<bool>,
+    when_merged: Option<bool>,
+    when_tagged: Option<bool>,
+) -> PreventIncrement {
     PreventIncrement {
         of_merged_branch: of_merged,
         when_branch_merged: when_merged,
@@ -61,7 +65,10 @@ fn global_base(mode: DeploymentMode, strategies: Vec<VersionStrategy>) -> GitVer
 }
 
 fn branch(regex: &str) -> BranchConfiguration {
-    BranchConfiguration { regex: Some(regex.into()), ..Default::default() }
+    BranchConfiguration {
+        regex: Some(regex.into()),
+        ..Default::default()
+    }
 }
 
 /// 기본 버전 전략(GitFlow/GitHubFlow 공용).
@@ -81,89 +88,134 @@ pub fn gitflow() -> GitVersionConfiguration {
     let mut c = global_base(DeploymentMode::ContinuousDelivery, default_strategies());
     let mut b: BTreeMap<String, BranchConfiguration> = BTreeMap::new();
 
-    b.insert("develop".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Minor),
-        mode: Some(DeploymentMode::ContinuousDelivery),
-        label: Some("alpha".into()),
-        source_branches: vec!["main".into()],
-        prevent_increment: Some(prevent(None, None, Some(false))),
-        track_merge_target: Some(true),
-        track_merge_message: Some(true),
-        tracks_release_branches: Some(true),
-        is_main_branch: Some(false),
-        is_release_branch: Some(false),
-        pre_release_weight: Some(0),
-        ..branch(DEVELOP_REGEX)
-    });
-    b.insert("main".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Patch),
-        label: Some(String::new()),
-        source_branches: vec![],
-        prevent_increment: Some(prevent(Some(true), None, None)),
-        track_merge_target: Some(false),
-        track_merge_message: Some(true),
-        is_main_branch: Some(true),
-        pre_release_weight: Some(55000),
-        ..branch(MAIN_REGEX)
-    });
-    b.insert("release".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Minor),
-        mode: Some(DeploymentMode::ManualDeployment),
-        label: Some("beta".into()),
-        source_branches: vec!["main".into(), "support".into()],
-        prevent_increment: Some(prevent(Some(true), None, Some(false))),
-        track_merge_target: Some(false),
-        is_release_branch: Some(true),
-        pre_release_weight: Some(30000),
-        ..branch(RELEASE_REGEX)
-    });
-    b.insert("feature".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Inherit),
-        mode: Some(DeploymentMode::ManualDeployment),
-        label: Some("{BranchName}".into()),
-        source_branches: vec!["develop".into(), "main".into(), "release".into(), "support".into(), "hotfix".into()],
-        prevent_increment: Some(prevent(None, None, Some(false))),
-        track_merge_message: Some(true),
-        pre_release_weight: Some(30000),
-        ..branch(FEATURE_REGEX)
-    });
-    b.insert("pull-request".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Inherit),
-        mode: Some(DeploymentMode::ContinuousDelivery),
-        label: Some("PullRequest{Number}".into()),
-        source_branches: vec!["develop".into(), "main".into(), "release".into(), "feature".into(), "support".into(), "hotfix".into()],
-        prevent_increment: Some(prevent(Some(true), None, Some(false))),
-        track_merge_message: Some(true),
-        pre_release_weight: Some(30000),
-        ..branch(PR_REGEX)
-    });
-    b.insert("hotfix".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Inherit),
-        mode: Some(DeploymentMode::ManualDeployment),
-        label: Some("beta".into()),
-        source_branches: vec!["main".into(), "support".into()],
-        prevent_increment: Some(prevent(None, None, Some(false))),
-        is_release_branch: Some(true),
-        pre_release_weight: Some(30000),
-        ..branch(HOTFIX_REGEX)
-    });
-    b.insert("support".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Patch),
-        label: Some(String::new()),
-        source_branches: vec!["main".into()],
-        prevent_increment: Some(prevent(Some(true), None, None)),
-        track_merge_target: Some(false),
-        is_main_branch: Some(true),
-        pre_release_weight: Some(55000),
-        ..branch(SUPPORT_REGEX)
-    });
-    b.insert("unknown".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Inherit),
-        mode: Some(DeploymentMode::ManualDeployment),
-        label: Some("{BranchName}".into()),
-        source_branches: vec!["main".into(), "develop".into(), "release".into(), "feature".into(), "pull-request".into(), "support".into(), "hotfix".into()],
-        ..branch(UNKNOWN_REGEX)
-    });
+    b.insert(
+        "develop".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Minor),
+            mode: Some(DeploymentMode::ContinuousDelivery),
+            label: Some("alpha".into()),
+            source_branches: vec!["main".into()],
+            prevent_increment: Some(prevent(None, None, Some(false))),
+            track_merge_target: Some(true),
+            track_merge_message: Some(true),
+            tracks_release_branches: Some(true),
+            is_main_branch: Some(false),
+            is_release_branch: Some(false),
+            pre_release_weight: Some(0),
+            ..branch(DEVELOP_REGEX)
+        },
+    );
+    b.insert(
+        "main".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Patch),
+            label: Some(String::new()),
+            source_branches: vec![],
+            prevent_increment: Some(prevent(Some(true), None, None)),
+            track_merge_target: Some(false),
+            track_merge_message: Some(true),
+            is_main_branch: Some(true),
+            pre_release_weight: Some(55000),
+            ..branch(MAIN_REGEX)
+        },
+    );
+    b.insert(
+        "release".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Minor),
+            mode: Some(DeploymentMode::ManualDeployment),
+            label: Some("beta".into()),
+            source_branches: vec!["main".into(), "support".into()],
+            prevent_increment: Some(prevent(Some(true), None, Some(false))),
+            track_merge_target: Some(false),
+            is_release_branch: Some(true),
+            pre_release_weight: Some(30000),
+            ..branch(RELEASE_REGEX)
+        },
+    );
+    b.insert(
+        "feature".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Inherit),
+            mode: Some(DeploymentMode::ManualDeployment),
+            label: Some("{BranchName}".into()),
+            source_branches: vec![
+                "develop".into(),
+                "main".into(),
+                "release".into(),
+                "support".into(),
+                "hotfix".into(),
+            ],
+            prevent_increment: Some(prevent(None, None, Some(false))),
+            track_merge_message: Some(true),
+            pre_release_weight: Some(30000),
+            ..branch(FEATURE_REGEX)
+        },
+    );
+    b.insert(
+        "pull-request".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Inherit),
+            mode: Some(DeploymentMode::ContinuousDelivery),
+            label: Some("PullRequest{Number}".into()),
+            source_branches: vec![
+                "develop".into(),
+                "main".into(),
+                "release".into(),
+                "feature".into(),
+                "support".into(),
+                "hotfix".into(),
+            ],
+            prevent_increment: Some(prevent(Some(true), None, Some(false))),
+            track_merge_message: Some(true),
+            pre_release_weight: Some(30000),
+            ..branch(PR_REGEX)
+        },
+    );
+    b.insert(
+        "hotfix".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Inherit),
+            mode: Some(DeploymentMode::ManualDeployment),
+            label: Some("beta".into()),
+            source_branches: vec!["main".into(), "support".into()],
+            prevent_increment: Some(prevent(None, None, Some(false))),
+            is_release_branch: Some(true),
+            pre_release_weight: Some(30000),
+            ..branch(HOTFIX_REGEX)
+        },
+    );
+    b.insert(
+        "support".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Patch),
+            label: Some(String::new()),
+            source_branches: vec!["main".into()],
+            prevent_increment: Some(prevent(Some(true), None, None)),
+            track_merge_target: Some(false),
+            is_main_branch: Some(true),
+            pre_release_weight: Some(55000),
+            ..branch(SUPPORT_REGEX)
+        },
+    );
+    b.insert(
+        "unknown".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Inherit),
+            mode: Some(DeploymentMode::ManualDeployment),
+            label: Some("{BranchName}".into()),
+            source_branches: vec![
+                "main".into(),
+                "develop".into(),
+                "release".into(),
+                "feature".into(),
+                "pull-request".into(),
+                "support".into(),
+                "hotfix".into(),
+            ],
+            ..branch(UNKNOWN_REGEX)
+        },
+    );
 
     c.branches = b;
     c
@@ -174,46 +226,66 @@ pub fn githubflow() -> GitVersionConfiguration {
     let mut c = global_base(DeploymentMode::ContinuousDelivery, default_strategies());
     let mut b: BTreeMap<String, BranchConfiguration> = BTreeMap::new();
 
-    b.insert("main".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Patch),
-        label: Some(String::new()),
-        source_branches: vec![],
-        is_main_branch: Some(true),
-        pre_release_weight: Some(55000),
-        ..branch(MAIN_REGEX)
-    });
-    b.insert("release".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Patch),
-        mode: Some(DeploymentMode::ManualDeployment),
-        label: Some("beta".into()),
-        source_branches: vec!["main".into(), "release".into()],
-        is_release_branch: Some(true),
-        pre_release_weight: Some(30000),
-        ..branch(RELEASE_REGEX)
-    });
-    b.insert("feature".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Inherit),
-        mode: Some(DeploymentMode::ManualDeployment),
-        label: Some("{BranchName}".into()),
-        source_branches: vec!["main".into(), "release".into()],
-        pre_release_weight: Some(30000),
-        ..branch(FEATURE_REGEX)
-    });
-    b.insert("pull-request".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Inherit),
-        mode: Some(DeploymentMode::ContinuousDelivery),
-        label: Some("PullRequest{Number}".into()),
-        source_branches: vec!["main".into(), "release".into(), "feature".into()],
-        pre_release_weight: Some(30000),
-        ..branch(PR_REGEX)
-    });
-    b.insert("unknown".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Inherit),
-        mode: Some(DeploymentMode::ManualDeployment),
-        label: Some("{BranchName}".into()),
-        source_branches: vec!["main".into(), "release".into(), "feature".into(), "pull-request".into()],
-        ..branch(UNKNOWN_REGEX)
-    });
+    b.insert(
+        "main".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Patch),
+            label: Some(String::new()),
+            source_branches: vec![],
+            is_main_branch: Some(true),
+            pre_release_weight: Some(55000),
+            ..branch(MAIN_REGEX)
+        },
+    );
+    b.insert(
+        "release".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Patch),
+            mode: Some(DeploymentMode::ManualDeployment),
+            label: Some("beta".into()),
+            source_branches: vec!["main".into(), "release".into()],
+            is_release_branch: Some(true),
+            pre_release_weight: Some(30000),
+            ..branch(RELEASE_REGEX)
+        },
+    );
+    b.insert(
+        "feature".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Inherit),
+            mode: Some(DeploymentMode::ManualDeployment),
+            label: Some("{BranchName}".into()),
+            source_branches: vec!["main".into(), "release".into()],
+            pre_release_weight: Some(30000),
+            ..branch(FEATURE_REGEX)
+        },
+    );
+    b.insert(
+        "pull-request".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Inherit),
+            mode: Some(DeploymentMode::ContinuousDelivery),
+            label: Some("PullRequest{Number}".into()),
+            source_branches: vec!["main".into(), "release".into(), "feature".into()],
+            pre_release_weight: Some(30000),
+            ..branch(PR_REGEX)
+        },
+    );
+    b.insert(
+        "unknown".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Inherit),
+            mode: Some(DeploymentMode::ManualDeployment),
+            label: Some("{BranchName}".into()),
+            source_branches: vec![
+                "main".into(),
+                "release".into(),
+                "feature".into(),
+                "pull-request".into(),
+            ],
+            ..branch(UNKNOWN_REGEX)
+        },
+    );
 
     c.branches = b;
     c
@@ -223,52 +295,70 @@ pub fn githubflow() -> GitVersionConfiguration {
 pub fn trunkbased() -> GitVersionConfiguration {
     let mut c = global_base(
         DeploymentMode::ContinuousDelivery,
-        vec![VersionStrategy::ConfiguredNextVersion, VersionStrategy::Mainline],
+        vec![
+            VersionStrategy::ConfiguredNextVersion,
+            VersionStrategy::Mainline,
+        ],
     );
     let mut b: BTreeMap<String, BranchConfiguration> = BTreeMap::new();
 
-    b.insert("main".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Patch),
-        mode: Some(DeploymentMode::ContinuousDeployment),
-        label: Some(String::new()),
-        source_branches: vec![],
-        is_main_branch: Some(true),
-        pre_release_weight: Some(55000),
-        ..branch(MAIN_REGEX)
-    });
-    b.insert("feature".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Minor),
-        mode: Some(DeploymentMode::ContinuousDelivery),
-        label: Some("{BranchName}".into()),
-        source_branches: vec!["main".into()],
-        pre_release_weight: Some(30000),
-        ..branch(FEATURE_REGEX)
-    });
-    b.insert("hotfix".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Patch),
-        mode: Some(DeploymentMode::ContinuousDelivery),
-        label: Some("{BranchName}".into()),
-        source_branches: vec!["main".into()],
-        is_release_branch: Some(true),
-        pre_release_weight: Some(30000),
-        ..branch(HOTFIX_REGEX)
-    });
-    b.insert("pull-request".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Inherit),
-        mode: Some(DeploymentMode::ContinuousDelivery),
-        label: Some("PullRequest{Number}".into()),
-        source_branches: vec!["main".into(), "feature".into(), "hotfix".into()],
-        pre_release_weight: Some(30000),
-        ..branch(PR_REGEX)
-    });
-    b.insert("unknown".into(), BranchConfiguration {
-        increment: Some(IncrementStrategy::Patch),
-        mode: Some(DeploymentMode::ContinuousDelivery),
-        label: Some("{BranchName}".into()),
-        source_branches: vec!["main".into()],
-        pre_release_weight: Some(30000),
-        ..branch(UNKNOWN_REGEX)
-    });
+    b.insert(
+        "main".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Patch),
+            mode: Some(DeploymentMode::ContinuousDeployment),
+            label: Some(String::new()),
+            source_branches: vec![],
+            is_main_branch: Some(true),
+            pre_release_weight: Some(55000),
+            ..branch(MAIN_REGEX)
+        },
+    );
+    b.insert(
+        "feature".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Minor),
+            mode: Some(DeploymentMode::ContinuousDelivery),
+            label: Some("{BranchName}".into()),
+            source_branches: vec!["main".into()],
+            pre_release_weight: Some(30000),
+            ..branch(FEATURE_REGEX)
+        },
+    );
+    b.insert(
+        "hotfix".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Patch),
+            mode: Some(DeploymentMode::ContinuousDelivery),
+            label: Some("{BranchName}".into()),
+            source_branches: vec!["main".into()],
+            is_release_branch: Some(true),
+            pre_release_weight: Some(30000),
+            ..branch(HOTFIX_REGEX)
+        },
+    );
+    b.insert(
+        "pull-request".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Inherit),
+            mode: Some(DeploymentMode::ContinuousDelivery),
+            label: Some("PullRequest{Number}".into()),
+            source_branches: vec!["main".into(), "feature".into(), "hotfix".into()],
+            pre_release_weight: Some(30000),
+            ..branch(PR_REGEX)
+        },
+    );
+    b.insert(
+        "unknown".into(),
+        BranchConfiguration {
+            increment: Some(IncrementStrategy::Patch),
+            mode: Some(DeploymentMode::ContinuousDelivery),
+            label: Some("{BranchName}".into()),
+            source_branches: vec!["main".into()],
+            pre_release_weight: Some(30000),
+            ..branch(UNKNOWN_REGEX)
+        },
+    );
 
     c.branches = b;
     c

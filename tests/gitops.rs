@@ -27,7 +27,10 @@ fn temp_repo() -> std::path::PathBuf {
     std::fs::create_dir_all(&dir).unwrap();
     git(&dir, &["init", "-q", "-b", "main"]);
     git(&dir, &["config", "commit.gpgsign", "false"]);
-    git(&dir, &["commit", "-q", "--no-verify", "--allow-empty", "-m", "a"]);
+    git(
+        &dir,
+        &["commit", "-q", "--no-verify", "--allow-empty", "-m", "a"],
+    );
     dir
 }
 
@@ -39,12 +42,18 @@ fn create_tag_and_branch_via_gix() {
     // 태그 생성 → HEAD 에 존재.
     repo.create_tag("v9.9.9", None).unwrap();
     let tags = repo.tags().unwrap();
-    assert!(tags.iter().any(|t| t.name == "v9.9.9"), "태그가 생성되지 않음: {tags:?}");
+    assert!(
+        tags.iter().any(|t| t.name == "v9.9.9"),
+        "태그가 생성되지 않음: {tags:?}"
+    );
 
     // 브랜치 생성 → 로컬 브랜치 목록에 포함.
     repo.create_branch("feature/from-tui", None).unwrap();
     let branches = repo.local_branch_names().unwrap();
-    assert!(branches.iter().any(|b| b == "feature/from-tui"), "브랜치 미생성: {branches:?}");
+    assert!(
+        branches.iter().any(|b| b == "feature/from-tui"),
+        "브랜치 미생성: {branches:?}"
+    );
 
     std::fs::remove_dir_all(&dir).ok();
 }

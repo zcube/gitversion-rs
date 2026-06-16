@@ -63,30 +63,63 @@ impl VersionVariables {
         m.insert("Minor".into(), self.minor.to_string());
         m.insert("Patch".into(), self.patch.to_string());
         m.insert("PreReleaseTag".into(), self.pre_release_tag.clone());
-        m.insert("PreReleaseTagWithDash".into(), self.pre_release_tag_with_dash.clone());
+        m.insert(
+            "PreReleaseTagWithDash".into(),
+            self.pre_release_tag_with_dash.clone(),
+        );
         m.insert("PreReleaseLabel".into(), self.pre_release_label.clone());
-        m.insert("PreReleaseLabelWithDash".into(), self.pre_release_label_with_dash.clone());
+        m.insert(
+            "PreReleaseLabelWithDash".into(),
+            self.pre_release_label_with_dash.clone(),
+        );
         m.insert("PreReleaseNumber".into(), opt(self.pre_release_number));
-        m.insert("WeightedPreReleaseNumber".into(), opt(self.weighted_pre_release_number));
+        m.insert(
+            "WeightedPreReleaseNumber".into(),
+            opt(self.weighted_pre_release_number),
+        );
         m.insert("BuildMetaData".into(), opt(self.build_meta_data));
-        m.insert("FullBuildMetaData".into(), self.full_build_meta_data.clone());
+        m.insert(
+            "FullBuildMetaData".into(),
+            self.full_build_meta_data.clone(),
+        );
         m.insert("MajorMinorPatch".into(), self.major_minor_patch.clone());
         m.insert("SemVer".into(), self.sem_ver.clone());
         m.insert("FullSemVer".into(), self.full_sem_ver.clone());
         m.insert("AssemblySemVer".into(), self.assembly_sem_ver.clone());
-        m.insert("AssemblySemFileVer".into(), self.assembly_sem_file_ver.clone());
-        m.insert("InformationalVersion".into(), self.informational_version.clone());
+        m.insert(
+            "AssemblySemFileVer".into(),
+            self.assembly_sem_file_ver.clone(),
+        );
+        m.insert(
+            "InformationalVersion".into(),
+            self.informational_version.clone(),
+        );
         m.insert("BranchName".into(), self.branch_name.clone());
         m.insert("EscapedBranchName".into(), self.escaped_branch_name.clone());
         m.insert("Sha".into(), self.sha.clone());
         m.insert("ShortSha".into(), self.short_sha.clone());
-        m.insert("VersionSourceDistance".into(), opt(self.version_source_distance));
-        m.insert("VersionSourceIncrement".into(), self.version_source_increment.clone());
-        m.insert("VersionSourceSemVer".into(), self.version_source_sem_ver.clone());
+        m.insert(
+            "VersionSourceDistance".into(),
+            opt(self.version_source_distance),
+        );
+        m.insert(
+            "VersionSourceIncrement".into(),
+            self.version_source_increment.clone(),
+        );
+        m.insert(
+            "VersionSourceSemVer".into(),
+            self.version_source_sem_ver.clone(),
+        );
         m.insert("VersionSourceSha".into(), self.version_source_sha.clone());
-        m.insert("CommitsSinceVersionSource".into(), opt(self.commits_since_version_source));
+        m.insert(
+            "CommitsSinceVersionSource".into(),
+            opt(self.commits_since_version_source),
+        );
         m.insert("CommitDate".into(), self.commit_date.clone());
-        m.insert("UncommittedChanges".into(), self.uncommitted_changes.to_string());
+        m.insert(
+            "UncommittedChanges".into(),
+            self.uncommitted_changes.to_string(),
+        );
         m
     }
 }

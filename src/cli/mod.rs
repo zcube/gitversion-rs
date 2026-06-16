@@ -41,7 +41,11 @@ impl Verbosity {
 
 /// GitVersion (Rust 포트).
 #[derive(Debug, Parser)]
-#[command(name = "gitversion", version, about = "Git 히스토리로부터 의미론적 버전을 계산합니다 (GitVersion Rust 포트)")]
+#[command(
+    name = "gitversion",
+    version,
+    about = "Git 히스토리로부터 의미론적 버전을 계산합니다 (GitVersion Rust 포트)"
+)]
 pub struct Cli {
     /// 저장소 경로(`.git` 포함 디렉터리). 생략 시 현재 디렉터리.
     #[arg(default_value = ".")]
@@ -201,12 +205,13 @@ pub fn apply_overrides(config: &mut GitVersionConfiguration, overrides: &[String
                 }
             }
             "commit-message-convention" => {
-                config.commit_message_convention = match value.to_lowercase().replace('-', "").as_str() {
-                    "conventionalcommits" | "conventional" => {
-                        Some(crate::config::CommitMessageConvention::ConventionalCommits)
+                config.commit_message_convention =
+                    match value.to_lowercase().replace('-', "").as_str() {
+                        "conventionalcommits" | "conventional" => {
+                            Some(crate::config::CommitMessageConvention::ConventionalCommits)
+                        }
+                        _ => Some(crate::config::CommitMessageConvention::Default),
                     }
-                    _ => Some(crate::config::CommitMessageConvention::Default),
-                }
             }
             other => log::warn!("지원하지 않는 overrideconfig 키(무시): {other}"),
         }

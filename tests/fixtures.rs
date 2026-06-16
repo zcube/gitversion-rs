@@ -55,7 +55,11 @@ fn extract_fixtures() -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    let dest = std::env::temp_dir().join(format!("gitversion-fixtures-{}-{}", std::process::id(), nanos));
+    let dest = std::env::temp_dir().join(format!(
+        "gitversion-fixtures-{}-{}",
+        std::process::id(),
+        nanos
+    ));
     fs::create_dir_all(&dest).unwrap();
 
     let file = fs::File::open(&archive).unwrap();
@@ -88,7 +92,11 @@ fn fixtures_match_real_gitversion() {
         }
     }
     scenario_dirs.sort();
-    assert!(!scenario_dirs.is_empty(), "시나리오를 찾지 못했습니다: {}", root.display());
+    assert!(
+        !scenario_dirs.is_empty(),
+        "시나리오를 찾지 못했습니다: {}",
+        root.display()
+    );
 
     let mut failures: Vec<String> = Vec::new();
     let mut checked = 0usize;
@@ -108,7 +116,10 @@ fn fixtures_match_real_gitversion() {
                 continue;
             }
         };
-        let workdir = repo.workdir().map(|p| p.to_path_buf()).unwrap_or_else(|| dir.clone());
+        let workdir = repo
+            .workdir()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| dir.clone());
         let configuration = config::loader::load(None, &workdir, Some(&workdir)).unwrap();
         let vars = match version::calculation::calculate(&repo, &configuration, None) {
             Ok(v) => v,
@@ -123,7 +134,9 @@ fn fixtures_match_real_gitversion() {
             let exp = normalize(expected.get(*key));
             let got = actual.get(*key).cloned().unwrap_or_default();
             if exp != got {
-                failures.push(format!("[{name}] {key}: 기대(real)={exp:?} 실제(mine)={got:?}"));
+                failures.push(format!(
+                    "[{name}] {key}: 기대(real)={exp:?} 실제(mine)={got:?}"
+                ));
             }
         }
         checked += 1;

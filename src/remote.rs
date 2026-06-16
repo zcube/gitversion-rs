@@ -34,7 +34,11 @@ pub fn prepare(opts: &DynamicRepoOptions) -> Result<PathBuf> {
     let base = opts.location.clone().unwrap_or_else(std::env::temp_dir);
     let mut hasher = Sha1::new();
     hasher.update(opts.url.as_bytes());
-    let hash: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
+    let hash: String = hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
     let dest = base.join(format!("gitversion-dynamic-{hash}"));
 
     // 항상 깨끗한 상태에서 clone(정확성 우선).
@@ -45,9 +49,21 @@ pub fn prepare(opts: &DynamicRepoOptions) -> Result<PathBuf> {
     std::fs::create_dir_all(&dest)?;
 
     // 인증 정보가 있으면 https URL 에 주입.
-    let url = inject_credentials(&opts.url, opts.username.as_deref(), opts.password.as_deref());
+    let url = inject_credentials(
+        &opts.url,
+        opts.username.as_deref(),
+        opts.password.as_deref(),
+    );
 
-    log::info!("{}", t!("remote.cloning", url = opts.url, branch = branch, dest = dest.display()));
+    log::info!(
+        "{}",
+        t!(
+            "remote.cloning",
+            url = opts.url,
+            branch = branch,
+            dest = dest.display()
+        )
+    );
 
     let should_interrupt = AtomicBool::new(false);
     let mut prepare = gix::prepare_clone(url.as_str(), &dest)
@@ -75,7 +91,9 @@ pub fn prepare(opts: &DynamicRepoOptions) -> Result<PathBuf> {
 /// - ssh(`ssh://host`): 사용자가 URL 에 없으면 `user@` 주입(SSH 는 키/에이전트 인증)
 /// - scp-like(`git@host:path`) 등 이미 사용자가 포함된 형태는 그대로.
 fn inject_credentials(url: &str, user: Option<&str>, pass: Option<&str>) -> String {
-    let Some(user) = user.filter(|u| !u.is_empty()) else { return url.to_string() };
+    let Some(user) = user.filter(|u| !u.is_empty()) else {
+        return url.to_string();
+    };
     if let Some(rest) = url.strip_prefix("https://") {
         let cred = match pass.filter(|p| !p.is_empty()) {
             Some(p) => format!("{user}:{p}"),
@@ -142,6 +160,9 @@ mod tests {
             inject_credentials("git@host:r.git", Some("u"), None),
             "git@host:r.git"
         );
-        assert_eq!(inject_credentials("https://host/r.git", None, None), "https://host/r.git");
+        assert_eq!(
+            inject_credentials("https://host/r.git", None, None),
+            "https://host/r.git"
+        );
     }
 }

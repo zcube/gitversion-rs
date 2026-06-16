@@ -6,8 +6,8 @@
 //! 바뀌면 키가 달라져 자동으로 무효화된다.
 
 use crate::git::GitRepo;
-use rust_i18n::t;
 use crate::output::VersionVariables;
+use rust_i18n::t;
 use sha1::{Digest, Sha1};
 use std::path::{Path, PathBuf};
 
@@ -50,7 +50,9 @@ pub fn compute_key(repo: &GitRepo, config_path: Option<&Path>, overrides: &[Stri
 
 /// 캐시 파일 경로: `<.git>/gitversion_cache/<키>.json`.
 fn cache_file(repo: &GitRepo, key: &str) -> PathBuf {
-    repo.git_dir().join("gitversion_cache").join(format!("{key}.json"))
+    repo.git_dir()
+        .join("gitversion_cache")
+        .join(format!("{key}.json"))
 }
 
 /// 캐시에서 변수 로드. 없거나 손상되면 None(손상 시 삭제).
@@ -60,7 +62,10 @@ pub fn load(repo: &GitRepo, key: &str) -> Option<VersionVariables> {
         log::debug!("cache miss: {}", path.display());
         return None;
     }
-    match std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str(&s).ok()) {
+    match std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+    {
         Some(vars) => {
             log::debug!("{}", t!("cache.hit", path = path.display()));
             Some(vars)
@@ -84,7 +89,10 @@ pub fn store(repo: &GitRepo, key: &str, vars: &VersionVariables) {
     match serde_json::to_string_pretty(vars) {
         Ok(json) => {
             if let Err(e) = std::fs::write(&path, json) {
-                log::warn!("{}", t!("cache.write_failed", path = path.display(), error = e));
+                log::warn!(
+                    "{}",
+                    t!("cache.write_failed", path = path.display(), error = e)
+                );
             } else {
                 log::debug!("cache write: {}", path.display());
             }

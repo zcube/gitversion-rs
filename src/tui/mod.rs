@@ -11,7 +11,6 @@ use crate::output::{generator, VersionVariables};
 use crate::remote::{self, DynamicRepoOptions};
 use crate::version::calculation;
 use anyhow::Result;
-use rust_i18n::t;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
@@ -21,6 +20,7 @@ use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table, Tabs},
 };
+use rust_i18n::t;
 use std::io;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -124,7 +124,10 @@ fn yaml_scalar(v: &str) -> serde_yaml::Value {
 fn global_value(config: &GitVersionConfiguration, key: &str) -> String {
     use crate::config::CommitMessageConvention as C;
     match key {
-        "increment" => config.increment.map(|v| format!("{v:?}")).unwrap_or_default(),
+        "increment" => config
+            .increment
+            .map(|v| format!("{v:?}"))
+            .unwrap_or_default(),
         "mode" => config.mode.map(|v| format!("{v:?}")).unwrap_or_default(),
         "label" => config.label.clone().unwrap_or_default(),
         "tag-prefix" => config.tag_prefix.clone().unwrap_or_default(),
@@ -133,13 +136,31 @@ fn global_value(config: &GitVersionConfiguration, key: &str) -> String {
             Some(C::ConventionalCommits) => "ConventionalCommits".into(),
             _ => "Default".into(),
         },
-        "semantic-version-format" => config.semantic_version_format.map(|v| format!("{v:?}")).unwrap_or_default(),
-        "tag-pre-release-weight" => config.tag_pre_release_weight.map(|v| v.to_string()).unwrap_or_default(),
-        "update-build-number" => config.update_build_number.map(|v| v.to_string()).unwrap_or_default(),
+        "semantic-version-format" => config
+            .semantic_version_format
+            .map(|v| format!("{v:?}"))
+            .unwrap_or_default(),
+        "tag-pre-release-weight" => config
+            .tag_pre_release_weight
+            .map(|v| v.to_string())
+            .unwrap_or_default(),
+        "update-build-number" => config
+            .update_build_number
+            .map(|v| v.to_string())
+            .unwrap_or_default(),
         "commit-date-format" => config.commit_date_format.clone().unwrap_or_default(),
-        "major-version-bump-message" => config.major_version_bump_message.clone().unwrap_or_default(),
-        "minor-version-bump-message" => config.minor_version_bump_message.clone().unwrap_or_default(),
-        "patch-version-bump-message" => config.patch_version_bump_message.clone().unwrap_or_default(),
+        "major-version-bump-message" => config
+            .major_version_bump_message
+            .clone()
+            .unwrap_or_default(),
+        "minor-version-bump-message" => config
+            .minor_version_bump_message
+            .clone()
+            .unwrap_or_default(),
+        "patch-version-bump-message" => config
+            .patch_version_bump_message
+            .clone()
+            .unwrap_or_default(),
         "no-bump-message" => config.no_bump_message.clone().unwrap_or_default(),
         _ => String::new(),
     }
@@ -206,7 +227,10 @@ pub fn run(repo: GitRepo, config: GitVersionConfiguration, work_dir: PathBuf) ->
             .map(|s| s.to_string())
             .or_else(|| info.payload().downcast_ref::<String>().cloned())
             .unwrap_or_else(|| t!("tui.panic.unknown").to_string());
-        let loc = info.location().map(|l| format!(" ({}:{})", l.file(), l.line())).unwrap_or_default();
+        let loc = info
+            .location()
+            .map(|l| format!(" ({}:{})", l.file(), l.line()))
+            .unwrap_or_default();
         *captured.lock().unwrap() = Some(format!("{msg}{loc}"));
     }));
 
@@ -216,14 +240,22 @@ pub fn run(repo: GitRepo, config: GitVersionConfiguration, work_dir: PathBuf) ->
 
     // 무슨 일이 있어도 터미널을 복구한다.
     let _ = disable_raw_mode();
-    let _ = execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture);
+    let _ = execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    );
     let _ = terminal.show_cursor();
     std::panic::set_hook(original_hook);
 
     match result {
         Ok(r) => r,
         Err(_) => {
-            let msg = panic_msg.lock().unwrap().clone().unwrap_or_else(|| t!("tui.panic.internal").to_string());
+            let msg = panic_msg
+                .lock()
+                .unwrap()
+                .clone()
+                .unwrap_or_else(|| t!("tui.panic.internal").to_string());
             // 패닉을 크래시가 아니라 일반 에러로 변환(터미널은 이미 복구됨).
             log::error!("{}", t!("tui.panic.defended", msg = msg));
             Err(anyhow::anyhow!("{}", t!("tui.panic.exit", msg = msg)))
@@ -245,9 +277,12 @@ impl App {
                 if let Some(cmd) = cfg.exec.get("version").cloned() {
                     if let Ok(Some(nv)) = exec::run_version_hook(&cmd, &v, &self.work_dir, false) {
                         cfg.next_version = Some(nv.clone());
-                        if let Ok(v2) = calculation::calculate(&self.repo, &cfg, self.branch_override.clone()) {
+                        if let Ok(v2) =
+                            calculation::calculate(&self.repo, &cfg, self.branch_override.clone())
+                        {
                             v = v2;
-                            self.status = t!("tui.status.version_hook_applied", nv = nv).to_string();
+                            self.status =
+                                t!("tui.status.version_hook_applied", nv = nv).to_string();
                             hook_applied = true;
                         }
                     }
@@ -265,8 +300,14 @@ impl App {
             Err(e) => self.status = t!("tui.status.calc_error", error = format!("{e}")).to_string(),
         }
         // 커밋 목록 갱신(대상 브랜치 기준).
-        let target = self.branch_override.clone().unwrap_or_else(|| self.base_branch.clone());
-        self.commits = self.repo.first_parent_between(None, &target).unwrap_or_default();
+        let target = self
+            .branch_override
+            .clone()
+            .unwrap_or_else(|| self.base_branch.clone());
+        self.commits = self
+            .repo
+            .first_parent_between(None, &target)
+            .unwrap_or_default();
         self.commits.truncate(200);
     }
 
@@ -281,9 +322,7 @@ impl App {
             .to_map()
             .into_iter()
             .filter(|(k, v)| {
-                q.is_empty()
-                    || k.to_lowercase().contains(&q)
-                    || v.to_lowercase().contains(&q)
+                q.is_empty() || k.to_lowercase().contains(&q) || v.to_lowercase().contains(&q)
             })
             .collect()
     }
@@ -291,7 +330,9 @@ impl App {
     fn copy(&mut self, text: &str) {
         match arboard::Clipboard::new().and_then(|mut c| c.set_text(text.to_string())) {
             Ok(_) => self.status = t!("tui.status.copied", text = truncate(text, 40)).to_string(),
-            Err(e) => self.status = t!("tui.status.clipboard_failed", error = format!("{e}")).to_string(),
+            Err(e) => {
+                self.status = t!("tui.status.clipboard_failed", error = format!("{e}")).to_string()
+            }
         }
     }
 
@@ -310,14 +351,18 @@ impl App {
                     self.recompute();
                     self.reload_lists();
                 }
-                Err(e) => self.status = t!("git.tag_create_failed", name = format!("{e}")).to_string(),
+                Err(e) => {
+                    self.status = t!("git.tag_create_failed", name = format!("{e}")).to_string()
+                }
             },
             Some(InputAction::CreateBranch) => match self.repo.create_branch(&buf, None) {
                 Ok(_) => {
                     self.status = t!("tui.status.branch_created", name = buf).to_string();
                     self.reload_lists();
                 }
-                Err(e) => self.status = t!("git.branch_create_failed", name = format!("{e}")).to_string(),
+                Err(e) => {
+                    self.status = t!("git.branch_create_failed", name = format!("{e}")).to_string()
+                }
             },
             Some(InputAction::SetNextVersion) => {
                 self.next_version_override = Some(buf.clone());
@@ -351,7 +396,8 @@ impl App {
             Some(InputAction::EditConfig) => {
                 if let Some(key) = self.edit_config_key.take() {
                     self.apply_global_edit(&key, &buf);
-                    self.status = t!("tui.status.config_saved_key", key = key, value = buf).to_string();
+                    self.status =
+                        t!("tui.status.config_saved_key", key = key, value = buf).to_string();
                 }
             }
             None => {}
@@ -367,7 +413,9 @@ impl App {
         };
         let opts = DynamicRepoOptions {
             url: url.to_string(),
-            branch: branch.map(|s| s.to_string()).or_else(|| Some("main".into())),
+            branch: branch
+                .map(|s| s.to_string())
+                .or_else(|| Some("main".into())),
             username: None,
             password: None,
             commit: None,
@@ -377,9 +425,12 @@ impl App {
         match remote::prepare(&opts) {
             Ok(dest) => match GitRepo::discover(&dest) {
                 Ok(repo) => {
-                    let root = repo.workdir().map(|p| p.to_path_buf()).unwrap_or_else(|| dest.clone());
-                    self.config =
-                        loader::load(None, &root, Some(&root)).unwrap_or_else(|_| self.config.clone());
+                    let root = repo
+                        .workdir()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| dest.clone());
+                    self.config = loader::load(None, &root, Some(&root))
+                        .unwrap_or_else(|_| self.config.clone());
                     self.repo = repo;
                     self.work_dir = root;
                     self.base_branch = self.repo.current_branch_name().unwrap_or_default();
@@ -389,9 +440,14 @@ impl App {
                     self.reload_lists();
                     self.status = t!("tui.status.clone_done", url = url).to_string();
                 }
-                Err(e) => self.status = t!("tui.status.clone_open_failed", error = format!("{e}")).to_string(),
+                Err(e) => {
+                    self.status =
+                        t!("tui.status.clone_open_failed", error = format!("{e}")).to_string()
+                }
             },
-            Err(e) => self.status = t!("tui.status.clone_failed", error = format!("{e}")).to_string(),
+            Err(e) => {
+                self.status = t!("tui.status.clone_failed", error = format!("{e}")).to_string()
+            }
         }
     }
 
@@ -407,12 +463,17 @@ impl App {
                     .commit_message_convention
                     .unwrap_or(CommitMessageConvention::Default);
                 let next = match cur {
-                    CommitMessageConvention::ConventionalCommits => CommitMessageConvention::Default,
-                    CommitMessageConvention::Default => CommitMessageConvention::ConventionalCommits,
+                    CommitMessageConvention::ConventionalCommits => {
+                        CommitMessageConvention::Default
+                    }
+                    CommitMessageConvention::Default => {
+                        CommitMessageConvention::ConventionalCommits
+                    }
                 };
                 let val = format!("{next:?}");
                 self.config.commit_message_convention = Some(next);
-                self.tui_overrides.insert("commit-message-convention".into(), val.clone());
+                self.tui_overrides
+                    .insert("commit-message-convention".into(), val.clone());
                 self.recompute();
                 self.save_config();
                 self.status = t!("tui.status.convention_toggled", value = val).to_string();
@@ -422,7 +483,10 @@ impl App {
             6 => self.save_config(),
             7 => match self.repo.clear_cache() {
                 Ok(n) => self.status = t!("tui.status.cache_cleared", count = n).to_string(),
-                Err(e) => self.status = t!("tui.status.cache_clear_failed", error = format!("{e}")).to_string(),
+                Err(e) => {
+                    self.status =
+                        t!("tui.status.cache_clear_failed", error = format!("{e}")).to_string()
+                }
             },
             8 => self.start_input(InputAction::DynamicClone),
             9 => self.recompute(),
@@ -430,7 +494,8 @@ impl App {
                 self.branch_override = None;
                 self.next_version_override = None;
                 self.recompute();
-                self.status = t!("tui.status.reset_base", branch = self.base_branch.clone()).to_string();
+                self.status =
+                    t!("tui.status.reset_base", branch = self.base_branch.clone()).to_string();
             }
             _ => {}
         }
@@ -454,23 +519,34 @@ impl App {
         } else {
             let mut exec_map = serde_yaml::Mapping::new();
             for (k, v) in &self.config.exec {
-                exec_map.insert(serde_yaml::Value::String(k.clone()), serde_yaml::Value::String(v.clone()));
+                exec_map.insert(
+                    serde_yaml::Value::String(k.clone()),
+                    serde_yaml::Value::String(v.clone()),
+                );
             }
-            doc.insert(serde_yaml::Value::String("exec".into()), serde_yaml::Value::Mapping(exec_map));
+            doc.insert(
+                serde_yaml::Value::String("exec".into()),
+                serde_yaml::Value::Mapping(exec_map),
+            );
         }
 
-        match serde_yaml::to_string(&doc).map_err(anyhow::Error::from).and_then(|y| {
-            std::fs::write(&path, y).map_err(anyhow::Error::from)
-        }) {
+        match serde_yaml::to_string(&doc)
+            .map_err(anyhow::Error::from)
+            .and_then(|y| std::fs::write(&path, y).map_err(anyhow::Error::from))
+        {
             Ok(_) => self.status = t!("tui.status.config_saved", path = path.display()).to_string(),
-            Err(e) => self.status = t!("tui.status.config_save_failed", error = format!("{e}")).to_string(),
+            Err(e) => {
+                self.status =
+                    t!("tui.status.config_save_failed", error = format!("{e}")).to_string()
+            }
         }
     }
 
     /// 전역 설정 키를 편집(overrideconfig 동일 로직) + 기록 + 재계산 + 저장.
     fn apply_global_edit(&mut self, key: &str, value: &str) {
         crate::cli::apply_overrides(&mut self.config, &[format!("{key}={value}")]);
-        self.tui_overrides.insert(key.to_string(), value.to_string());
+        self.tui_overrides
+            .insert(key.to_string(), value.to_string());
         self.recompute();
         self.save_config();
     }
@@ -495,7 +571,9 @@ fn event_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<(
         if !event::poll(Duration::from_millis(200))? {
             continue;
         }
-        let Event::Key(key) = event::read()? else { continue };
+        let Event::Key(key) = event::read()? else {
+            continue;
+        };
         if key.kind != KeyEventKind::Press {
             continue;
         }
@@ -637,8 +715,11 @@ impl App {
             }
             3 => {
                 if let Some(b) = self.branches.get(self.selected).cloned() {
-                    self.branch_override =
-                        if b == self.base_branch { None } else { Some(b.clone()) };
+                    self.branch_override = if b == self.base_branch {
+                        None
+                    } else {
+                        Some(b.clone())
+                    };
                     self.recompute();
                 }
             }
@@ -651,7 +732,11 @@ impl App {
     fn input_prompt(&self) -> String {
         match (&self.input, &self.edit_config_key) {
             (Some(InputAction::EditConfig), Some(key)) => {
-                let hint_key = EDITABLE_CONFIG.iter().find(|(k, _)| k == key).map(|(_, h)| *h).unwrap_or("");
+                let hint_key = EDITABLE_CONFIG
+                    .iter()
+                    .find(|(k, _)| k == key)
+                    .map(|(_, h)| *h)
+                    .unwrap_or("");
                 t!("tui.config_edit_prompt", key = key, hint = t!(hint_key)).to_string()
             }
             (Some(a), _) => t!(a.prompt()).to_string(),
@@ -674,22 +759,49 @@ fn ui(f: &mut Frame, app: &App) {
     // 헤더.
     let target = app.branch_override.as_deref().unwrap_or(&app.base_branch);
     let mut header_spans = vec![
-        Span::styled(" GitVersion ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " GitVersion ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("  "),
-        Span::styled(&app.vars.full_sem_ver, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            &app.vars.full_sem_ver,
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(format!("   {}: ", t!("tui.header.branch"))),
         Span::styled(target, Style::default().fg(Color::Yellow)),
     ];
     if app.next_version_override.is_some() {
-        header_spans.push(Span::styled("  [next-version override]", Style::default().fg(Color::Magenta)));
+        header_spans.push(Span::styled(
+            "  [next-version override]",
+            Style::default().fg(Color::Magenta),
+        ));
     }
-    f.render_widget(Paragraph::new(Line::from(header_spans)).block(Block::default().borders(Borders::ALL)), chunks[0]);
+    f.render_widget(
+        Paragraph::new(Line::from(header_spans)).block(Block::default().borders(Borders::ALL)),
+        chunks[0],
+    );
 
     // 탭.
-    let tabs = Tabs::new(TAB_KEYS.iter().enumerate().map(|(i, k)| format!("{}:{}", i + 1, t!(*k))).collect::<Vec<_>>())
-        .select(app.tab)
-        .block(Block::default().borders(Borders::ALL))
-        .highlight_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
+    let tabs = Tabs::new(
+        TAB_KEYS
+            .iter()
+            .enumerate()
+            .map(|(i, k)| format!("{}:{}", i + 1, t!(*k)))
+            .collect::<Vec<_>>(),
+    )
+    .select(app.tab)
+    .block(Block::default().borders(Borders::ALL))
+    .highlight_style(
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    );
     f.render_widget(tabs, chunks[1]);
 
     match app.tab {
@@ -709,7 +821,10 @@ fn ui(f: &mut Frame, app: &App) {
         _ => t!("tui.help.default"),
     };
     let footer = Line::from(vec![
-        Span::styled(format!(" {} ", app.status), Style::default().fg(Color::Black).bg(Color::Gray)),
+        Span::styled(
+            format!(" {} ", app.status),
+            Style::default().fg(Color::Black).bg(Color::Gray),
+        ),
         Span::raw("  "),
         Span::styled(help.to_string(), Style::default().fg(Color::DarkGray)),
     ]);
@@ -733,7 +848,11 @@ fn render_variables(f: &mut Frame, app: &App, area: Rect) {
             } else {
                 Style::default().fg(Color::White)
             };
-            Row::new(vec![Cell::from(k.clone()).style(Style::default().fg(Color::Cyan)), Cell::from(v.clone())]).style(style)
+            Row::new(vec![
+                Cell::from(k.clone()).style(Style::default().fg(Color::Cyan)),
+                Cell::from(v.clone()),
+            ])
+            .style(style)
         })
         .collect();
     let title = if app.searching || !app.search.is_empty() {
@@ -741,9 +860,22 @@ fn render_variables(f: &mut Frame, app: &App, area: Rect) {
     } else {
         t!("tui.title.variables_count", count = items.len()).to_string()
     };
-    let table = Table::new(rows, [Constraint::Percentage(38), Constraint::Percentage(62)])
-        .header(Row::new(vec![t!("tui.col.variable").to_string(), t!("tui.col.value").to_string()]).style(Style::default().add_modifier(Modifier::BOLD).fg(Color::Yellow)))
-        .block(Block::default().borders(Borders::ALL).title(title));
+    let table = Table::new(
+        rows,
+        [Constraint::Percentage(38), Constraint::Percentage(62)],
+    )
+    .header(
+        Row::new(vec![
+            t!("tui.col.variable").to_string(),
+            t!("tui.col.value").to_string(),
+        ])
+        .style(
+            Style::default()
+                .add_modifier(Modifier::BOLD)
+                .fg(Color::Yellow),
+        ),
+    )
+    .block(Block::default().borders(Borders::ALL).title(title));
     f.render_widget(table, area);
 }
 
@@ -759,7 +891,11 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
         .enumerate()
         .map(|(i, (key, _))| {
             let val = global_value(&app.config, key);
-            let shown = if val.is_empty() { t!("tui.unset").to_string() } else { val };
+            let shown = if val.is_empty() {
+                t!("tui.unset").to_string()
+            } else {
+                val
+            };
             let style = if i == app.selected {
                 Style::default().fg(Color::Black).bg(Color::Cyan)
             } else {
@@ -769,22 +905,37 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
     f.render_widget(
-        List::new(edit_items)
-            .block(Block::default().borders(Borders::ALL).title(format!(" {} ", t!("tui.title.global_config")))),
+        List::new(edit_items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!(" {} ", t!("tui.title.global_config"))),
+        ),
         halves[0],
     );
 
-    let eff = EffectiveConfiguration::resolve(&app.config, app.branch_override.as_deref().unwrap_or(&app.base_branch));
+    let eff = EffectiveConfiguration::resolve(
+        &app.config,
+        app.branch_override.as_deref().unwrap_or(&app.base_branch),
+    );
     let strategies: Vec<String> = if app.config.strategies.is_empty() {
         vec![t!("tui.default_paren").to_string()]
     } else {
-        app.config.strategies.iter().map(|s| format!("{s:?}")).collect()
+        app.config
+            .strategies
+            .iter()
+            .map(|s| format!("{s:?}"))
+            .collect()
     };
     let none_paren = t!("tui.none_paren").to_string();
     let exec_hooks: String = if app.config.exec.is_empty() {
         none_paren.clone()
     } else {
-        app.config.exec.keys().cloned().collect::<Vec<_>>().join(", ")
+        app.config
+            .exec
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
     };
     let lines = vec![
         kv(&t!("tui.kv.matched_branch_key"), &eff.branch_key),
@@ -794,23 +945,53 @@ fn render_config(f: &mut Frame, app: &App, area: Rect) {
         kv("regex", eff.regex.as_deref().unwrap_or("")),
         kv("is-release-branch", &eff.is_release_branch.to_string()),
         kv("is-main-branch", &eff.is_main_branch.to_string()),
-        kv("tracks-release-branches", &eff.tracks_release_branches.to_string()),
+        kv(
+            "tracks-release-branches",
+            &eff.tracks_release_branches.to_string(),
+        ),
         kv("track-merge-message", &eff.track_merge_message.to_string()),
-        kv("commit-message-incrementing", &format!("{:?}", eff.commit_message_incrementing)),
-        kv("commit-message-convention", &format!("{:?}", eff.commit_message_convention)),
-        kv("prevent-increment.of-merged", &eff.prevent_increment_of_merged_branch.to_string()),
-        kv("prevent-increment.when-tagged", &eff.prevent_increment_when_current_commit_tagged.to_string()),
+        kv(
+            "commit-message-incrementing",
+            &format!("{:?}", eff.commit_message_incrementing),
+        ),
+        kv(
+            "commit-message-convention",
+            &format!("{:?}", eff.commit_message_convention),
+        ),
+        kv(
+            "prevent-increment.of-merged",
+            &eff.prevent_increment_of_merged_branch.to_string(),
+        ),
+        kv(
+            "prevent-increment.when-tagged",
+            &eff.prevent_increment_when_current_commit_tagged.to_string(),
+        ),
         kv("pre-release-weight", &eff.pre_release_weight.to_string()),
-        kv("tag-pre-release-weight", &eff.tag_pre_release_weight.to_string()),
+        kv(
+            "tag-pre-release-weight",
+            &eff.tag_pre_release_weight.to_string(),
+        ),
         kv("tag-prefix", &eff.tag_prefix),
-        kv("semantic-version-format", &format!("{:?}", eff.semantic_version_format)),
+        kv(
+            "semantic-version-format",
+            &format!("{:?}", eff.semantic_version_format),
+        ),
         kv("source-branches", &eff.source_branches.join(", ")),
         kv("strategies", &strategies.join(", ")),
         kv(&t!("tui.kv.exec_hooks"), &exec_hooks),
-        kv("next-version", app.next_version_override.as_deref().or(app.config.next_version.as_deref()).unwrap_or(&none_paren)),
+        kv(
+            "next-version",
+            app.next_version_override
+                .as_deref()
+                .or(app.config.next_version.as_deref())
+                .unwrap_or(&none_paren),
+        ),
     ];
-    let para = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL).title(format!(" {} ", t!("tui.title.effective"))));
+    let para = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(format!(" {} ", t!("tui.title.effective"))),
+    );
     f.render_widget(para, halves[1]);
 }
 
@@ -828,7 +1009,8 @@ fn render_commits(f: &mut Frame, app: &App, area: Rect) {
         .iter()
         .enumerate()
         .map(|(i, c)| {
-            let is_src = !src.is_empty() && c.sha.starts_with(&src[..src.len().min(c.sha.len())]) || c.sha == src;
+            let is_src = !src.is_empty() && c.sha.starts_with(&src[..src.len().min(c.sha.len())])
+                || c.sha == src;
             let marker = if is_src { "◆ " } else { "  " };
             let date = c.when.format("%Y-%m-%d").to_string();
             let msg = c.message.lines().next().unwrap_or("");
@@ -841,7 +1023,10 @@ fn render_commits(f: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
     let title = t!("tui.title.commits", count = app.commits.len()).to_string();
-    f.render_widget(List::new(items).block(Block::default().borders(Borders::ALL).title(title)), area);
+    f.render_widget(
+        List::new(items).block(Block::default().borders(Borders::ALL).title(title)),
+        area,
+    );
 }
 
 fn render_branches(f: &mut Frame, app: &App, area: Rect) {
@@ -851,7 +1036,13 @@ fn render_branches(f: &mut Frame, app: &App, area: Rect) {
         .iter()
         .enumerate()
         .map(|(i, b)| {
-            let mark = if b == current { "● " } else if b == &app.base_branch { "○ " } else { "  " };
+            let mark = if b == current {
+                "● "
+            } else if b == &app.base_branch {
+                "○ "
+            } else {
+                "  "
+            };
             let mut style = Style::default().fg(Color::White);
             if i == app.selected {
                 style = Style::default().fg(Color::Black).bg(Color::Cyan);
@@ -862,7 +1053,11 @@ fn render_branches(f: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
     f.render_widget(
-        List::new(items).block(Block::default().borders(Borders::ALL).title(format!(" {} ", t!("tui.title.branches")))),
+        List::new(items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!(" {} ", t!("tui.title.branches"))),
+        ),
         area,
     );
 }
@@ -882,7 +1077,11 @@ fn render_actions(f: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
     f.render_widget(
-        List::new(items).block(Block::default().borders(Borders::ALL).title(format!(" {} ", t!("tui.title.actions")))),
+        List::new(items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!(" {} ", t!("tui.title.actions"))),
+        ),
         area,
     );
 }
@@ -890,11 +1089,17 @@ fn render_actions(f: &mut Frame, app: &App, area: Rect) {
 fn render_input_modal(f: &mut Frame, prompt: &str, buf: &str) {
     let area = centered_rect(70, 20, f.area());
     f.render_widget(Clear, area);
-    let block = Block::default().borders(Borders::ALL).title(format!(" {} ", t!("tui.title.input_modal"))).border_style(Style::default().fg(Color::Magenta));
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(format!(" {} ", t!("tui.title.input_modal")))
+        .border_style(Style::default().fg(Color::Magenta));
     let text = vec![
         Line::from(Span::styled(prompt, Style::default().fg(Color::Yellow))),
         Line::from(""),
-        Line::from(Span::styled(format!("> {buf}_"), Style::default().fg(Color::White))),
+        Line::from(Span::styled(
+            format!("> {buf}_"),
+            Style::default().fg(Color::White),
+        )),
     ];
     f.render_widget(Paragraph::new(text).block(block), area);
 }
@@ -902,10 +1107,18 @@ fn render_input_modal(f: &mut Frame, prompt: &str, buf: &str) {
 fn centered_rect(px: u16, py: u16, r: Rect) -> Rect {
     let v = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage((100 - py) / 2), Constraint::Percentage(py), Constraint::Percentage((100 - py) / 2)])
+        .constraints([
+            Constraint::Percentage((100 - py) / 2),
+            Constraint::Percentage(py),
+            Constraint::Percentage((100 - py) / 2),
+        ])
         .split(r);
     Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage((100 - px) / 2), Constraint::Percentage(px), Constraint::Percentage((100 - px) / 2)])
+        .constraints([
+            Constraint::Percentage((100 - px) / 2),
+            Constraint::Percentage(px),
+            Constraint::Percentage((100 - px) / 2),
+        ])
         .split(v[1])[1]
 }

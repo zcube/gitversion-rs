@@ -19,7 +19,9 @@ pub fn find_branch_config<'a>(
         if re_src.is_empty() {
             continue;
         }
-        let Ok(re) = Regex::new(&format!("(?i){re_src}")) else { continue };
+        let Ok(re) = Regex::new(&format!("(?i){re_src}")) else {
+            continue;
+        };
         if re.is_match(branch_name) || re.is_match(short) {
             if key == "unknown" {
                 unknown = Some((key.clone(), bc));
@@ -48,9 +50,13 @@ fn resolve_label(label: &str, regex_src: &Option<String>, branch_name: &str) -> 
         }
     }
     // 미지정 BranchName 은 브랜치 마지막 세그먼트로.
-    captures
-        .entry("BranchName".into())
-        .or_insert_with(|| branch_name.rsplit('/').next().unwrap_or(branch_name).to_string());
+    captures.entry("BranchName".into()).or_insert_with(|| {
+        branch_name
+            .rsplit('/')
+            .next()
+            .unwrap_or(branch_name)
+            .to_string()
+    });
 
     let token_re = Regex::new(r"\{([^}]+)\}").unwrap();
     let out = token_re
@@ -83,9 +89,16 @@ fn resolve_increment(
     bc: &BranchConfiguration,
     depth: usize,
 ) -> IncrementStrategy {
-    let own = bc.increment.or(config.increment).unwrap_or(IncrementStrategy::Inherit);
+    let own = bc
+        .increment
+        .or(config.increment)
+        .unwrap_or(IncrementStrategy::Inherit);
     if own != IncrementStrategy::Inherit || depth > 8 {
-        return if own == IncrementStrategy::Inherit { IncrementStrategy::Patch } else { own };
+        return if own == IncrementStrategy::Inherit {
+            IncrementStrategy::Patch
+        } else {
+            own
+        };
     }
     for src in &bc.source_branches {
         if let Some(src_bc) = config.branches.get(src) {
@@ -150,7 +163,11 @@ impl EffectiveConfiguration {
         let pi_global = config.prevent_increment.clone().unwrap_or_default();
         let coalesce_bool = |b: Option<bool>, g: Option<bool>| b.or(g).unwrap_or(false);
 
-        let raw_label = bc.label.clone().or_else(|| config.label.clone()).unwrap_or_default();
+        let raw_label = bc
+            .label
+            .clone()
+            .or_else(|| config.label.clone())
+            .unwrap_or_default();
         let label = resolve_label(&raw_label, &bc.regex, branch_name);
 
         EffectiveConfiguration {
@@ -184,7 +201,10 @@ impl EffectiveConfiguration {
             ),
             is_release_branch: coalesce_bool(bc.is_release_branch, config.is_release_branch),
             is_main_branch: coalesce_bool(bc.is_main_branch, config.is_main_branch),
-            pre_release_weight: bc.pre_release_weight.or(config.pre_release_weight).unwrap_or(0),
+            pre_release_weight: bc
+                .pre_release_weight
+                .or(config.pre_release_weight)
+                .unwrap_or(0),
             tag_pre_release_weight: config.tag_pre_release_weight.unwrap_or(60000),
             commit_message_incrementing: bc
                 .commit_message_incrementing

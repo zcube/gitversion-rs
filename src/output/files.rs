@@ -3,12 +3,12 @@
 //! 원본 `GitVersion.Output/AssemblyInfo/*`, `WixUpdater/*` 대응.
 
 use super::variables::VersionVariables;
-use rust_i18n::t;
 use anyhow::{Context, Result};
 use quick_xml::events::{BytesText, Event};
 use quick_xml::reader::Reader;
 use quick_xml::writer::Writer;
 use regex::Regex;
+use rust_i18n::t;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
@@ -28,12 +28,18 @@ fn find_recursive(root: &Path, matches: impl Fn(&Path) -> bool) -> Vec<PathBuf> 
     let mut out = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
                 // .git 등 숨김 디렉터리는 건너뛴다.
-                if path.file_name().map(|n| n.to_string_lossy().starts_with('.')).unwrap_or(false) {
+                if path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().starts_with('.'))
+                    .unwrap_or(false)
+                {
                     continue;
                 }
                 stack.push(path);
@@ -57,8 +63,14 @@ pub fn update_assembly_info(
 ) -> Result<Vec<PathBuf>> {
     let targets: Vec<PathBuf> = if files.is_empty() {
         find_recursive(work_dir, |p| {
-            let name = p.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
-            matches!(name.as_str(), "assemblyinfo.cs" | "assemblyinfo.vb" | "assemblyinfo.fs")
+            let name = p
+                .file_name()
+                .map(|n| n.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            matches!(
+                name.as_str(),
+                "assemblyinfo.cs" | "assemblyinfo.vb" | "assemblyinfo.fs"
+            )
         })
     } else {
         files.iter().map(|f| work_dir.join(f)).collect()
@@ -89,20 +101,31 @@ fn replace_assembly_attributes(content: &str, vars: &VersionVariables) -> String
     let replace_attr = |text: &str, attr: &str, value: &str| -> String {
         // AssemblyVersion("...") / <Assembly: AssemblyVersion("...")> 모두 매칭.
         let re = Regex::new(&format!(r#"({attr}\s*\(\s*")[^"]*("\s*\))"#)).unwrap();
-        re.replace_all(text, format!("${{1}}{value}${{2}}").as_str()).into_owned()
+        re.replace_all(text, format!("${{1}}{value}${{2}}").as_str())
+            .into_owned()
     };
     let mut out = content.to_string();
     out = replace_attr(&out, "AssemblyFileVersion", &vars.assembly_sem_file_ver);
-    out = replace_attr(&out, "AssemblyInformationalVersion", &vars.informational_version);
+    out = replace_attr(
+        &out,
+        "AssemblyInformationalVersion",
+        &vars.informational_version,
+    );
     out = replace_attr(&out, "AssemblyVersion", &vars.assembly_sem_ver);
     out
 }
 
 /// 새 AssemblyInfo 파일 내용 생성(확장자별 문법).
 fn create_assembly_info(path: &Path, vars: &VersionVariables) -> String {
-    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
-    let (fv, av, iv) =
-        (&vars.assembly_sem_file_ver, &vars.assembly_sem_ver, &vars.informational_version);
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    let (fv, av, iv) = (
+        &vars.assembly_sem_file_ver,
+        &vars.assembly_sem_ver,
+        &vars.informational_version,
+    );
     match ext.as_str() {
         "vb" => format!(
             "{ASSEMBLY_HEADER}\nImports System.Reflection\n\n\
@@ -134,7 +157,10 @@ pub fn update_project_files(
 ) -> Result<Vec<PathBuf>> {
     let targets: Vec<PathBuf> = if files.is_empty() {
         find_recursive(work_dir, |p| {
-            let ext = p.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+            let ext = p
+                .extension()
+                .map(|e| e.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
             matches!(ext.as_str(), "csproj" | "vbproj" | "fsproj")
         })
     } else {
@@ -157,8 +183,12 @@ pub fn update_project_files(
 }
 
 /// 대상 버전 요소(고정 순서: 원본 ProjectFileUpdater 처리 순서).
-const PROJECT_ELEMENTS: [&str; 4] =
-    ["AssemblyVersion", "FileVersion", "InformationalVersion", "Version"];
+const PROJECT_ELEMENTS: [&str; 4] = [
+    "AssemblyVersion",
+    "FileVersion",
+    "InformationalVersion",
+    "Version",
+];
 
 /// 프로젝트 파일의 버전 요소를 실제 XML 파싱으로 갱신한다.
 ///
@@ -187,8 +217,10 @@ fn replace_project_elements(content: &str, vars: &VersionVariables) -> Result<St
         }
     }
 
-    let name_of = |e: &quick_xml::events::BytesStart| String::from_utf8_lossy(e.name().as_ref()).into_owned();
-    let end_name_of = |e: &quick_xml::events::BytesEnd| String::from_utf8_lossy(e.name().as_ref()).into_owned();
+    let name_of =
+        |e: &quick_xml::events::BytesStart| String::from_utf8_lossy(e.name().as_ref()).into_owned();
+    let end_name_of =
+        |e: &quick_xml::events::BytesEnd| String::from_utf8_lossy(e.name().as_ref()).into_owned();
 
     // 2) 존재하는 대상 요소의 텍스트를 갱신하고, 존재 여부와 첫 PropertyGroup 위치를 기록.
     let mut existing: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -218,8 +250,7 @@ fn replace_project_elements(content: &str, vars: &VersionVariables) -> Result<St
             Event::Text(_) => {
                 // 첫 PropertyGroup 의 첫 자식 들여쓰기 포착.
                 if first_pg_start.is_some() && first_pg_end.is_none() && child_indent.is_none() {
-                    if let (Event::Text(t), Some(Event::Start(_))) =
-                        (&events[i], events.get(i + 1))
+                    if let (Event::Text(t), Some(Event::Start(_))) = (&events[i], events.get(i + 1))
                     {
                         let s = String::from_utf8_lossy(t.as_ref()).into_owned();
                         if s.contains('\n') {
@@ -251,8 +282,11 @@ fn replace_project_elements(content: &str, vars: &VersionVariables) -> Result<St
     }
 
     // 3) 없는 요소를 첫 PropertyGroup 끝에 삽입.
-    let missing: Vec<&str> =
-        PROJECT_ELEMENTS.iter().filter(|e| !existing.contains(**e)).copied().collect();
+    let missing: Vec<&str> = PROJECT_ELEMENTS
+        .iter()
+        .filter(|e| !existing.contains(**e))
+        .copied()
+        .collect();
     if let (Some(end_idx), false) = (first_pg_end, missing.is_empty()) {
         let indent = child_indent.unwrap_or_else(|| "\n    ".into());
         // 닫는 들여쓰기 텍스트(End 직전) 앞에 삽입.
@@ -264,9 +298,13 @@ fn replace_project_elements(content: &str, vars: &VersionVariables) -> Result<St
         let mut new_events: Vec<Event<'static>> = Vec::new();
         for elem in &missing {
             new_events.push(Event::Text(BytesText::new(&indent).into_owned()));
-            new_events.push(Event::Start(quick_xml::events::BytesStart::new(*elem).into_owned()));
+            new_events.push(Event::Start(
+                quick_xml::events::BytesStart::new(*elem).into_owned(),
+            ));
             new_events.push(Event::Text(BytesText::new(value_of(elem)).into_owned()));
-            new_events.push(Event::End(quick_xml::events::BytesEnd::new(*elem).into_owned()));
+            new_events.push(Event::End(
+                quick_xml::events::BytesEnd::new(*elem).into_owned(),
+            ));
         }
         events.splice(insert_at..insert_at, new_events);
     }
@@ -293,14 +331,20 @@ pub fn update_package_files(
 ) -> Result<Vec<PathBuf>> {
     let targets: Vec<PathBuf> = if files.is_empty() {
         find_recursive(work_dir, |p| {
-            let name =
-                p.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+            let name = p
+                .file_name()
+                .map(|n| n.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
             // node_modules/벤더 디렉터리의 매니페스트는 제외.
             let in_vendor = p.components().any(|c| {
                 let s = c.as_os_str().to_string_lossy();
                 s == "node_modules" || s == "vendor" || s == "target"
             });
-            !in_vendor && matches!(name.as_str(), "package.json" | "cargo.toml" | "pyproject.toml")
+            !in_vendor
+                && matches!(
+                    name.as_str(),
+                    "package.json" | "cargo.toml" | "pyproject.toml"
+                )
         })
     } else {
         files.iter().map(|f| work_dir.join(f)).collect()
@@ -311,7 +355,10 @@ pub fn update_package_files(
         if !path.exists() {
             continue;
         }
-        let name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_lowercase())
+            .unwrap_or_default();
         let content = std::fs::read_to_string(&path)
             .with_context(|| t!("file.read_failed", path = path.display()).to_string())?;
         // 패키지 매니페스트에는 SemVer(빌드 메타데이터 제외)를 사용한다.
@@ -334,11 +381,16 @@ pub fn update_package_files(
 fn update_package_json(content: &str, version: &str) -> Result<Option<String>> {
     let mut value: serde_json::Value =
         serde_json::from_str(content).with_context(|| t!("file.json_parse_failed").to_string())?;
-    let serde_json::Value::Object(map) = &mut value else { return Ok(None) };
+    let serde_json::Value::Object(map) = &mut value else {
+        return Ok(None);
+    };
     if !map.contains_key("version") {
         return Ok(None);
     }
-    map.insert("version".into(), serde_json::Value::String(version.to_string()));
+    map.insert(
+        "version".into(),
+        serde_json::Value::String(version.to_string()),
+    );
     let mut out = serde_json::to_string_pretty(&value)?;
     out.push('\n'); // npm 관례상 끝에 개행.
     Ok(Some(out))
@@ -346,7 +398,9 @@ fn update_package_json(content: &str, version: &str) -> Result<Option<String>> {
 
 /// Cargo.toml 의 [package] version 갱신(포맷 보존).
 fn update_cargo_toml(content: &str, version: &str) -> Result<Option<String>> {
-    let mut doc = content.parse::<toml_edit::DocumentMut>().with_context(|| t!("file.cargo_parse_failed").to_string())?;
+    let mut doc = content
+        .parse::<toml_edit::DocumentMut>()
+        .with_context(|| t!("file.cargo_parse_failed").to_string())?;
     let Some(pkg) = doc.get_mut("package").and_then(|p| p.as_table_mut()) else {
         return Ok(None);
     };
@@ -359,7 +413,9 @@ fn update_cargo_toml(content: &str, version: &str) -> Result<Option<String>> {
 
 /// pyproject.toml 의 [project] 또는 [tool.poetry] version 갱신(포맷 보존).
 fn update_pyproject_toml(content: &str, version: &str) -> Result<Option<String>> {
-    let mut doc = content.parse::<toml_edit::DocumentMut>().with_context(|| t!("file.pyproject_parse_failed").to_string())?;
+    let mut doc = content
+        .parse::<toml_edit::DocumentMut>()
+        .with_context(|| t!("file.pyproject_parse_failed").to_string())?;
     let mut changed = false;
     // PEP 621: [project] version
     if let Some(project) = doc.get_mut("project").and_then(|p| p.as_table_mut()) {

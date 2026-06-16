@@ -20,7 +20,11 @@ pub struct PreReleaseTag {
 
 impl PreReleaseTag {
     pub fn new(name: impl Into<String>, number: Option<i64>, promote: bool) -> Self {
-        Self { name: name.into(), number, promote_tag_even_if_name_is_empty: promote }
+        Self {
+            name: name.into(),
+            number,
+            promote_tag_even_if_name_is_empty: promote,
+        }
     }
 
     /// 의미 있는 태그가 존재하는지.
@@ -37,10 +41,20 @@ impl PreReleaseTag {
         let re = regex::Regex::new(r"(?<name>.*?)\.?(?<number>\d+)?$").unwrap();
         if let Some(c) = re.captures(input) {
             let name = c.name("name").map(|m| m.as_str()).unwrap_or("").to_string();
-            let number = c.name("number").and_then(|m| m.as_str().parse::<i64>().ok());
-            return Self { name, number, promote_tag_even_if_name_is_empty: false };
+            let number = c
+                .name("number")
+                .and_then(|m| m.as_str().parse::<i64>().ok());
+            return Self {
+                name,
+                number,
+                promote_tag_even_if_name_is_empty: false,
+            };
         }
-        Self { name: input.to_string(), number: None, promote_tag_even_if_name_is_empty: false }
+        Self {
+            name: input.to_string(),
+            number: None,
+            promote_tag_even_if_name_is_empty: false,
+        }
     }
 
     /// `t` 포맷: 이름만. 기본 포맷: `name.number`.
@@ -99,7 +113,9 @@ impl BuildMetaData {
 
     /// 기본 포맷 `b`: commits-since-tag 만.
     pub fn format_short(&self) -> String {
-        self.commits_since_tag.map(|c| c.to_string()).unwrap_or_default()
+        self.commits_since_tag
+            .map(|c| c.to_string())
+            .unwrap_or_default()
     }
 
     /// 완전 포맷 `f`: commits.Branch.<branch>.Sha.<sha>[.other].
@@ -135,7 +151,12 @@ pub struct SemanticVersion {
 
 impl SemanticVersion {
     pub fn new(major: i64, minor: i64, patch: i64) -> Self {
-        Self { major, minor, patch, ..Default::default() }
+        Self {
+            major,
+            minor,
+            patch,
+            ..Default::default()
+        }
     }
 
     /// `Major.Minor.Patch` 만.
@@ -169,11 +190,25 @@ impl SemanticVersion {
             return None;
         }
         let major = c.name("major")?.as_str().parse().ok()?;
-        let minor = c.name("minor").and_then(|m| m.as_str().parse().ok()).unwrap_or(0);
-        let patch = c.name("patch").and_then(|m| m.as_str().parse().ok()).unwrap_or(0);
-        let pre_release_tag =
-            c.name("tag").map(|m| PreReleaseTag::parse(m.as_str())).unwrap_or_default();
-        Some(Self { major, minor, patch, pre_release_tag, build_metadata: BuildMetaData::default() })
+        let minor = c
+            .name("minor")
+            .and_then(|m| m.as_str().parse().ok())
+            .unwrap_or(0);
+        let patch = c
+            .name("patch")
+            .and_then(|m| m.as_str().parse().ok())
+            .unwrap_or(0);
+        let pre_release_tag = c
+            .name("tag")
+            .map(|m| PreReleaseTag::parse(m.as_str()))
+            .unwrap_or_default();
+        Some(Self {
+            major,
+            minor,
+            patch,
+            pre_release_tag,
+            build_metadata: BuildMetaData::default(),
+        })
     }
 
     /// 코어 버전만 비교(pre-release 무시).
@@ -193,7 +228,7 @@ impl SemanticVersion {
         let mut v = self.clone();
         let has_pre = self.pre_release_tag.has_tag();
         // 이미 pre-release 가 있으면(그리고 force 아님) 코어를 올리지 않는다.
-        let bump_core = !(has_pre && !force);
+        let bump_core = !has_pre || force;
 
         match field {
             VersionField::None => {}
@@ -242,7 +277,8 @@ impl fmt::Display for SemanticVersion {
 
 impl Ord for SemanticVersion {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.cmp_core(other).then(self.pre_release_tag.cmp(&other.pre_release_tag))
+        self.cmp_core(other)
+            .then(self.pre_release_tag.cmp(&other.pre_release_tag))
     }
 }
 impl PartialOrd for SemanticVersion {

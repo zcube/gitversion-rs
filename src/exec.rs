@@ -5,9 +5,9 @@
 //! 버전 정보를 수정(next-version 덮어쓰기 후 재계산)할 수 있다.
 
 use crate::output::VersionVariables;
-use rust_i18n::t;
 use anyhow::{bail, Context, Result};
 use regex::Regex;
+use rust_i18n::t;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -33,7 +33,10 @@ fn render(cmd: &str, map: &BTreeMap<String, String>) -> String {
 
 /// 버전 변수를 `GitVersion_*` 환경변수로 변환.
 fn env_vars(vars: &VersionVariables) -> Vec<(String, String)> {
-    vars.to_map().into_iter().map(|(k, v)| (format!("GitVersion_{k}"), v)).collect()
+    vars.to_map()
+        .into_iter()
+        .map(|(k, v)| (format!("GitVersion_{k}"), v))
+        .collect()
 }
 
 /// 쉘로 명령을 실행. `capture` 면 stdout 을 수집해 반환, 아니면 상속 출력.
@@ -52,25 +55,49 @@ fn run_command(
     }
     log::info!("{}", t!("exec.running", cmd = rendered));
 
-    let (program, flag) = if cfg!(windows) { ("cmd", "/C") } else { ("sh", "-c") };
+    let (program, flag) = if cfg!(windows) {
+        ("cmd", "/C")
+    } else {
+        ("sh", "-c")
+    };
     let mut command = Command::new(program);
-    command.arg(flag).arg(&rendered).current_dir(work_dir).envs(env_vars(vars));
+    command
+        .arg(flag)
+        .arg(&rendered)
+        .current_dir(work_dir)
+        .envs(env_vars(vars));
     if capture {
         command.stdout(Stdio::piped()).stderr(Stdio::inherit());
     }
 
     if capture {
-        let output =
-            command.output().with_context(|| t!("exec.run_failed", cmd = rendered))?;
+        let output = command
+            .output()
+            .with_context(|| t!("exec.run_failed", cmd = rendered))?;
         if !output.status.success() {
-            bail!("{}", t!("exec.cmd_failed", code = format!("{:?}", output.status.code()), cmd = rendered));
+            bail!(
+                "{}",
+                t!(
+                    "exec.cmd_failed",
+                    code = format!("{:?}", output.status.code()),
+                    cmd = rendered
+                )
+            );
         }
         Ok(Some(String::from_utf8_lossy(&output.stdout).into_owned()))
     } else {
-        let status =
-            command.status().with_context(|| t!("exec.run_failed", cmd = rendered))?;
+        let status = command
+            .status()
+            .with_context(|| t!("exec.run_failed", cmd = rendered))?;
         if !status.success() {
-            bail!("{}", t!("exec.cmd_failed", code = format!("{:?}", status.code()), cmd = rendered));
+            bail!(
+                "{}",
+                t!(
+                    "exec.cmd_failed",
+                    code = format!("{:?}", status.code()),
+                    cmd = rendered
+                )
+            );
         }
         Ok(None)
     }
@@ -85,7 +112,12 @@ pub fn run_version_hook(
     dry_run: bool,
 ) -> Result<Option<String>> {
     let out = run_command(cmd, vars, work_dir, true, dry_run)?;
-    Ok(out.and_then(|s| s.lines().map(str::trim).find(|l| !l.is_empty()).map(String::from)))
+    Ok(out.and_then(|s| {
+        s.lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty())
+            .map(String::from)
+    }))
 }
 
 /// side-effect 훅(verify/prepare/publish/success)을 순서대로 실행.

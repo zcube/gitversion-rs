@@ -37,7 +37,8 @@ pub struct GitRepo {
 }
 
 fn gix_time_to_chrono(t: gix::date::Time) -> DateTime<FixedOffset> {
-    let offset = FixedOffset::east_opt(t.offset).unwrap_or_else(|| FixedOffset::east_opt(0).unwrap());
+    let offset =
+        FixedOffset::east_opt(t.offset).unwrap_or_else(|| FixedOffset::east_opt(0).unwrap());
     offset
         .timestamp_opt(t.seconds, 0)
         .single()
@@ -47,8 +48,8 @@ fn gix_time_to_chrono(t: gix::date::Time) -> DateTime<FixedOffset> {
 impl GitRepo {
     /// `path` 또는 상위에서 `.git` 을 탐색해 연다.
     pub fn discover(path: &Path) -> Result<Self> {
-        let repo = gix::discover(path)
-            .with_context(|| t!("git.repo_not_found", path = path.display()))?;
+        let repo =
+            gix::discover(path).with_context(|| t!("git.repo_not_found", path = path.display()))?;
         Ok(Self { repo })
     }
 
@@ -66,7 +67,10 @@ impl GitRepo {
     pub fn head_ref_name(&self) -> String {
         match self.repo.head_name() {
             Ok(Some(name)) => name.as_bstr().to_string(),
-            _ => self.head_commit().map(|c| c.short_sha).unwrap_or_else(|_| "HEAD".into()),
+            _ => self
+                .head_commit()
+                .map(|c| c.short_sha)
+                .unwrap_or_else(|_| "HEAD".into()),
         }
     }
 
@@ -110,7 +114,10 @@ impl GitRepo {
 
     /// HEAD 가 가리키는 커밋.
     pub fn head_commit(&self) -> Result<CommitInfo> {
-        let commit = self.repo.head_commit().with_context(|| t!("git.head_read").to_string())?;
+        let commit = self
+            .repo
+            .head_commit()
+            .with_context(|| t!("git.head_read").to_string())?;
         Self::commit_info(&commit)
     }
 
@@ -267,7 +274,9 @@ impl GitRepo {
     /// 지정 커밋(기본 HEAD)에 lightweight 태그 생성.
     pub fn create_tag(&self, name: &str, target_spec: Option<&str>) -> Result<()> {
         let target = match target_spec {
-            Some(s) => self.resolve(s).with_context(|| t!("git.target_commit_not_found").to_string())?,
+            Some(s) => self
+                .resolve(s)
+                .with_context(|| t!("git.target_commit_not_found").to_string())?,
             None => self.repo.head_commit()?.id,
         };
         self.repo
@@ -284,7 +293,9 @@ impl GitRepo {
     /// 지정 커밋(기본 HEAD)에 브랜치 ref 생성(작업 트리는 변경하지 않음).
     pub fn create_branch(&self, name: &str, target_spec: Option<&str>) -> Result<()> {
         let target = match target_spec {
-            Some(s) => self.resolve(s).with_context(|| t!("git.target_commit_not_found").to_string())?,
+            Some(s) => self
+                .resolve(s)
+                .with_context(|| t!("git.target_commit_not_found").to_string())?,
             None => self.repo.head_commit()?.id,
         };
         self.repo
@@ -305,7 +316,8 @@ impl GitRepo {
             return Ok(0);
         }
         let count = std::fs::read_dir(&dir).map(|d| d.count()).unwrap_or(0);
-        std::fs::remove_dir_all(&dir).with_context(|| t!("git.cache_clear_failed", path = dir.display()))?;
+        std::fs::remove_dir_all(&dir)
+            .with_context(|| t!("git.cache_clear_failed", path = dir.display()))?;
         Ok(count)
     }
 

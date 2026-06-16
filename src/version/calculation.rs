@@ -27,7 +27,11 @@ struct IgnoreSet {
 impl IgnoreSet {
     fn from_config(config: &GitVersionConfiguration) -> Self {
         let shas: HashSet<String> = config.ignore.sha.iter().map(|s| s.to_lowercase()).collect();
-        let before = config.ignore.commits_before.as_deref().and_then(parse_ignore_date);
+        let before = config
+            .ignore
+            .commits_before
+            .as_deref()
+            .and_then(parse_ignore_date);
         IgnoreSet { shas, before }
     }
 
@@ -36,7 +40,11 @@ impl IgnoreSet {
             return true;
         }
         // 전체 sha 가 아닌 접두어로 지정됐을 수도 있으므로 prefix 도 확인.
-        if self.shas.iter().any(|s| sha.to_lowercase().starts_with(s.as_str()) && s.len() >= 7) {
+        if self
+            .shas
+            .iter()
+            .any(|s| sha.to_lowercase().starts_with(s.as_str()) && s.len() >= 7)
+        {
             return true;
         }
         matches!(&self.before, Some(b) if when < b)
@@ -46,7 +54,10 @@ impl IgnoreSet {
         if self.shas.is_empty() && self.before.is_none() {
             return commits;
         }
-        commits.into_iter().filter(|c| !self.is_ignored(&c.sha, &c.when)).collect()
+        commits
+            .into_iter()
+            .filter(|c| !self.is_ignored(&c.sha, &c.when))
+            .collect()
     }
 }
 
@@ -152,7 +163,9 @@ fn conventional_increment(msg: &str) -> Option<VersionField> {
     let header = Regex::new(r"^\s*(?P<type>[a-zA-Z]+)(\([^)]*\))?(?P<bang>!)?:").ok()?;
     let caps = header.captures(first)?;
     let breaking = caps.name("bang").is_some()
-        || Regex::new(r"(?m)^BREAKING[ -]CHANGE:").map(|r| r.is_match(msg)).unwrap_or(false);
+        || Regex::new(r"(?m)^BREAKING[ -]CHANGE:")
+            .map(|r| r.is_match(msg))
+            .unwrap_or(false);
     if breaking {
         return Some(VersionField::Major);
     }
@@ -171,7 +184,11 @@ fn increment_from_message(msg: &str, eff: &EffectiveConfiguration) -> Option<Ver
             return Some(f);
         }
     }
-    let test = |pat: &str| Regex::new(&format!("(?im){pat}")).map(|r| r.is_match(msg)).unwrap_or(false);
+    let test = |pat: &str| {
+        Regex::new(&format!("(?im){pat}"))
+            .map(|r| r.is_match(msg))
+            .unwrap_or(false)
+    };
     if test(&eff.major_bump_message) {
         Some(VersionField::Major)
     } else if test(&eff.minor_bump_message) {
@@ -197,23 +214,24 @@ fn determine_increment(
 ) -> Result<VersionField> {
     let default_increment = strategy_to_field(eff.increment);
 
-    let message_increment = if eff.commit_message_incrementing == CommitMessageIncrementMode::Disabled
-    {
-        None
-    } else {
-        let commits = ignore.filter(repo.commits_between(base_source, head_sha)?);
-        let merge_only = eff.commit_message_incrementing == CommitMessageIncrementMode::MergeMessageOnly;
-        let mut best: Option<VersionField> = None;
-        for c in &commits {
-            if merge_only && c.parent_count < 2 {
-                continue;
+    let message_increment =
+        if eff.commit_message_incrementing == CommitMessageIncrementMode::Disabled {
+            None
+        } else {
+            let commits = ignore.filter(repo.commits_between(base_source, head_sha)?);
+            let merge_only =
+                eff.commit_message_incrementing == CommitMessageIncrementMode::MergeMessageOnly;
+            let mut best: Option<VersionField> = None;
+            for c in &commits {
+                if merge_only && c.parent_count < 2 {
+                    continue;
+                }
+                if let Some(f) = increment_from_message(&c.message, eff) {
+                    best = Some(best.map_or(f, |b| b.max(f)));
+                }
             }
-            if let Some(f) = increment_from_message(&c.message, eff) {
-                best = Some(best.map_or(f, |b| b.max(f)));
-            }
-        }
-        best
-    };
+            best
+        };
 
     Ok(match message_increment {
         None => {
@@ -243,7 +261,10 @@ fn parse_version(input: &str, eff: &EffectiveConfiguration) -> Option<SemanticVe
 fn extract_version(text: &str, pattern: &str, tag_prefix: &str) -> Option<SemanticVersion> {
     let re = Regex::new(&format!("(?i){pattern}")).ok()?;
     let caps = re.captures(text)?;
-    let raw = caps.name("version").map(|m| m.as_str()).unwrap_or_else(|| caps.get(0).unwrap().as_str());
+    let raw = caps
+        .name("version")
+        .map(|m| m.as_str())
+        .unwrap_or_else(|| caps.get(0).unwrap().as_str());
     SemanticVersion::parse(raw, tag_prefix)
 }
 
@@ -258,7 +279,10 @@ fn resolve_inherit_via_git(
     let Some((_, bc)) = crate::config::effective::find_branch_config(config, branch_name) else {
         return Ok(None);
     };
-    let own = bc.increment.or(config.increment).unwrap_or(IncrementStrategy::Inherit);
+    let own = bc
+        .increment
+        .or(config.increment)
+        .unwrap_or(IncrementStrategy::Inherit);
     if own != IncrementStrategy::Inherit {
         return Ok(None);
     }
@@ -267,9 +291,15 @@ fn resolve_inherit_via_git(
     let mut best: Option<(i64, IncrementStrategy)> = None;
 
     for src_key in &bc.source_branches {
-        let Some(src_bc) = config.branches.get(src_key) else { continue };
-        let Some(re_src) = &src_bc.regex else { continue };
-        let Ok(re) = Regex::new(&format!("(?i){re_src}")) else { continue };
+        let Some(src_bc) = config.branches.get(src_key) else {
+            continue;
+        };
+        let Some(re_src) = &src_bc.regex else {
+            continue;
+        };
+        let Ok(re) = Regex::new(&format!("(?i){re_src}")) else {
+            continue;
+        };
 
         // 이 source 설정에 매칭되는 실제 저장소 브랜치들.
         for rb in &repo_branches {
@@ -280,7 +310,9 @@ fn resolve_inherit_via_git(
             if !(re.is_match(rb) || re.is_match(short)) {
                 continue;
             }
-            let Some(mb) = repo.merge_base(branch_name, rb)? else { continue };
+            let Some(mb) = repo.merge_base(branch_name, rb)? else {
+                continue;
+            };
             // merge-base 가 루트에서 멀수록(=깊을수록) 최근에 분기한 것.
             let depth = repo.commits_between(None, &mb)?.len() as i64;
             let inc = src_bc
@@ -329,11 +361,20 @@ fn parse_merge_message(
     // 사용자 정의 포맷 우선, 이어서 8종 내장 포맷.
     let custom = eff.merge_message_formats.values().map(|s| s.as_str());
     for pattern in custom.chain(BUILTIN_MERGE_FORMATS.iter().copied()) {
-        let Ok(re) = Regex::new(&format!("(?s){pattern}")) else { continue };
-        let Some(caps) = re.captures(message) else { continue };
-        let Some(sb) = caps.name("SourceBranch") else { continue };
+        let Ok(re) = Regex::new(&format!("(?s){pattern}")) else {
+            continue;
+        };
+        let Some(caps) = re.captures(message) else {
+            continue;
+        };
+        let Some(sb) = caps.name("SourceBranch") else {
+            continue;
+        };
         let branch = sb.as_str().to_string();
-        if let Some(v) = caps.name("Version").and_then(|m| SemanticVersion::parse(m.as_str(), &eff.tag_prefix)) {
+        if let Some(v) = caps
+            .name("Version")
+            .and_then(|m| SemanticVersion::parse(m.as_str(), &eff.tag_prefix))
+        {
             return Some((branch, v));
         }
         if let Some(v) = from_branch(&branch) {
@@ -368,7 +409,10 @@ pub fn calculate(
     // 재계산). 아니면 현재 HEAD.
     let (head, branch_name) = match &branch_override {
         Some(b) => {
-            let head = repo.commit_info_of(b).map(Ok).unwrap_or_else(|| repo.head_commit())?;
+            let head = repo
+                .commit_info_of(b)
+                .map(Ok)
+                .unwrap_or_else(|| repo.head_commit())?;
             (head, b.clone())
         }
         None => (repo.head_commit()?, repo.current_branch_name()?),
@@ -420,9 +464,11 @@ pub fn calculate(
             }
             VersionStrategy::VersionInBranchName => {
                 if eff.is_release_branch {
-                    if let Some(v) =
-                        extract_version(&branch_name, &eff.version_in_branch_pattern, &eff.tag_prefix)
-                    {
+                    if let Some(v) = extract_version(
+                        &branch_name,
+                        &eff.version_in_branch_pattern,
+                        &eff.tag_prefix,
+                    ) {
                         candidates.push(BaseVersion::new(
                             "VersionInBranchName",
                             v,
@@ -474,9 +520,13 @@ pub fn calculate(
             let incremented = if b.exact {
                 b.semantic_version.clone()
             } else {
-                b.semantic_version.increment(b.increment, b.label.as_deref(), b.force_increment)
+                b.semantic_version
+                    .increment(b.increment, b.label.as_deref(), b.force_increment)
             };
-            NextVersion { incremented, base: b }
+            NextVersion {
+                incremented,
+                base: b,
+            }
         })
         .collect();
 
@@ -500,8 +550,15 @@ pub fn calculate(
 
     let chosen = next.into_iter().nth(max_idx).unwrap();
 
-    let final_semver =
-        apply_deployment_mode(repo, &eff, &branch_name, &head, &chosen, base_source.as_deref(), &ignore)?;
+    let final_semver = apply_deployment_mode(
+        repo,
+        &eff,
+        &branch_name,
+        &head,
+        &chosen,
+        base_source.as_deref(),
+        &ignore,
+    )?;
     let variables = build_variables(&eff, &branch_name, &head, &final_semver, &source_semver)?;
     Ok(variables)
 }
@@ -528,13 +585,16 @@ fn mainline_calculate(
         }
         if let Some(v) = parse_version(&tag.name, eff) {
             let core = SemanticVersion::new(v.major, v.minor, v.patch);
-            let e = tags_by_sha.entry(tag.target_sha.clone()).or_insert_with(|| core.clone());
+            let e = tags_by_sha
+                .entry(tag.target_sha.clone())
+                .or_insert_with(|| core.clone());
             if core.cmp_core(e) == std::cmp::Ordering::Greater {
                 *e = core;
             }
         }
     }
-    let core_gt = |a: &SemanticVersion, b: &SemanticVersion| a.cmp_core(b) == std::cmp::Ordering::Greater;
+    let core_gt =
+        |a: &SemanticVersion, b: &SemanticVersion| a.cmp_core(b) == std::cmp::Ordering::Greater;
 
     // first-parent 트렁크를 루트부터 순회. 각 step 에서 도입된 커밋의 태그가 현재
     // 버전보다 높으면 그 코어로 설정(증분 없음 = stable/pre-release 확정), 아니면 증분.
@@ -554,7 +614,11 @@ fn mainline_calculate(
 
         // 도입 커밋(및 merge 커밋 자신)에 붙은 가장 높은 태그 코어.
         let mut step_tag: Option<SemanticVersion> = None;
-        for sha in introduced.iter().map(|x| &x.sha).chain(std::iter::once(&c.sha)) {
+        for sha in introduced
+            .iter()
+            .map(|x| &x.sha)
+            .chain(std::iter::once(&c.sha))
+        {
             if let Some(tv) = tags_by_sha.get(sha) {
                 if step_tag.as_ref().map(|s| core_gt(tv, s)).unwrap_or(true) {
                     step_tag = Some(tv.clone());
@@ -589,7 +653,9 @@ fn mainline_calculate(
     // Mainline 의 version source 는 head 의 첫 번째 부모(직전 트렁크 상태). distance 는
     // 그로부터 head 까지의 전체 커밋 수(merge 면 병합된 커밋들 포함).
     let source_sha = head.parents.first().cloned();
-    let distance = repo.commits_between(source_sha.as_deref(), &head.sha)?.len() as i64;
+    let distance = repo
+        .commits_between(source_sha.as_deref(), &head.sha)?
+        .len() as i64;
 
     // deployment mode 별 pre-release / build metadata.
     let label = eff.label.as_str();
@@ -635,10 +701,15 @@ fn gather_tagged(
         if ignore.is_ignored(&tag.target_sha, &tag.when) {
             continue;
         }
-        if !repo.is_ancestor_of(&tag.target_sha, &head.sha).unwrap_or(false) {
+        if !repo
+            .is_ancestor_of(&tag.target_sha, &head.sha)
+            .unwrap_or(false)
+        {
             continue;
         }
-        let Some(version) = parse_version(&tag.name, &eff) else { continue };
+        let Some(version) = parse_version(&tag.name, eff) else {
+            continue;
+        };
         let is_current = tag.target_sha == head.sha;
         let exact = is_current && eff.prevent_increment_when_current_commit_tagged;
         // pre-release 태그(예: 1.0.0-beta.1)는 아직 "릴리스" 가 아니므로 버전
@@ -646,11 +717,19 @@ fn gather_tagged(
         // 포함해 그 이전부터 센다(원본 TaggedCommitVersionStrategy 동작).
         let has_pre = version.pre_release_tag.has_tag();
         let use_as_source = exact || !has_pre;
-        let base_src = if use_as_source { Some(tag.target_sha.clone()) } else { None };
+        let base_src = if use_as_source {
+            Some(tag.target_sha.clone())
+        } else {
+            None
+        };
         let field = if exact {
             VersionField::None
         } else {
-            let from = if use_as_source { Some(tag.target_sha.as_str()) } else { None };
+            let from = if use_as_source {
+                Some(tag.target_sha.as_str())
+            } else {
+                None
+            };
             determine_increment(repo, from, &head.sha, true, eff, ignore)?
         };
         let mut bv = BaseVersion::new(
@@ -680,7 +759,9 @@ fn gather_merge_messages(
     out: &mut Vec<BaseVersion>,
 ) -> Result<()> {
     for c in ignore.filter(repo.commits_between(None, &head.sha)?) {
-        let Some((merged_branch, v)) = parse_merge_message(&c.message, eff) else { continue };
+        let Some((merged_branch, v)) = parse_merge_message(&c.message, eff) else {
+            continue;
+        };
         // 병합된 브랜치가 release 브랜치가 아니면 버전을 사용하지 않는다.
         if !is_release_branch(config, &merged_branch) {
             continue;
@@ -688,7 +769,8 @@ fn gather_merge_messages(
         // merge 커밋의 base source 는 두 부모의 merge-base. 그래야 병합으로 들어온
         // 커밋들이 버전 소스 이후 커밋 수에 정확히 반영된다.
         let base_src = if c.parents.len() >= 2 {
-            repo.merge_base(&c.parents[0], &c.parents[1])?.unwrap_or_else(|| c.sha.clone())
+            repo.merge_base(&c.parents[0], &c.parents[1])?
+                .unwrap_or_else(|| c.sha.clone())
         } else {
             c.sha.clone()
         };
@@ -697,7 +779,13 @@ fn gather_merge_messages(
         } else {
             determine_increment(repo, Some(&base_src), &head.sha, true, eff, ignore)?
         };
-        let mut bv = BaseVersion::new("MergeMessage", v, Some(base_src), field, Some(eff.label.clone()));
+        let mut bv = BaseVersion::new(
+            "MergeMessage",
+            v,
+            Some(base_src),
+            field,
+            Some(eff.label.clone()),
+        );
         bv.source_when = Some(c.when);
         out.push(bv);
     }
@@ -723,8 +811,12 @@ fn gather_track_release(
     else {
         return Ok(());
     };
-    let Some(re_src) = &release_bc.regex else { return Ok(()) };
-    let Ok(re) = Regex::new(&format!("(?i){re_src}")) else { return Ok(()) };
+    let Some(re_src) = &release_bc.regex else {
+        return Ok(());
+    };
+    let Ok(re) = Regex::new(&format!("(?i){re_src}")) else {
+        return Ok(());
+    };
 
     for rb in repo.branch_names()? {
         let short = rb.rsplit('/').next().unwrap_or(&rb);
@@ -755,8 +847,14 @@ fn apply_deployment_mode(
     base_source: Option<&str>,
     ignore: &IgnoreSet,
 ) -> Result<SemanticVersion> {
-    let base_src = if chosen.base.exact { chosen.base.base_version_source.as_deref() } else { base_source };
-    let commits = ignore.filter(repo.commits_between(base_src, &head.sha)?).len() as i64;
+    let base_src = if chosen.base.exact {
+        chosen.base.base_version_source.as_deref()
+    } else {
+        base_source
+    };
+    let commits = ignore
+        .filter(repo.commits_between(base_src, &head.sha)?)
+        .len() as i64;
     let uncommitted = repo.uncommitted_changes().unwrap_or(0);
 
     let mut sv = chosen.incremented.clone();
@@ -814,9 +912,19 @@ fn build_variables(
     let pre = &sv.pre_release_tag;
     let pre_label = pre.name.clone();
     let pre_number = pre.number;
-    let pre_tag_str = if pre.has_tag() { pre.format(false) } else { String::new() };
+    let pre_tag_str = if pre.has_tag() {
+        pre.format(false)
+    } else {
+        String::new()
+    };
 
-    let with_dash = |s: &str| if s.is_empty() { String::new() } else { format!("-{s}") };
+    let with_dash = |s: &str| {
+        if s.is_empty() {
+            String::new()
+        } else {
+            format!("-{s}")
+        }
+    };
 
     let major_minor_patch = sv.major_minor_patch();
     let sem_ver = sv.to_string();
@@ -876,9 +984,17 @@ fn build_variables(
         sha: head.sha.clone(),
         short_sha: head.short_sha.clone(),
         version_source_distance: Some(commits),
-        version_source_increment: sv.build_metadata.version_source_increment.as_str().to_string(),
+        version_source_increment: sv
+            .build_metadata
+            .version_source_increment
+            .as_str()
+            .to_string(),
         version_source_sem_ver: source_semver.major_minor_patch(),
-        version_source_sha: sv.build_metadata.version_source_sha.clone().unwrap_or_default(),
+        version_source_sha: sv
+            .build_metadata
+            .version_source_sha
+            .clone()
+            .unwrap_or_default(),
         commits_since_version_source: Some(commits),
         commit_date,
         uncommitted_changes: sv.build_metadata.uncommitted_changes,
@@ -957,8 +1073,14 @@ mod tests {
         let f = |m: &str| conventional_increment(m);
         assert_eq!(f("feat!: drop x"), Some(VersionField::Major));
         assert_eq!(f("fix(core)!: change"), Some(VersionField::Major));
-        assert_eq!(f("feat: x\n\nBREAKING CHANGE: removed"), Some(VersionField::Major));
-        assert_eq!(f("feat: x\n\nBREAKING-CHANGE: removed"), Some(VersionField::Major));
+        assert_eq!(
+            f("feat: x\n\nBREAKING CHANGE: removed"),
+            Some(VersionField::Major)
+        );
+        assert_eq!(
+            f("feat: x\n\nBREAKING-CHANGE: removed"),
+            Some(VersionField::Major)
+        );
         // BREAKING 푸터지만 헤더가 비규약이면 인식 안 함.
         assert_eq!(f("random\n\nBREAKING CHANGE: x"), None);
     }

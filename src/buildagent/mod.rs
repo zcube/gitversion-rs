@@ -63,7 +63,10 @@ impl BuildAgent for TeamCity {
         "TeamCity"
     }
     fn set_build_number(&self, vars: &VersionVariables) -> String {
-        format!("##teamcity[buildNumber '{}']", escape_value(&vars.full_sem_ver))
+        format!(
+            "##teamcity[buildNumber '{}']",
+            escape_value(&vars.full_sem_ver)
+        )
     }
     fn set_output_variable(&self, name: &str, value: &str) -> Vec<String> {
         let e = escape_value(value);
@@ -81,10 +84,16 @@ impl BuildAgent for MyGet {
         "MyGet"
     }
     fn set_build_number(&self, vars: &VersionVariables) -> String {
-        format!("##myget[buildNumber '{}']", escape_value(&vars.full_sem_ver))
+        format!(
+            "##myget[buildNumber '{}']",
+            escape_value(&vars.full_sem_ver)
+        )
     }
     fn set_output_variable(&self, name: &str, value: &str) -> Vec<String> {
-        vec![format!("##myget[setParameter name='GitVersion.{name}' value='{}']", escape_value(value))]
+        vec![format!(
+            "##myget[setParameter name='GitVersion.{name}' value='{}']",
+            escape_value(value)
+        )]
     }
 }
 
@@ -102,7 +111,10 @@ impl BuildAgent for AzurePipelines {
                 if replaced != bn {
                     format!("##vso[build.updatebuildnumber]{replaced}")
                 } else {
-                    let v = vars.full_sem_ver.strip_suffix("+0").unwrap_or(&vars.full_sem_ver);
+                    let v = vars
+                        .full_sem_ver
+                        .strip_suffix("+0")
+                        .unwrap_or(&vars.full_sem_ver);
                     format!("##vso[build.updatebuildnumber]{v}")
                 }
             }
@@ -149,7 +161,9 @@ impl BuildAgent for EnvRun {
         "EnvRun"
     }
     fn set_output_variable(&self, name: &str, value: &str) -> Vec<String> {
-        vec![format!("@@envrun[set name='GitVersion_{name}' value='{value}']")]
+        vec![format!(
+            "@@envrun[set name='GitVersion_{name}' value='{value}']"
+        )]
     }
 }
 
@@ -180,8 +194,11 @@ impl BuildAgent for Drone {
 
 /// gitversion.properties 파일에 변수 기록(GitLabCi, Jenkins, CodeBuild 공통).
 fn write_properties_file(vars: &VersionVariables) {
-    let lines: Vec<String> =
-        vars.to_map().iter().map(|(k, v)| format!("GitVersion_{k}={v}")).collect();
+    let lines: Vec<String> = vars
+        .to_map()
+        .iter()
+        .map(|(k, v)| format!("GitVersion_{k}={v}"))
+        .collect();
     let _ = std::fs::write("gitversion.properties", lines.join("\n") + "\n");
 }
 
@@ -330,7 +347,9 @@ impl BuildAgent for AppVeyor {
         format!("Set AppVeyor build number to '{}'.", vars.full_sem_ver)
     }
     fn set_output_variable(&self, name: &str, value: &str) -> Vec<String> {
-        vec![format!("Adding Environment Variable. name='GitVersion_{name}' value='{value}']")]
+        vec![format!(
+            "Adding Environment Variable. name='GitVersion_{name}' value='{value}']"
+        )]
     }
 }
 
@@ -389,7 +408,10 @@ pub fn detect() -> Option<Box<dyn BuildAgent>> {
         Some(Box::new(BuildKite))
     } else if has("JB_SPACE_PROJECT_KEY") {
         Some(Box::new(SpaceAutomation))
-    } else if env::var("BuildRunner").map(|v| v.eq_ignore_ascii_case("MyGet")).unwrap_or(false) {
+    } else if env::var("BuildRunner")
+        .map(|v| v.eq_ignore_ascii_case("MyGet"))
+        .unwrap_or(false)
+    {
         Some(Box::new(MyGet))
     } else {
         None
@@ -401,13 +423,19 @@ mod tests {
     use super::*;
 
     fn sample() -> VersionVariables {
-        VersionVariables { full_sem_ver: "1.0.1-1".into(), ..Default::default() }
+        VersionVariables {
+            full_sem_ver: "1.0.1-1".into(),
+            ..Default::default()
+        }
     }
 
     #[test]
     fn teamcity_format() {
         let a = TeamCity;
-        assert_eq!(a.set_build_number(&sample()), "##teamcity[buildNumber '1.0.1-1']");
+        assert_eq!(
+            a.set_build_number(&sample()),
+            "##teamcity[buildNumber '1.0.1-1']"
+        );
         assert_eq!(
             a.set_output_variable("FullSemVer", "1.0.1-1"),
             vec![
@@ -443,8 +471,14 @@ mod tests {
 
     #[test]
     fn key_value_agents() {
-        assert_eq!(GitLabCi.set_output_variable("Sha", "abc"), vec!["GitVersion_Sha=abc"]);
-        assert_eq!(TravisCi.set_output_variable("Sha", "abc"), vec!["GitVersion_Sha=abc"]);
+        assert_eq!(
+            GitLabCi.set_output_variable("Sha", "abc"),
+            vec!["GitVersion_Sha=abc"]
+        );
+        assert_eq!(
+            TravisCi.set_output_variable("Sha", "abc"),
+            vec!["GitVersion_Sha=abc"]
+        );
         assert_eq!(
             BitBucketPipelines.set_output_variable("FullSemVer", "1.0.1-1"),
             vec!["GITVERSION_FULLSEMVER=1.0.1-1"]
@@ -455,7 +489,9 @@ mod tests {
     fn integration_skips_build_number_when_disabled() {
         let out = TeamCity.write_integration(&sample(), false);
         assert!(out.iter().all(|l| !l.contains("buildNumber")));
-        assert!(out.iter().any(|l| l.starts_with("Set Output Variables for 'TeamCity'.")));
+        assert!(out
+            .iter()
+            .any(|l| l.starts_with("Set Output Variables for 'TeamCity'.")));
     }
 
     #[test]

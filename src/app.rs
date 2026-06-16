@@ -23,7 +23,11 @@ fn run() -> Result<()> {
     i18n::init(args.lang.as_deref());
 
     // 로깅 초기화: RUST_LOG 가 있으면 우선, 없으면 verbosity/diag 기반.
-    let level = if args.diag { log::LevelFilter::Trace } else { args.verbosity.to_level() };
+    let level = if args.diag {
+        log::LevelFilter::Trace
+    } else {
+        args.verbosity.to_level()
+    };
     // 로그는 항상 stderr 로(stdout 은 버전 결과 전용 → `$(gitversion ...)` 캡처가 깨끗하게 유지됨).
     env_logger::Builder::new()
         .filter_level(level)
@@ -44,12 +48,13 @@ fn run() -> Result<()> {
         };
         remote::prepare(&opts).with_context(|| t!("error.dynamic_repo").to_string())?
     } else {
-        args.target_path.clone().unwrap_or_else(|| args.path.clone())
+        args.target_path
+            .clone()
+            .unwrap_or_else(|| args.path.clone())
     };
     log::debug!("target path: {}", target.display());
 
-    let repo = git::GitRepo::discover(&target)
-        .with_context(|| t!("error.git_open").to_string())?;
+    let repo = git::GitRepo::discover(&target).with_context(|| t!("error.git_open").to_string())?;
     let work_dir = target.canonicalize().unwrap_or(target);
     let repo_root: Option<PathBuf> = repo.workdir().map(|p| p.to_path_buf());
 
@@ -71,12 +76,18 @@ fn run() -> Result<()> {
     if let Some(b) = &args.branch {
         key_inputs.push(format!("branch={b}"));
     }
-    let config_path =
-        args.config.clone().or_else(|| config::loader::locate(&work_dir, repo_root.as_deref()));
+    let config_path = args
+        .config
+        .clone()
+        .or_else(|| config::loader::locate(&work_dir, repo_root.as_deref()));
     let cache_key = if args.nocache {
         None
     } else {
-        Some(cache::compute_key(&repo, config_path.as_deref(), &key_inputs))
+        Some(cache::compute_key(
+            &repo,
+            config_path.as_deref(),
+            &key_inputs,
+        ))
     };
 
     let mut variables = match cache_key.as_deref().and_then(|k| cache::load(&repo, k)) {
@@ -92,8 +103,10 @@ fn run() -> Result<()> {
     };
 
     // version 훅: 외부 명령 출력으로 버전 정보를 수정하고 재계산.
-    let version_cmd =
-        args.exec_version.clone().or_else(|| configuration.exec.get("version").cloned());
+    let version_cmd = args
+        .exec_version
+        .clone()
+        .or_else(|| configuration.exec.get("version").cloned());
     if let Some(cmd) = version_cmd {
         if let Some(new_ver) = exec::run_version_hook(&cmd, &variables, &work_dir, args.dry_run)? {
             log::info!("{}", t!("log.version_hook_modified", ver = new_ver));
@@ -105,7 +118,12 @@ fn run() -> Result<()> {
 
     // 파일 출력.
     if let Some(files) = &args.update_assembly_info {
-        for p in output::files::update_assembly_info(&variables, &work_dir, files, args.ensure_assembly_info)? {
+        for p in output::files::update_assembly_info(
+            &variables,
+            &work_dir,
+            files,
+            args.ensure_assembly_info,
+        )? {
             log::info!("{}", t!("log.assemblyinfo_updated", path = p.display()));
         }
     }
@@ -126,7 +144,13 @@ fn run() -> Result<()> {
 
     // 외부 명령 훅.
     if !configuration.exec.is_empty() || args.exec.is_some() {
-        exec::run_hooks(&configuration.exec, args.exec.as_deref(), &variables, &work_dir, args.dry_run)?;
+        exec::run_hooks(
+            &configuration.exec,
+            args.exec.as_deref(),
+            &variables,
+            &work_dir,
+            args.dry_run,
+        )?;
     }
 
     // 단일 변수 / 포맷 문자열.
@@ -134,7 +158,10 @@ fn run() -> Result<()> {
         return emit(&args, output::generator::show_variable(&variables, name)?);
     }
     if let Some(template) = &args.format {
-        return emit(&args, output::generator::format_template(&variables, template)?);
+        return emit(
+            &args,
+            output::generator::format_template(&variables, template)?,
+        );
     }
 
     // 출력 형식.
