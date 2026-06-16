@@ -372,6 +372,240 @@ tagcommit v1.0.0; branch hotfix/1.0.1; commit h1
 git -C "$CUR" tag v1.0.1
 record
 
+# ─── 긴 커밋 체인 / 다양한 깊이 / 다양한 메시지 시나리오 ──────────────────
+
+# 태그 없이 12개 커밋: VersionSourceDistance=12 기준점
+newrepo main_long_no_tag main
+for i in $(seq 1 12); do commit "c$i"; done
+record
+
+# v1.0.0 이후 10개 커밋: VersionSourceDistance=10 검증
+newrepo main_deep_after_tag main
+tagcommit v1.0.0
+for i in $(seq 1 10); do commit "c$i"; done
+record
+
+# 두 태그 사이 긴 거리: v1.1.0 이후 8개 커밋 → 가장 가까운 태그 선택 검증
+newrepo multi_tag_deep main
+tagcommit v1.0.0
+for i in $(seq 1 5); do commit "a$i"; done
+tagcommit v1.1.0
+for i in $(seq 1 8); do commit "b$i"; done
+record
+
+# develop: 8개 커밋 (PreReleaseNumber=8 검증)
+newrepo develop_8commits main
+tagcommit v1.0.0
+branch develop
+for i in $(seq 1 8); do commit "d$i"; done
+record
+
+# develop 5개 후 feature 7개: 깊은 기능 브랜치의 거리 계산
+newrepo feature_deep_develop main
+tagcommit v1.0.0
+branch develop
+for i in $(seq 1 5); do commit "d$i"; done
+branch feature/deep
+for i in $(seq 1 7); do commit "f$i"; done
+record
+
+# main 3개 후 hotfix 6개: 긴 핫픽스 브랜치
+newrepo hotfix_deep main
+tagcommit v1.0.0
+for i in $(seq 1 3); do commit "m$i"; done
+branch hotfix/1.0.1
+for i in $(seq 1 6); do commit "h$i"; done
+record
+
+# main 4개 후 release 7개: 긴 릴리스 브랜치
+newrepo release_deep main
+tagcommit v1.0.0
+for i in $(seq 1 4); do commit "m$i"; done
+branch release-1.1.0
+for i in $(seq 1 7); do commit "r$i"; done
+record
+
+# 긴 체인 중간에 +semver:minor 혼재 (main)
+newrepo main_long_with_minor main
+tagcommit v1.0.0
+commit c1; commit c2; commit c3
+commit "feat
++semver: minor"
+commit c5; commit c6; commit c7; commit c8
+record
+
+# 긴 체인에서 +semver:major가 중간에 위치
+newrepo main_long_with_major main
+tagcommit v1.0.0
+commit c1; commit c2
+commit "BREAKING CHANGE: api redesign
++semver: major"
+commit c4; commit c5; commit c6; commit c7; commit c8; commit c9
+record
+
+# 여러 +semver 메시지가 긴 체인에 혼재 (가장 높은 증분이 우선)
+newrepo main_mixed_semver main
+tagcommit v1.0.0
+commit c1
+commit "fix: small patch
++semver: patch"
+commit c3
+commit "feat: new api
++semver: minor"
+commit c5
+commit "chore: cleanup"; commit c7; commit c8
+record
+
+# develop에 +semver 메시지 혼재
+newrepo develop_with_semver main
+tagcommit v1.0.0
+branch develop
+commit d1; commit d2
+commit "feat
++semver: minor"
+commit d4; commit d5; commit d6
+record
+
+# GitHubFlow: v1.0.0 이후 9개 커밋
+newrepo githubflow_deep_main main
+writeconfig 'workflow: GitHubFlow/v1'
+tagcommit v1.0.0
+for i in $(seq 1 9); do commit "m$i"; done
+record
+
+# GitHubFlow: main 4개 후 feature 8개
+newrepo githubflow_deep_feature main
+writeconfig 'workflow: GitHubFlow/v1'
+tagcommit v1.0.0
+for i in $(seq 1 4); do commit "m$i"; done
+branch feature/big
+for i in $(seq 1 8); do commit "f$i"; done
+record
+
+# GitHubFlow: feature에 +semver:minor 포함, 긴 체인
+newrepo githubflow_feature_semver main
+writeconfig 'workflow: GitHubFlow/v1'
+tagcommit v1.0.0
+commit m1; commit m2
+branch feature/api
+commit f1; commit f2
+commit "feat: add new endpoint
++semver: minor"
+commit f4; commit f5; commit f6
+record
+
+# GitHubFlow: 두 PR 순차 병합 (각 PR 여러 커밋)
+newrepo githubflow_multi_pr main
+writeconfig 'workflow: GitHubFlow/v1'
+git -C "$CUR" config merge.ff false
+tagcommit v1.0.0
+branch feature/pr1; commit f1; commit f2; commit f3
+checkout main; merge feature/pr1 "Merge pull request #1 from org/feature/pr1"
+branch feature/pr2; commit g1; commit g2; commit g3; commit g4
+checkout main; merge feature/pr2 "Merge pull request #2 from org/feature/pr2"
+record
+
+# TrunkBased: v1.0.0 이후 8개 커밋
+newrepo trunkbased_long main
+writeconfig 'workflow: TrunkBased/preview1'
+tagcommit v1.0.0
+for i in $(seq 1 8); do commit "m$i"; done
+record
+
+# TrunkBased: feature 깊은 브랜치 (5개)
+newrepo trunkbased_deep_feature main
+writeconfig 'workflow: TrunkBased/preview1'
+tagcommit v1.0.0
+commit m1; commit m2
+branch feature/deep
+for i in $(seq 1 5); do commit "f$i"; done
+record
+
+# Mainline: 10개 커밋, 혼합 +semver 메시지
+newrepo mainline_long main
+writeconfig 'strategies:
+- Mainline
+mode: ContinuousDeployment'
+commit c1; commit c2
+commit "feat
++semver: minor"
+commit c4; commit c5
+commit "break
++semver: major"
+commit c7; commit c8; commit c9; commit c10
+record
+
+# Mainline: 태그 이후 다양한 +semver 메시지 혼재
+newrepo mainline_tag_mixed main
+writeconfig 'strategies:
+- Mainline
+mode: ContinuousDeployment'
+tagcommit v1.0.0
+commit a
+commit "feat
++semver: minor"
+commit b; commit c
+commit "fix
++semver: patch"
+commit d; commit e; commit f
+record
+
+# Mainline + feature 8개 커밋 병합
+newrepo mainline_deep_feature main
+writeconfig 'strategies:
+- Mainline
+mode: ContinuousDeployment'
+git -C "$CUR" config merge.ff false
+tagcommit v1.0.0
+commit m1; commit m2
+branch feature/long
+for i in $(seq 1 8); do commit "f$i"; done
+checkout main; merge feature/long "Merge branch 'feature/long'"
+record
+
+# 완전한 GitFlow 사이클: develop 4, feature 5, release 3
+newrepo gitflow_full_cycle main
+tagcommit v1.0.0
+branch develop
+for i in $(seq 1 4); do commit "d$i"; done
+branch feature/x
+for i in $(seq 1 5); do commit "fx$i"; done
+checkout develop
+merge feature/x "Merge branch 'feature/x' into develop"
+branch release-2.0.0
+for i in $(seq 1 3); do commit "r$i"; done
+record
+
+# develop에 여러 feature 병합: 각 feature 3~4개 커밋
+newrepo develop_multi_feature main
+git -C "$CUR" config merge.ff false
+tagcommit v1.0.0
+branch develop
+commit d1
+branch feature/a; commit a1; commit a2; commit a3
+checkout develop; merge feature/a "Merge branch 'feature/a' into develop"
+branch feature/b; commit b1; commit b2; commit b3; commit b4
+checkout develop; merge feature/b "Merge branch 'feature/b' into develop"
+record
+
+# 여러 릴리스 사이클: v1.0.0→ 커밋 → v1.1.0 → 커밋 → v2.0.0 → 긴 체인
+newrepo multi_release_cycle main
+tagcommit v1.0.0
+commit a1; commit a2; commit a3
+tagcommit v1.1.0
+commit b1; commit b2
+tagcommit v2.0.0
+for i in $(seq 1 7); do commit "c$i"; done
+record
+
+# support 브랜치에서 긴 체인: 패치 버전 누적
+newrepo support_deep main
+tagcommit v1.0.0
+commit m1; commit m2; commit m3
+branch support/1.x
+for i in $(seq 1 6); do commit "s$i"; done
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"

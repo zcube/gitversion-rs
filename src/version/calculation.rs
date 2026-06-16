@@ -418,7 +418,7 @@ pub fn calculate(
 
     // Mainline 전략이 활성화되어 있으면 per-commit 누적 방식으로 계산.
     if config.strategies.contains(&VersionStrategy::Mainline) {
-        return mainline_calculate(repo, &eff, &branch_name, &head, &ignore);
+        return mainline_calculate(repo, config, &eff, &branch_name, &head, &ignore);
     }
 
     // Inherit 증분: 실제 git 조상을 따라 현재 브랜치가 분기된 source 브랜치를
@@ -567,6 +567,7 @@ pub fn calculate(
 /// pre-release 없이 단조 증가하는 버전을 만든다.
 fn mainline_calculate(
     repo: &GitRepo,
+    config: &GitVersionConfiguration,
     eff: &EffectiveConfiguration,
     branch_name: &str,
     head: &CommitInfo,
@@ -592,12 +593,37 @@ fn mainline_calculate(
     let core_gt =
         |a: &SemanticVersion, b: &SemanticVersion| a.cmp_core(b) == std::cmp::Ordering::Greater;
 
-    // first-parent 트렁크를 루트부터 순회. 각 step 에서 도입된 커밋의 태그가 현재
-    // 버전보다 높으면 그 코어로 설정(증분 없음 = stable/pre-release 확정), 아니면 증분.
-    let mut trunk = ignore.filter(repo, repo.first_parent_between(None, &head.sha)?);
+    let default = strategy_to_field(eff.increment);
+
+    // 비-트렁크 브랜치(feature/hotfix 등)는 source 브랜치의 merge-base 까지만 트렁크
+    // 증분을 적용하고, feature 증분은 1회만 적용한다. source 브랜치 ref 를 찾지 못하면
+    // 기존 트렁크 walk 로 fallback.
+    let merge_base_sha: Option<String> = if !eff.is_main_branch && !eff.source_branches.is_empty() {
+        let src = &eff.source_branches[0];
+        if let Some(src_info) = repo.commit_info_of(src) {
+            repo.merge_base(&head.sha, &src_info.sha)?
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // 트렁크 부분 walk: merge-base 까지(브랜치) 또는 HEAD 까지(트렁크).
+    // 브랜치인 경우에는 source 브랜치의 설정(Patch 증분 등)으로 walk 한다.
+    let trunk_target = merge_base_sha.as_deref().unwrap_or(&head.sha);
+    let trunk_eff_buf;
+    let trunk_eff: &EffectiveConfiguration = if merge_base_sha.is_some() {
+        trunk_eff_buf = EffectiveConfiguration::resolve(config, &eff.source_branches[0]);
+        &trunk_eff_buf
+    } else {
+        eff
+    };
+    let trunk_default = strategy_to_field(trunk_eff.increment);
+
+    let mut trunk = ignore.filter(repo, repo.first_parent_between(None, trunk_target)?);
     trunk.reverse();
 
-    let default = strategy_to_field(eff.increment);
     let mut version = SemanticVersion::new(0, 0, 0);
     let mut highest_tag = SemanticVersion::new(0, 0, 0);
     for c in &trunk {
@@ -637,9 +663,9 @@ fn mainline_calculate(
         }
 
         // 태그가 없거나 더 낮으면 증분(도입 커밋 메시지 consolidate, 바닥은 기본 증분).
-        let mut field = default;
+        let mut field = trunk_default;
         for ic in &introduced {
-            if let Some(f) = increment_from_message(&ic.message, eff) {
+            if let Some(f) = increment_from_message(&ic.message, trunk_eff) {
                 if f > field {
                     field = f;
                 }
@@ -649,21 +675,51 @@ fn mainline_calculate(
     }
     let base = highest_tag;
 
-    // HEAD 에 태그가 있고 when-current-commit-tagged: false 인 경우:
-    // 태그를 base 로 삼되 브랜치 증분을 적용하고 distance=0 으로 처리.
-    // (원본 동작: 태그가 있어도 prevent-increment 하지 않으면 한 step 더 올림)
-    let head_is_tagged = tags_by_sha.contains_key(&head.sha);
-    let (source_sha, distance) =
-        if head_is_tagged && !eff.prevent_increment_when_current_commit_tagged {
-            version = version.increment(default, None, true);
-            (Some(head.sha.clone()), 0i64)
+    // distance / source_sha 계산.
+    let (mut version, source_sha, distance) = if let Some(ref mb_sha) = merge_base_sha {
+        // 브랜치: 브랜치 부분(merge-base 이후)의 커밋만 distance 로 센다.
+        let feature_commits = ignore.filter(repo, repo.commits_between(Some(mb_sha), &head.sha)?);
+        let head_is_tagged = tags_by_sha.contains_key(&head.sha);
+
+        // 브랜치 부분에 태그가 있는지 확인(HEAD 포함).
+        let feature_tag = feature_commits
+            .iter()
+            .filter_map(|c| {
+                tags_by_sha
+                    .get(&c.sha)
+                    .map(|tv| (c.sha.clone(), tv.clone()))
+            })
+            .reduce(|(sa, a), (sb, b)| if core_gt(&b, &a) { (sb, b) } else { (sa, a) });
+
+        if let Some((ft_sha, ft)) = feature_tag {
+            // 브랜치에 태그 존재: 태그를 version source 로 사용.
+            if head_is_tagged && !eff.prevent_increment_when_current_commit_tagged {
+                // HEAD 가 태그이고 prevent-increment=false → 1회 추가 증분, distance=0.
+                let v = ft.increment(default, None, true);
+                (v, Some(head.sha.clone()), 0i64)
+            } else {
+                let d = repo.commits_between(Some(&ft_sha), &head.sha)?.len() as i64;
+                (ft, Some(ft_sha), d)
+            }
         } else {
-            // Mainline 의 version source 는 head 의 첫 번째 부모(직전 트렁크 상태). distance 는
-            // 그로부터 head 까지의 전체 커밋 수(merge 면 병합된 커밋들 포함).
+            // 브랜치에 태그 없음: trunk 버전 + 브랜치 증분 1회, distance = 브랜치 커밋 수.
+            let v = version.increment(default, None, true);
+            let d = feature_commits.len() as i64;
+            (v, Some(mb_sha.clone()), d)
+        }
+    } else {
+        // 트렁크: HEAD 태그 처리(when-current-commit-tagged: false).
+        let head_is_tagged = tags_by_sha.contains_key(&head.sha);
+        if head_is_tagged && !eff.prevent_increment_when_current_commit_tagged {
+            let v = version.increment(default, None, true);
+            (v, Some(head.sha.clone()), 0i64)
+        } else {
+            // Mainline 의 version source 는 head 의 첫 번째 부모(직전 트렁크 상태).
             let s = head.parents.first().cloned();
             let d = repo.commits_between(s.as_deref(), &head.sha)?.len() as i64;
-            (s, d)
-        };
+            (version, s, d)
+        }
+    };
 
     // deployment mode 별 pre-release / build metadata.
     let label = eff.label.as_str();
