@@ -825,7 +825,12 @@ fn gather_merge_messages(
     ignore: &IgnoreSet,
     out: &mut Vec<BaseVersion>,
 ) -> Result<()> {
+    // 원본 MergeMessageVersionStrategy.GetBaseVersions 는 최대 5개 후보만 반환한다.
+    let mut count = 0usize;
     for c in ignore.filter(repo, repo.commits_between(None, &head.sha)?) {
+        if count >= 5 {
+            break;
+        }
         let Some((merged_branch, v)) = parse_merge_message(&c.message, eff) else {
             continue;
         };
@@ -855,6 +860,7 @@ fn gather_merge_messages(
         );
         bv.source_when = Some(c.when);
         out.push(bv);
+        count += 1;
     }
     Ok(())
 }
@@ -896,7 +902,7 @@ fn gather_track_release(
                 format!("TrackReleaseBranches: {rb}"),
                 v,
                 base_src.or(Some(head.sha.clone())),
-                VersionField::None,
+                strategy_to_field(eff.increment),
                 Some(eff.label.clone()),
             ));
         }

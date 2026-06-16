@@ -647,6 +647,57 @@ git -C "$CUR" tag ver2.0.0
 commit b
 record
 
+# ─── assembly-versioning-scheme 4종 / TrackRelease / prevent-increment ─────
+
+# assembly-versioning-scheme: Major (AssemblyVersion = Major.0.0.0)
+newrepo assembly_scheme_major main
+writeconfig "assembly-versioning-scheme: Major"
+tagcommit v1.2.3; commit a
+record
+
+# assembly-versioning-scheme: MajorMinor (AssemblyVersion = Major.Minor.0.0)
+newrepo assembly_scheme_majorminor main
+writeconfig "assembly-versioning-scheme: MajorMinor"
+tagcommit v1.2.3; commit a
+record
+
+# assembly-versioning-scheme: MajorMinorPatchTag (AssemblyVersion = Major.Minor.Patch.PreReleaseNumber)
+newrepo assembly_scheme_patch_tag main
+writeconfig "assembly-versioning-scheme: MajorMinorPatchTag"
+tagcommit v1.2.3; commit a
+record
+
+# assembly-versioning-scheme: None (AssemblyVersion = 빈 문자열)
+newrepo assembly_scheme_none main
+writeconfig "assembly-versioning-scheme: None"
+tagcommit v1.2.3; commit a
+record
+
+# develop 에서 release 브랜치 추적 (TrackReleaseBranches 전략)
+# GitFlow develop 은 tracks-release-branches: true 이므로 release 브랜치 버전을 추적
+newrepo track_release_develop main
+tagcommit v1.0.0
+branch develop
+for i in $(seq 1 3); do commit "d$i"; done
+checkout main
+branch release-2.0.0
+for i in $(seq 1 2); do commit "r$i"; done
+checkout develop
+record
+
+# prevent-increment.of-merged-branch: true 가 있는 GitFlow merge
+newrepo prevent_increment_merged main
+git -C "$CUR" config merge.ff false
+writeconfig "branches:
+  release:
+    prevent-increment:
+      of-merged-branch: true"
+tagcommit v1.0.0
+branch release-2.0.0; commit r1; commit r2
+checkout main
+merge release-2.0.0 "Merge branch 'release-2.0.0' into main"
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"
