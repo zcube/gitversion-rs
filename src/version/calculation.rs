@@ -22,6 +22,8 @@ use std::collections::HashSet;
 struct IgnoreSet {
     shas: HashSet<String>,
     before: Option<DateTime<FixedOffset>>,
+    /// 이 접두어 아래 파일만 변경한 커밋을 제외 (ignore.paths).
+    paths: Vec<String>,
 }
 
 impl IgnoreSet {
@@ -32,7 +34,12 @@ impl IgnoreSet {
             .commits_before
             .as_deref()
             .and_then(parse_ignore_date);
-        IgnoreSet { shas, before }
+        let paths = config.ignore.paths.clone();
+        IgnoreSet {
+            shas,
+            before,
+            paths,
+        }
     }
 
     fn is_ignored(&self, sha: &str, when: &DateTime<FixedOffset>) -> bool {
@@ -50,13 +57,32 @@ impl IgnoreSet {
         matches!(&self.before, Some(b) if when < b)
     }
 
-    fn filter(&self, commits: Vec<CommitInfo>) -> Vec<CommitInfo> {
-        if self.shas.is_empty() && self.before.is_none() {
+    /// 커밋의 변경 파일이 전부 무시 경로 안에 있으면 true.
+    fn is_path_ignored(&self, repo: &crate::git::GitRepo, sha: &str) -> bool {
+        if self.paths.is_empty() {
+            return false;
+        }
+        let changed = repo.changed_paths_for_commit(sha);
+        // 변경 파일이 없는 커밋(예: --allow-empty)은 vacuous truth:
+        // 모든 파일이 무시 경로에 속하므로 무시한다(원본 .NET GitVersion 동작).
+        if changed.is_empty() {
+            return true;
+        }
+        changed.iter().all(|file| {
+            self.paths.iter().any(|prefix| {
+                let prefix = prefix.trim_end_matches('/');
+                file == prefix || file.starts_with(&format!("{prefix}/"))
+            })
+        })
+    }
+
+    fn filter(&self, repo: &crate::git::GitRepo, commits: Vec<CommitInfo>) -> Vec<CommitInfo> {
+        if self.shas.is_empty() && self.before.is_none() && self.paths.is_empty() {
             return commits;
         }
         commits
             .into_iter()
-            .filter(|c| !self.is_ignored(&c.sha, &c.when))
+            .filter(|c| !self.is_ignored(&c.sha, &c.when) && !self.is_path_ignored(repo, &c.sha))
             .collect()
     }
 }
@@ -188,7 +214,7 @@ fn determine_increment(
         if eff.commit_message_incrementing == CommitMessageIncrementMode::Disabled {
             None
         } else {
-            let commits = ignore.filter(repo.commits_between(base_source, head_sha)?);
+            let commits = ignore.filter(repo, repo.commits_between(base_source, head_sha)?);
             let merge_only =
                 eff.commit_message_incrementing == CommitMessageIncrementMode::MergeMessageOnly;
             let mut best: Option<VersionField> = None;
@@ -568,7 +594,7 @@ fn mainline_calculate(
 
     // first-parent 트렁크를 루트부터 순회. 각 step 에서 도입된 커밋의 태그가 현재
     // 버전보다 높으면 그 코어로 설정(증분 없음 = stable/pre-release 확정), 아니면 증분.
-    let mut trunk = ignore.filter(repo.first_parent_between(None, &head.sha)?);
+    let mut trunk = ignore.filter(repo, repo.first_parent_between(None, &head.sha)?);
     trunk.reverse();
 
     let default = strategy_to_field(eff.increment);
@@ -577,7 +603,10 @@ fn mainline_calculate(
     for c in &trunk {
         // 이 step 이 도입한 커밋들. merge 면 병합된 브랜치(두 번째 부모 계열), 아니면 자신.
         let introduced: Vec<CommitInfo> = if c.parents.len() >= 2 {
-            ignore.filter(repo.commits_between(Some(&c.parents[0]), &c.parents[1])?)
+            ignore.filter(
+                repo,
+                repo.commits_between(Some(&c.parents[0]), &c.parents[1])?,
+            )
         } else {
             vec![c.clone()]
         };
@@ -620,12 +649,21 @@ fn mainline_calculate(
     }
     let base = highest_tag;
 
-    // Mainline 의 version source 는 head 의 첫 번째 부모(직전 트렁크 상태). distance 는
-    // 그로부터 head 까지의 전체 커밋 수(merge 면 병합된 커밋들 포함).
-    let source_sha = head.parents.first().cloned();
-    let distance = repo
-        .commits_between(source_sha.as_deref(), &head.sha)?
-        .len() as i64;
+    // HEAD 에 태그가 있고 when-current-commit-tagged: false 인 경우:
+    // 태그를 base 로 삼되 브랜치 증분을 적용하고 distance=0 으로 처리.
+    // (원본 동작: 태그가 있어도 prevent-increment 하지 않으면 한 step 더 올림)
+    let head_is_tagged = tags_by_sha.contains_key(&head.sha);
+    let (source_sha, distance) =
+        if head_is_tagged && !eff.prevent_increment_when_current_commit_tagged {
+            version = version.increment(default, None, true);
+            (Some(head.sha.clone()), 0i64)
+        } else {
+            // Mainline 의 version source 는 head 의 첫 번째 부모(직전 트렁크 상태). distance 는
+            // 그로부터 head 까지의 전체 커밋 수(merge 면 병합된 커밋들 포함).
+            let s = head.parents.first().cloned();
+            let d = repo.commits_between(s.as_deref(), &head.sha)?.len() as i64;
+            (s, d)
+        };
 
     // deployment mode 별 pre-release / build metadata.
     let label = eff.label.as_str();
@@ -669,6 +707,9 @@ fn gather_tagged(
 ) -> Result<()> {
     for tag in repo.tags()? {
         if ignore.is_ignored(&tag.target_sha, &tag.when) {
+            continue;
+        }
+        if ignore.is_path_ignored(repo, &tag.target_sha) {
             continue;
         }
         if !repo
@@ -728,7 +769,7 @@ fn gather_merge_messages(
     ignore: &IgnoreSet,
     out: &mut Vec<BaseVersion>,
 ) -> Result<()> {
-    for c in ignore.filter(repo.commits_between(None, &head.sha)?) {
+    for c in ignore.filter(repo, repo.commits_between(None, &head.sha)?) {
         let Some((merged_branch, v)) = parse_merge_message(&c.message, eff) else {
             continue;
         };
@@ -823,7 +864,7 @@ fn apply_deployment_mode(
         base_source
     };
     let commits = ignore
-        .filter(repo.commits_between(base_src, &head.sha)?)
+        .filter(repo, repo.commits_between(base_src, &head.sha)?)
         .len() as i64;
     let uncommitted = repo.uncommitted_changes().unwrap_or(0);
 

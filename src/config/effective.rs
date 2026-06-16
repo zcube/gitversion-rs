@@ -79,8 +79,8 @@ fn resolve_label(label: &str, regex_src: &Option<String>, branch_name: &str) -> 
         })
         .into_owned();
 
-    // 파일시스템 안전: '/' -> '-'
-    out.replace('/', "-")
+    // SemVer pre-release 식별자와 파일시스템 안전을 위해 '/'와 '.'을 '-'로 교체.
+    out.replace(['/', '.'], "-")
 }
 
 /// Increment == Inherit 를 source-branch 를 따라 해석.

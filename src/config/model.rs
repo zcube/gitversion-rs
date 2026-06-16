@@ -83,6 +83,10 @@ pub struct IgnoreConfig {
     pub commits_before: Option<String>,
     #[serde(default)]
     pub sha: Vec<String>,
+    /// 이 경로 아래 파일만 변경한 커밋을 버전 계산에서 제외.
+    /// 커밋의 변경 파일 전부가 무시 경로에 속할 때만 제외된다.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paths: Vec<String>,
 }
 
 /// 개별 브랜치 설정. 전역 설정에서 상속받아 병합된다.

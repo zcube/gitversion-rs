@@ -243,7 +243,10 @@ pub fn githubflow() -> GitVersionConfiguration {
             increment: Some(IncrementStrategy::Patch),
             mode: Some(DeploymentMode::ManualDeployment),
             label: Some("beta".into()),
-            source_branches: vec!["main".into(), "release".into()],
+            source_branches: vec!["main".into()],
+            prevent_increment: Some(prevent(Some(true), Some(false), Some(false))),
+            track_merge_target: Some(false),
+            track_merge_message: Some(true),
             is_release_branch: Some(true),
             pre_release_weight: Some(30000),
             ..branch(RELEASE_REGEX)
@@ -256,6 +259,7 @@ pub fn githubflow() -> GitVersionConfiguration {
             mode: Some(DeploymentMode::ManualDeployment),
             label: Some("{BranchName}".into()),
             source_branches: vec!["main".into(), "release".into()],
+            prevent_increment: Some(prevent(None, None, Some(false))),
             pre_release_weight: Some(30000),
             ..branch(FEATURE_REGEX)
         },
@@ -267,6 +271,7 @@ pub fn githubflow() -> GitVersionConfiguration {
             mode: Some(DeploymentMode::ContinuousDelivery),
             label: Some("PullRequest{Number}".into()),
             source_branches: vec!["main".into(), "release".into(), "feature".into()],
+            prevent_increment: Some(prevent(Some(true), None, Some(false))),
             pre_release_weight: Some(30000),
             ..branch(PR_REGEX)
         },
@@ -283,6 +288,7 @@ pub fn githubflow() -> GitVersionConfiguration {
                 "feature".into(),
                 "pull-request".into(),
             ],
+            track_merge_message: Some(false),
             ..branch(UNKNOWN_REGEX)
         },
     );
@@ -321,6 +327,7 @@ pub fn trunkbased() -> GitVersionConfiguration {
             mode: Some(DeploymentMode::ContinuousDelivery),
             label: Some("{BranchName}".into()),
             source_branches: vec!["main".into()],
+            prevent_increment: Some(prevent(None, None, Some(false))),
             pre_release_weight: Some(30000),
             ..branch(FEATURE_REGEX)
         },
@@ -332,6 +339,7 @@ pub fn trunkbased() -> GitVersionConfiguration {
             mode: Some(DeploymentMode::ContinuousDelivery),
             label: Some("{BranchName}".into()),
             source_branches: vec!["main".into()],
+            prevent_increment: Some(prevent(None, None, Some(false))),
             is_release_branch: Some(true),
             pre_release_weight: Some(30000),
             ..branch(HOTFIX_REGEX)
@@ -344,6 +352,7 @@ pub fn trunkbased() -> GitVersionConfiguration {
             mode: Some(DeploymentMode::ContinuousDelivery),
             label: Some("PullRequest{Number}".into()),
             source_branches: vec!["main".into(), "feature".into(), "hotfix".into()],
+            prevent_increment: Some(prevent(Some(true), None, Some(false))),
             pre_release_weight: Some(30000),
             ..branch(PR_REGEX)
         },

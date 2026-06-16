@@ -95,6 +95,16 @@ merge() { # $1=branch to merge, $2=message
     git -C "$CUR" merge --no-ff -q "$1" -m "$2"
 }
 writeconfig() { printf '%s\n' "$1" > "$CUR/GitVersion.yml"; }
+writefile() { # $1=상대경로  $2=내용
+  mkdir -p "$CUR/$(dirname "$1")"
+  printf '%s\n' "$2" > "$CUR/$1"
+  git -C "$CUR" add "$1"
+}
+commitfile() { # $1=메시지 (staged 변경사항 커밋)
+  TICK=$((TICK + 60))
+  GIT_AUTHOR_DATE="$TICK +0000" GIT_COMMITTER_DATE="$TICK +0000" \
+    git -C "$CUR" commit -q --no-verify -m "$1"
+}
 
 record() { # 실제 GitVersion 출력을 golden 으로 저장
   "$GV" "$CUR" /nocache /output json > "$CUR/expected.json" 2>/dev/null || true
@@ -322,6 +332,45 @@ gen_agent AzurePipelines "TF_BUILD=True"                          '^##vso|^Set '
 gen_agent ContinuaCi     "ContinuaCI.Version=1"                   '^@@continua|^Set '
 gen_agent MyGet          "BuildRunner=MyGet"                      '^##myget|^Set '
 gen_agent Drone          "DRONE=true"                             '^GitVersion_|^Set '
+
+# ignore.paths: docs/ 만 건드리는 커밋은 버전 계산에서 제외
+newrepo ignore_paths main
+tagcommit v1.0.0
+writefile docs/readme.md "doc content"; commitfile "update docs"
+writefile src/main.rs "fn main(){}"; commitfile "add code"
+writeconfig 'ignore:
+  paths:
+    - docs'
+record
+
+# GitHubFlow feature + HEAD 태그(when-current-commit-tagged: false)
+# → feature HEAD 에 태그가 있어도 prevent-increment 하지 않음
+newrepo githubflow_feature_tagged main
+writeconfig 'workflow: GitHubFlow/v1'
+tagcommit v1.0.0; branch feature/foo; commit f1
+git -C "$CUR" tag v1.1.0
+record
+
+# GitHubFlow release branch: prevent-increment of-merged-branch=true, when-branch-merged=false
+newrepo githubflow_release_prevent main
+writeconfig 'workflow: GitHubFlow/v1'
+tagcommit v1.0.0; commit a; commit b
+branch release/2.0.0; commit r1; commit r2
+record
+
+# TrunkBased feature + HEAD 태그(when-current-commit-tagged: false)
+newrepo trunkbased_feature_tagged main
+writeconfig 'workflow: TrunkBased/preview1'
+tagcommit v1.0.0; branch feature/foo; commit f1
+git -C "$CUR" tag v2.0.0
+record
+
+# TrunkBased hotfix + HEAD 태그(when-current-commit-tagged: false)
+newrepo trunkbased_hotfix_tagged main
+writeconfig 'workflow: TrunkBased/preview1'
+tagcommit v1.0.0; branch hotfix/1.0.1; commit h1
+git -C "$CUR" tag v1.0.1
+record
 
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .

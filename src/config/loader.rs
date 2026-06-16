@@ -159,7 +159,10 @@ pub fn merge(base: &mut GitVersionConfiguration, over: GitVersionConfiguration) 
     if !over.is_source_branch_for.is_empty() {
         base.is_source_branch_for = over.is_source_branch_for;
     }
-    if over.ignore.commits_before.is_some() || !over.ignore.sha.is_empty() {
+    if over.ignore.commits_before.is_some()
+        || !over.ignore.sha.is_empty()
+        || !over.ignore.paths.is_empty()
+    {
         base.ignore = over.ignore;
     }
     if !over.merge_message_formats.is_empty() {

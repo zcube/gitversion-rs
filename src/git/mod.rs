@@ -253,6 +253,36 @@ impl GitRepo {
         }
     }
 
+    /// 커밋이 첫 번째 부모 대비 변경한 파일 경로 목록.
+    /// 루트 커밋이거나 diff 를 얻을 수 없으면 빈 벡터를 반환한다.
+    pub fn changed_paths_for_commit(&self, sha: &str) -> Vec<String> {
+        (|| -> Option<Vec<String>> {
+            let oid = self.resolve(sha)?;
+            let commit = self.repo.find_commit(oid).ok()?;
+            let new_tree = commit.tree().ok()?;
+            let parent = commit
+                .parent_ids()
+                .next()
+                .and_then(|pid| self.repo.find_commit(pid).ok())?;
+            let old_tree = parent.tree().ok()?;
+
+            let mut paths: Vec<String> = Vec::new();
+            let mut platform = old_tree.changes().ok()?;
+            // track_path: location() 필드 활성화.
+            // track_rewrites(None): rename 추적 비활성화 → blob 접근 불필요.
+            platform.options(|o| {
+                o.track_path();
+                o.track_rewrites(None);
+            });
+            let _ = platform.for_each_to_obtain_tree(&new_tree, |change| {
+                paths.push(change.location().to_string());
+                Ok::<_, std::convert::Infallible>(std::ops::ControlFlow::Continue(()))
+            });
+            Some(paths)
+        })()
+        .unwrap_or_default()
+    }
+
     /// spec(브랜치/태그/sha)을 CommitInfo 로 해석.
     pub fn commit_info_of(&self, spec: &str) -> Option<CommitInfo> {
         let id = self.resolve(spec)?;
