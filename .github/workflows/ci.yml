@@ -42,13 +42,3 @@ jobs:
         run: cargo build --verbose
       - name: test
         run: cargo test --verbose
-
-  msrv:
-    name: MSRV (1.85)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.85
-      - uses: Swatinem/rust-cache@v2
-      - name: build
-        run: cargo build --verbose

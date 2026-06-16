@@ -37,34 +37,30 @@ pub fn init(explicit: Option<&str>) {
 mod tests {
     use rust_i18n::t;
 
+    // set_locale 은 전역 상태라 병렬 테스트에서 경쟁한다. 테스트에서는 전역을
+    // 바꾸지 않고 `t!(.., locale = "..")` 로 로케일을 명시해 격리한다.
     #[test]
     fn translates_by_locale() {
-        rust_i18n::set_locale("en");
-        assert_eq!(t!("status.ready"), "Ready");
-        rust_i18n::set_locale("ko");
-        assert_eq!(t!("status.ready"), "준비 완료");
-        rust_i18n::set_locale("ja");
-        assert_eq!(t!("status.ready"), "準備完了");
-        rust_i18n::set_locale("zh");
-        assert_eq!(t!("status.ready"), "就绪");
-        rust_i18n::set_locale("en");
+        assert_eq!(t!("status.ready", locale = "en"), "Ready");
+        assert_eq!(t!("status.ready", locale = "ko"), "준비 완료");
+        assert_eq!(t!("status.ready", locale = "ja"), "準備完了");
+        assert_eq!(t!("status.ready", locale = "zh"), "就绪");
     }
 
     #[test]
     fn interpolation() {
-        rust_i18n::set_locale("en");
-        assert_eq!(t!("error.generic", error => "boom"), "Error: boom");
+        assert_eq!(
+            t!("error.generic", locale = "en", error = "boom"),
+            "Error: boom"
+        );
     }
 
     /// TUI 는 키를 런타임 변수(`t!(*k)`)로 넘기므로, 변수 키 해석이 동작하고
     /// 모든 tui.* 키가 실제로 YAML 에 존재함을 보장한다(누락 시 키가 그대로 출력됨).
     #[test]
     fn runtime_variable_key_resolves() {
-        rust_i18n::set_locale("en");
         let key = "tui.tab.variables";
-        assert_eq!(t!(key), "Variables");
-        rust_i18n::set_locale("ko");
-        assert_eq!(t!(key), "변수");
-        rust_i18n::set_locale("en");
+        assert_eq!(t!(key, locale = "en"), "Variables");
+        assert_eq!(t!(key, locale = "ko"), "변수");
     }
 }
