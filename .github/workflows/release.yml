@@ -16,8 +16,33 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # 릴리스 버전은 Cargo.toml(placeholder)이 아니라 gitversion 자신이 산출한다(dogfooding).
+  # 태그된 커밋에서 gitversion 은 태그의 깨끗한 버전(예: v0.1.0 -> 0.1.0)을 계산한다.
+  version:
+    name: Compute version (gitversion)
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.gv.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ github.event.inputs.tag || github.ref_name }}
+          fetch-depth: 0 # gitversion 은 전체 히스토리와 태그가 필요하다.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build gitversion (bootstrap)
+        run: cargo build --release --bin gitversion
+      - id: gv
+        name: Compute SemVer
+        shell: bash
+        run: |
+          v="$(./target/release/gitversion -v SemVer)"
+          echo "Computed version: $v"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
   build:
     name: ${{ matrix.target }}
+    needs: version
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -40,6 +65,22 @@ jobs:
         with:
           ref: refs/tags/${{ github.event.inputs.tag || github.ref_name }}
       - uses: dtolnay/rust-toolchain@stable
+      - name: Inject gitversion version into Cargo.toml
+        shell: bash
+        env:
+          GV_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          # Cargo.toml 의 [package] version 은 placeholder 다. 빌드 전에 gitversion
+          # 산출 버전으로 덮어써, 배포 바이너리의 `--version` 이 실제 릴리스 버전을 보고한다.
+          # rust-version 라인과 구분하기 위해 줄 시작이 정확히 'version =' 인 첫 줄만 교체.
+          python3 - "$GV_VERSION" <<'PY'
+          import re, sys
+          v = sys.argv[1]
+          s = open("Cargo.toml", encoding="utf-8").read()
+          s = re.sub(r'(?m)^version = "[^"]*"', f'version = "{v}"', s, count=1)
+          open("Cargo.toml", "w", encoding="utf-8").write(s)
+          print(f"Cargo.toml version set to {v}")
+          PY
       - name: Build and upload binary
         uses: taiki-e/upload-rust-binary-action@v1
         with:
@@ -48,6 +89,6 @@ jobs:
           # taiki-e/upload-rust-binary-action cross-compiles via `cross` when needed.
           archive: gitversion-$tag-$target
           include: README.md,README.ko.md,README.ja.md,README.zh.md,LICENSE
-          # On tag pushes the ref tag is used; workflow_dispatch builds the given tag.
+          # 태그 푸시는 ref 태그를, workflow_dispatch 는 입력 태그를 빌드한다.
           ref: refs/tags/${{ github.event.inputs.tag || github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}

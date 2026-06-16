@@ -1,0 +1,15 @@
+# GitVersion 설정 — 이 저장소의 버전 계산 규칙.
+#
+# 이 프로젝트는 자기 자신(gitversion)으로 버전을 계산한다(dogfooding).
+# 릴리스 버전의 기준은 git 태그(v*)이며, CI 의 release 워크플로가 태그된 커밋에서
+# 이 설정으로 gitversion 을 실행해 버전을 산출하고 빌드에 주입한다.
+# Cargo.toml 의 version 은 placeholder 이며 빌드 시 덮어쓴다.
+# 자세한 릴리스 절차는 AGENTS.md 를 참고.
+
+workflow: GitHubFlow/v1
+
+# 태그 접두사: v0.1.0 / 0.1.0 모두 인식.
+tag-prefix: "[vV]?"
+
+# 다음 릴리스 후보(태그가 없을 때의 기준). 태그가 있으면 태그가 우선한다.
+next-version: 0.1.0
