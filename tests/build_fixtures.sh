@@ -606,6 +606,47 @@ branch support/1.x
 for i in $(seq 1 6); do commit "s$i"; done
 record
 
+# ─── 중복 태그 / next-version 충돌 / tag-prefix 혼재 시나리오 ───────────────
+
+# 동일 커밋에 릴리스 태그 2개: 최고 버전(v2.0.0)이 선택되어야 함
+newrepo dual_release_tag main
+commit init
+git -C "$CUR" tag v1.0.0
+git -C "$CUR" tag v2.0.0
+commit a
+record
+
+# 동일 커밋에 pre-release 태그와 릴리스 태그 공존(HEAD)
+# → 릴리스 태그(v1.0.0)가 pre-release(v1.0.0-beta.1)보다 우선해야 함
+newrepo prerelease_release_same_commit main
+commit init
+git -C "$CUR" tag v1.0.0-beta.1
+git -C "$CUR" tag v1.0.0
+record
+
+# next-version(0.5.0) < 히스토리 태그(v1.5.0): 태그+증분이 이겨야 함
+newrepo tag_beats_nextversion main
+writeconfig 'next-version: "0.5.0"'
+tagcommit v1.5.0; commit a; commit b
+record
+
+# next-version(3.0.0) > 히스토리 태그(v1.5.0): next-version이 이겨야 함
+newrepo nextversion_beats_tag main
+writeconfig 'next-version: "3.0.0"'
+tagcommit v1.5.0; commit a; commit b
+record
+
+# 커스텀 tag-prefix("ver") 환경에서 기본 prefix 태그(v1.0.0)와 커스텀 태그(ver2.0.0) 혼재:
+# v1.0.0은 파싱 실패(무시), ver2.0.0만 활성 버전으로 인식되어야 함
+newrepo tagprefix_mixed main
+writeconfig 'tag-prefix: "ver"'
+commit init
+git -C "$CUR" tag v1.0.0
+commit a
+git -C "$CUR" tag ver2.0.0
+commit b
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"
