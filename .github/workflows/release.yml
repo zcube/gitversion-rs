@@ -18,11 +18,17 @@ env:
 jobs:
   # 릴리스 버전은 Cargo.toml(placeholder)이 아니라 gitversion 자신이 산출한다(dogfooding).
   # 태그된 커밋에서 gitversion 은 태그의 깨끗한 버전(예: v0.1.0 -> 0.1.0)을 계산한다.
+  #
+  # 버저닝은 gittools-actions(GitVersion 액션)로 수행하되, .NET GitVersion.Tool 대신
+  # 우리가 부트스트랩 빌드한 네이티브 gitversion-rs 바이너리를 쓰게 한다
+  # (GITVERSION_RS_EXE). 이로써 액션 연동 경로까지 자기 자신으로 검증한다.
   version:
-    name: Compute version (gitversion)
+    name: Compute version (gitversion-rs via gittools-actions)
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.gv.outputs.version }}
+      version: ${{ steps.gv.outputs.semVer }}
+    env:
+      GITVERSION_RS_EXE: ${{ github.workspace }}/target/release/gitversion-rs
     steps:
       - uses: actions/checkout@v6
         with:
@@ -32,13 +38,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build gitversion-rs (bootstrap)
         run: cargo build --release --bin gitversion-rs
+      - name: Setup GitVersion (native gitversion-rs)
+        uses: zcube/gittools-actions/gitversion/setup@feature/gitversion-rs-support
       - id: gv
-        name: Compute SemVer
-        shell: bash
-        run: |
-          v="$(./target/release/gitversion-rs -v SemVer)"
-          echo "Computed version: $v"
-          echo "version=$v" >> "$GITHUB_OUTPUT"
+        name: Compute version
+        uses: zcube/gittools-actions/gitversion/execute@feature/gitversion-rs-support
       - name: Ensure GitHub Release exists
         # taiki-e/upload-rust-binary-action 은 기존 Release 에 자산을 올린다.
         # 병렬 build 잡들이 업로드할 수 있도록 여기서 먼저 Release 를 만들어 둔다.
@@ -46,7 +50,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.event.inputs.tag || github.ref_name }}
-          GV: ${{ steps.gv.outputs.version }}
+          GV: ${{ steps.gv.outputs.semVer }}
         run: |
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
