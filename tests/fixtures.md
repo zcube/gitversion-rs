@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **135**
+- 현재 시나리오 수: **140**
 - golden 생성/비교 모두 **캐시·부수효과 배제**: record 는 `/nocache /nonormalize`
   (.NET 이 저장소 refs/브랜치를 수정하지 못함), 비교(fixtures.rs)는 `calculate()`
   직접 호출. 검증 결과 .NET 호출 전후 refs/출력 동일, tar 에 .NET 흔적 없음.
@@ -76,6 +76,11 @@
 | semver_minor_main / semver_major_main | +semver: minor/major |
 | semver_breaking | +semver: breaking (major 별칭) |
 | semver_none | +semver: none (증분 억제) |
+| cfg_custom_major_bump | 커스텀 major-bump "BREAKING" (2.0.0) |
+| cfg_custom_minor_bump | 커스텀 minor-bump "^feat" (1.1.0) |
+| cfg_custom_bump_overrides | 커스텀 패턴이 기본 +semver 대체 (1.0.1) |
+| cfg_custom_bump_multi | 커스텀 + 복수 커밋, 혼재 시 최고 major (2.0.0) |
+| cfg_custom_bump_multi_minor | 커스텀 + 복수 feat, minor 1회 (1.1.0) |
 | main_long_with_minor / main_long_with_major | 긴 체인 중간 +semver |
 | main_mixed_semver | 다중 +semver (최고 우선) |
 | develop_with_semver | develop +semver |
@@ -179,7 +184,7 @@
 | mode (deployment) | ✅ ContinuousDelivery, ContinuousDeployment, ManualDeployment (전역·브랜치별) | — |
 | 워크플로 × unknown 브랜치 | ✅ GitFlow, GitHubFlow | ❌ TrunkBased unknown(별도 있음) |
 | commit-message-incrementing | ✅ Enabled, Disabled, MergeMessageOnly | — |
-| *-version-bump-message | ✅ 기본(+semver) (잘못된 정규식은 에러) | ❌ 커스텀 bump 패턴 |
+| *-version-bump-message | ✅ 기본(+semver), 커스텀 패턴(단일·복수 커밋), 기본 대체 (잘못된 정규식은 에러) | — |
 | tag-prefix | ✅ 기본, "ver", 빈값 (잘못된 정규식은 에러) | — |
 | next-version | ✅ full/pre-release/build-metadata(Strict), 부분/정수(Loose) | Strict+부분버전은 계산 에러(원본 동작) |
 | next-version 정수 보정 | ✅ "1"은 "1.0", "2"는 "2.0"(원본 setter) | — |

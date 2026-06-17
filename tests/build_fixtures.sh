@@ -1164,6 +1164,47 @@ commit "chore
 +semver: none"
 record
 
+# 커스텀 major-version-bump-message: "BREAKING" 매칭 커밋이 major 증분(2.0.0).
+newrepo cfg_custom_major_bump main
+writeconfig 'major-version-bump-message: "BREAKING"'
+tagcommit v1.0.0
+commit "BREAKING change here"
+record
+
+# 커스텀 minor-version-bump-message: "^feat" 매칭 커밋이 minor 증분(1.1.0).
+newrepo cfg_custom_minor_bump main
+writeconfig 'minor-version-bump-message: "^feat"'
+tagcommit v1.0.0
+commit "feat: add thing"
+record
+
+# 커스텀 bump 패턴은 기본 +semver 를 대체: minor 를 "^feat" 로 바꾸면 "+semver: minor"
+# 는 더 이상 매칭되지 않아 patch 만 증분(1.0.1).
+newrepo cfg_custom_bump_overrides main
+writeconfig 'minor-version-bump-message: "^feat"'
+tagcommit v1.0.0
+commit "+semver: minor"
+record
+
+# 커스텀 bump + 복수 커밋: major/minor 매칭이 혼재하면 최고(major) 증분(2.0.0).
+newrepo cfg_custom_bump_multi main
+writeconfig 'major-version-bump-message: "BREAKING"
+minor-version-bump-message: "^feat"'
+tagcommit v1.0.0
+commit "feat: x"
+commit "BREAKING: y"
+commit "feat: z"
+record
+
+# 커스텀 bump + 복수 커밋: feat 여러 개여도 minor 는 한 번만 적용(1.1.0).
+newrepo cfg_custom_bump_multi_minor main
+writeconfig 'minor-version-bump-message: "^feat"'
+tagcommit v1.0.0
+commit "feat: x"
+commit "chore: y"
+commit "feat: z"
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"
