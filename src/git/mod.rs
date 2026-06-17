@@ -121,15 +121,39 @@ impl GitRepo {
         Self::commit_info(&commit)
     }
 
-    /// 현재 체크아웃된 브랜치 이름(friendly). detached 면 short sha.
+    /// 현재 체크아웃된 브랜치 이름(friendly).
+    ///
+    /// detached HEAD 면 원본 GitVersion 처럼 HEAD 커밋을 tip 으로 갖는 로컬 브랜치를
+    /// 찾는다. 정확히 하나면 그 브랜치명, 그 외(0개·여러개)는 `(no branch)`.
     pub fn current_branch_name(&self) -> Result<String> {
         if let Some(name) = self.repo.head_name()? {
             Ok(name.shorten().to_string())
         } else {
-            let commit = self.repo.head_commit()?;
-            let sha = commit.id().to_string();
-            Ok(sha[..7.min(sha.len())].to_string())
+            let head_sha = self.repo.head_commit()?.id().to_string();
+            let tips = self.local_branches_at(&head_sha);
+            if tips.len() == 1 {
+                Ok(tips.into_iter().next().unwrap())
+            } else {
+                Ok("(no branch)".to_string())
+            }
         }
+    }
+
+    /// 지정 sha 를 tip 으로 갖는 로컬 브랜치 이름 목록(shorthand).
+    fn local_branches_at(&self, sha: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        if let Ok(platform) = self.repo.references() {
+            if let Ok(branches) = platform.local_branches() {
+                for reference in branches.flatten() {
+                    if let Ok(id) = reference.clone().into_fully_peeled_id() {
+                        if id.to_string() == sha {
+                            out.push(reference.name().shorten().to_string());
+                        }
+                    }
+                }
+            }
+        }
+        out
     }
 
     /// spec(브랜치/태그/sha)을 커밋 ObjectId 로 해석.

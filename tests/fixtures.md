@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **127**
+- 현재 시나리오 수: **129**
 - golden 생성/비교 모두 **캐시·부수효과 배제**: record 는 `/nocache /nonormalize`
   (.NET 이 저장소 refs/브랜치를 수정하지 못함), 비교(fixtures.rs)는 `calculate()`
   직접 호출. 검증 결과 .NET 호출 전후 refs/출력 동일, tar 에 .NET 흔적 없음.
@@ -146,6 +146,12 @@
 | label_mismatch_prerelease | label 불일치 태그 무시 |
 | cd_prerelease_numbered_tag | CD + 높은 pre-release 번호 태그 |
 | branch_dot_in_name | 브랜치명 점 sanitize |
+
+### git 상태 엣지
+| 시나리오 | 검증 내용 |
+|---|---|
+| detached_head_main | detached HEAD, main 유일 tip → main 으로 계산 |
+| detached_head_feature | detached HEAD, feature/y 유일 tip → feature/y 로 계산 |
 
 ### 빌드 에이전트
 | 시나리오 | 검증 내용 |

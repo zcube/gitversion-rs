@@ -1108,6 +1108,19 @@ writeconfig 'tag-prefix: ""'
 tagcommit v1.0.0; commit b
 record
 
+# detached HEAD: HEAD 커밋이 main 의 유일 tip 이면 원본처럼 main 으로 계산.
+newrepo detached_head_main main
+tagcommit v1.0.0; commit b
+git -C "$CUR" -c advice.detachedHead=false checkout -q "$(git -C "$CUR" rev-parse HEAD)"
+record
+
+# detached HEAD: HEAD 가 feature/y 의 유일 tip 이면 feature/y 로 계산.
+newrepo detached_head_feature main
+tagcommit v1.0.0
+branch feature/y; commit b
+git -C "$CUR" -c advice.detachedHead=false checkout -q "$(git -C "$CUR" rev-parse HEAD)"
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"
