@@ -5,7 +5,10 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **124**
+- 현재 시나리오 수: **127**
+- golden 생성/비교 모두 **캐시·부수효과 배제**: record 는 `/nocache /nonormalize`
+  (.NET 이 저장소 refs/브랜치를 수정하지 못함), 비교(fixtures.rs)는 `calculate()`
+  직접 호출. 검증 결과 .NET 호출 전후 refs/출력 동일, tar 에 .NET 흔적 없음.
 
 ## 픽스쳐 시나리오
 
@@ -124,6 +127,9 @@
 | cfg_release_mode_cd | branches.release.mode | ContinuousDeployment |
 | cfg_develop_mode_manual | branches.develop.mode | ManualDeployment |
 | cfg_nextversion_loose_partial | semantic-version-format + next-version | Loose + "1"(1.0.0) |
+| cfg_nextver_build | next-version | "1.0.0+build5"(build metadata) |
+| cfg_nextver_prerelease | next-version | "1.0.0-beta.3"(label 불일치 무시) |
+| cfg_empty_tagprefix | tag-prefix | ""(빈 prefix, v태그 무시) |
 
 ### 머지 메시지 / 태그 파싱 엣지
 | 시나리오 | 검증 내용 |
@@ -161,13 +167,13 @@
 | mode (deployment) | ✅ ContinuousDelivery, ContinuousDeployment, ManualDeployment (전역·브랜치별) | — |
 | 워크플로 × unknown 브랜치 | ✅ GitFlow, GitHubFlow | ❌ TrunkBased unknown(별도 있음) |
 | commit-message-incrementing | ✅ Enabled, Disabled, MergeMessageOnly | — |
-| tag-prefix | ✅ 기본, "ver" | — |
-| next-version | ✅ full/pre-release(Strict), 부분(Loose) | Strict+부분버전은 계산 에러(원본 동작) |
+| tag-prefix | ✅ 기본, "ver", 빈값 | — |
+| next-version | ✅ full/pre-release/build-metadata(Strict), 부분(Loose) | Strict+부분버전은 계산 에러(원본 동작) |
 | semantic-version-format | ✅ Strict, Loose | — |
 | commit-date-format | ✅ 커스텀 | — |
 | ignore | ✅ sha, commits-before, paths | — |
 | assembly-versioning-scheme | ✅ Major, MajorMinor, MajorMinorPatch, MajorMinorPatchTag, None | — |
-| assembly-versioning-format | ✅ 커스텀 | — |
+| assembly-versioning-format | ✅ 커스텀, 알 수 없는 토큰은 에러(원본 동작) | — |
 | assembly-file-versioning-scheme | ✅ Major, MajorMinor, None | ❌ MajorMinorPatch 등 |
 | assembly-file-versioning-format | ✅ 커스텀 | — |
 | assembly-informational-format | ✅ 커스텀 | — |

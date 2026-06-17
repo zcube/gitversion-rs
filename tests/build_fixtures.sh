@@ -107,7 +107,9 @@ commitfile() { # $1=메시지 (staged 변경사항 커밋)
 }
 
 record() { # 실제 GitVersion 출력을 golden 으로 저장
-  "$GV" "$CUR" /nocache /output json > "$CUR/expected.json" 2>/dev/null || true
+  # /nocache: 디스크 캐시 미사용. /nonormalize: GitVersion 이 저장소(브랜치/refs)를
+  # 수정하지 못하게 해, golden repo 가 .NET 부수효과로 오염되는 것을 원천 차단한다.
+  "$GV" "$CUR" /nocache /nonormalize /output json > "$CUR/expected.json" 2>/dev/null || true
   if ! grep -q '"FullSemVer"' "$CUR/expected.json" 2>/dev/null; then
     echo "  !! $(basename "$CUR"): GitVersion 출력 없음 → 시나리오 제외" >&2
     rm -rf "$CUR"
@@ -1086,6 +1088,24 @@ newrepo cfg_nextversion_loose_partial main
 writeconfig 'semantic-version-format: Loose
 next-version: "1"'
 commit a; commit b
+record
+
+# next-version + build metadata("1.0.0+build5"): build 부분이 있어도 정상 파싱.
+newrepo cfg_nextver_build main
+writeconfig 'next-version: "1.0.0+build5"'
+tagcommit v1.0.0; commit b
+record
+
+# next-version pre-release("1.0.0-beta.3") on main: label 불일치로 무시되고 태그 기반.
+newrepo cfg_nextver_prerelease main
+writeconfig 'next-version: "1.0.0-beta.3"'
+tagcommit v1.0.0; commit b
+record
+
+# tag-prefix 빈 문자열: "v1.0.0" 태그가 prefix 없이 파싱 실패해 fallback(0.0.x).
+newrepo cfg_empty_tagprefix main
+writeconfig 'tag-prefix: ""'
+tagcommit v1.0.0; commit b
 record
 
 echo "압축: $OUT"

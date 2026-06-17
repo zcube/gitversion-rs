@@ -1240,30 +1240,46 @@ fn build_variables(
     // 포맷은 위에서 계산된 변수들을 참조하므로 여기서 후처리한다.
     let ctx = vars.to_map();
     if let Some(fmt) = &eff.assembly_versioning_format {
-        vars.assembly_sem_ver = render_template(fmt, &ctx);
+        vars.assembly_sem_ver = render_template(fmt, &ctx)?;
     }
     if let Some(fmt) = &eff.assembly_file_versioning_format {
-        vars.assembly_sem_file_ver = render_template(fmt, &ctx);
+        vars.assembly_sem_file_ver = render_template(fmt, &ctx)?;
     }
     // informational-format 의 기본값 `{InformationalVersion}` 은 원래 값을 그대로
     // 재현하므로 항상 적용해도 안전하다.
-    vars.informational_version = render_template(&eff.assembly_informational_format, &ctx);
+    vars.informational_version = render_template(&eff.assembly_informational_format, &ctx)?;
 
     Ok(vars)
 }
 
 /// `{Variable}` 및 `{env:VAR}` 토큰을 변수 맵으로 치환.
-fn render_template(fmt: &str, ctx: &std::collections::BTreeMap<String, String>) -> String {
+/// `{Variable}`/`{env:VAR}` 토큰을 변수 맵으로 치환. 원본 GitVersion 은 알 수 없는
+/// 토큰을 만나면 포맷 확장에 실패(에러)하므로, 여기서도 ctx 에 없고 `env:` 도 아닌
+/// 토큰이 있으면 Err 를 반환한다.
+fn render_template(fmt: &str, ctx: &std::collections::BTreeMap<String, String>) -> Result<String> {
     let re = Regex::new(r"\{(?<t>[A-Za-z0-9_:]+)\}").unwrap();
-    re.replace_all(fmt, |c: &regex::Captures| {
-        let t = &c["t"];
-        if let Some(env_var) = t.strip_prefix("env:") {
-            std::env::var(env_var).unwrap_or_default()
-        } else {
-            ctx.get(t).cloned().unwrap_or_default()
-        }
-    })
-    .into_owned()
+    let mut unknown: Option<String> = None;
+    let out = re
+        .replace_all(fmt, |c: &regex::Captures| {
+            let t = &c["t"];
+            if let Some(env_var) = t.strip_prefix("env:") {
+                std::env::var(env_var).unwrap_or_default()
+            } else if let Some(v) = ctx.get(t) {
+                v.clone()
+            } else {
+                if unknown.is_none() {
+                    unknown = Some(t.to_string());
+                }
+                String::new()
+            }
+        })
+        .into_owned();
+    match unknown {
+        Some(t) => Err(anyhow::anyhow!(
+            "Unknown template token '{{{t}}}' in format string"
+        )),
+        None => Ok(out),
+    }
 }
 
 /// AssemblyVersion 스킴 적용.
@@ -1290,6 +1306,18 @@ mod tests {
     fn default_eff() -> EffectiveConfiguration {
         let cfg = defaults::gitflow();
         EffectiveConfiguration::resolve(&cfg, "main")
+    }
+
+    #[test]
+    fn render_template_errors_on_unknown_token() {
+        let mut ctx = std::collections::BTreeMap::new();
+        ctx.insert("Major".to_string(), "1".to_string());
+        // 알려진 토큰은 치환된다.
+        assert_eq!(render_template("v{Major}", &ctx).unwrap(), "v1");
+        // env: 토큰은 환경변수(없으면 빈 문자열).
+        assert!(render_template("{env:GV_NO_SUCH_VAR}", &ctx).is_ok());
+        // 알 수 없는 토큰은 원본처럼 에러(원본 GitVersion 동작).
+        assert!(render_template("{Bogus}", &ctx).is_err());
     }
 
     #[test]
