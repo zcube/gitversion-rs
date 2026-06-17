@@ -1049,6 +1049,37 @@ tagcommit v1.0.0
 branch feature/x; commit f1
 record
 
+# GitFlow unknown 브랜치(misc/foo): 명시 타입에 안 맞는 브랜치의 기본 동작.
+newrepo cfg_gitflow_unknown main
+tagcommit v1.0.0
+branch misc/foo; commit u1
+record
+
+# GitHubFlow unknown 브랜치(misc/foo): 워크플로별 unknown 처리 차이.
+newrepo cfg_githubflow_unknown main
+writeconfig 'workflow: GitHubFlow/v1'
+tagcommit v1.0.0
+branch misc/foo; commit u1
+record
+
+# release 브랜치 + mode: ContinuousDeployment 직접 - 브랜치별 deployment mode 조합.
+newrepo cfg_release_mode_cd main
+writeconfig 'branches:
+  release:
+    mode: ContinuousDeployment'
+tagcommit v1.0.0
+branch release/2.0.0; commit r1; commit r2
+record
+
+# develop 브랜치 + mode: ManualDeployment 직접 - 비 mainline 수동 배포 조합.
+newrepo cfg_develop_mode_manual main
+writeconfig 'branches:
+  develop:
+    mode: ManualDeployment'
+tagcommit v1.0.0
+branch develop; commit d1; commit d2
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"
