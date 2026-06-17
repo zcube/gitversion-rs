@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **107**
+- 현재 시나리오 수: **111**
 
 ## 픽스쳐 시나리오
 
@@ -107,6 +107,10 @@
 | cfg_version_pattern_custom | version-in-branch-pattern | 커스텀(separator split 검증) |
 | cfg_merge_format_custom | merge-message-formats | 커스텀 |
 | cfg_track_merge_msg_false | branches.main.track-merge-message | false |
+| cfg_prerelease_weight | branches.feature.pre-release-weight | 5000 |
+| cfg_assembly_file_format | assembly-file-versioning-format | 커스텀 |
+| cfg_msg_inc_enabled | commit-message-incrementing | Enabled |
+| cfg_assembly_scheme_default | assembly-versioning-scheme | MajorMinorPatch |
 
 ### 머지 메시지 / 태그 파싱 엣지
 | 시나리오 | 검증 내용 |
@@ -142,16 +146,16 @@
 | increment (전역) | ✅ Major, None, Patch(기본) | ❌ Minor(직접), Inherit |
 | increment (브랜치별 직접) | ✅ Major, Minor | ❌ None, Inherit |
 | mode (deployment) | ✅ ContinuousDelivery, Manual, ContinuousDeployment | — |
-| commit-message-incrementing | ✅ Disabled, MergeMessageOnly | ❌ Enabled(명시) |
+| commit-message-incrementing | ✅ Enabled, Disabled, MergeMessageOnly | — |
 | tag-prefix | ✅ 기본, "ver" | — |
 | next-version | ✅ 정수/부분/full/pre-release | — |
 | semantic-version-format | ✅ Strict, Loose | — |
 | commit-date-format | ✅ 커스텀 | — |
 | ignore | ✅ sha, commits-before, paths | — |
-| assembly-versioning-scheme | ✅ Major, MajorMinor, MajorMinorPatchTag, None | ❌ MajorMinorPatch(기본 명시) |
+| assembly-versioning-scheme | ✅ Major, MajorMinor, MajorMinorPatch, MajorMinorPatchTag, None | — |
 | assembly-versioning-format | ✅ 커스텀 | — |
 | assembly-file-versioning-scheme | ✅ MajorMinor | ❌ 그 외 값 |
-| assembly-file-versioning-format | ❌ | ❌ 전체 |
+| assembly-file-versioning-format | ✅ 커스텀 | — |
 | assembly-informational-format | ✅ 커스텀 | — |
 | prevent-increment.of-merged-branch | ✅ true | ❌ false(명시) |
 | prevent-increment.when-branch-merged | ✅ true | ❌ false(명시) |
@@ -160,7 +164,7 @@
 | track-merge-target | ❌ | ❌ true/false |
 | track-merge-message | ✅ true(기본), false | — |
 | tag-pre-release-weight | ✅ 60000 | — |
-| pre-release-weight | ❌ | ❌ 커스텀 |
+| pre-release-weight | ✅ 5000(커스텀) | — |
 | label (브랜치) | ✅ 기본(alpha 등), 커스텀(preview) | — |
 | label-number-pattern | ❌ | ❌ 커스텀 |
 | version-in-branch-pattern | ✅ 기본, 커스텀(separator split) | — |
@@ -170,11 +174,9 @@
 | semantic-version-threshold | ✅ 1.0.0 | — |
 
 ### 다음 추가 대상 (우선순위)
-1. label-number-pattern 커스텀
+1. label-number-pattern 커스텀 (pull-request 브랜치 PR 번호 추출)
 2. track-merge-target true/false
 3. source-branches / is-source-branch-for
 4. increment 브랜치별 Inherit (feature 가 부모 증분 상속)
-5. pre-release-weight 커스텀
-6. assembly-file-versioning-format 커스텀
-7. commit-message-incrementing: Enabled(명시)
-8. assembly-versioning-scheme: MajorMinorPatch(기본 명시)
+5. assembly-file-versioning-scheme 그 외 값 (Major/None 등)
+6. update-build-number (출력 영향 적음, 후순위)

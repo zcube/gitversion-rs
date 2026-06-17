@@ -943,6 +943,38 @@ checkout main
 merge release/2.0.0 "Merge branch '\''release/2.0.0'\''"
 record
 
+# branches.feature.pre-release-weight: 커스텀 - WeightedPreReleaseNumber 분기.
+newrepo cfg_prerelease_weight main
+writeconfig 'workflow: GitHubFlow/v1
+branches:
+  feature:
+    pre-release-weight: 5000'
+tagcommit v1.0.0
+branch feature/x; commit f1
+record
+
+# assembly-file-versioning-format: 커스텀 - AssemblySemFileVer 포맷 분기.
+newrepo cfg_assembly_file_format main
+writeconfig "assembly-file-versioning-format: '{Major}.{Minor}.{Patch}.0'"
+tagcommit v1.2.3
+commit a
+record
+
+# commit-message-incrementing: Enabled (명시) - +semver 메시지 활성(기본).
+newrepo cfg_msg_inc_enabled main
+writeconfig 'commit-message-incrementing: Enabled'
+tagcommit v1.0.0
+commit "feat
++semver: minor"
+record
+
+# assembly-versioning-scheme: MajorMinorPatch (기본 명시) - AssemblySemVer 분기.
+newrepo cfg_assembly_scheme_default main
+writeconfig 'assembly-versioning-scheme: MajorMinorPatch'
+tagcommit v1.2.3
+commit a
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"
