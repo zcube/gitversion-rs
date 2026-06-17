@@ -1238,6 +1238,16 @@ git -C "$CUR" branch feature/x
 git -C "$CUR" -c advice.detachedHead=false checkout -q "$(git -C "$CUR" rev-parse HEAD)"
 record
 
+# detached HEAD 가 과거 태그 커밋(v1.0.0)이고 main 만 그 커밋을 포함(reachable)하는
+# 경우. CI 가 태그를 checkout 한 상황과 동일하다. 원본은 HEAD 의 tip 브랜치가 아니라
+# "HEAD 커밋을 포함하는 브랜치"(GetBranchesContainingCommit)가 유일하면 그걸 쓰므로
+# BranchName=main, 태그 커밋이라 SemVer=1.0.0 이 된다(우리도 reachable 로 맞춰야 함).
+newrepo detached_head_reachable main
+tagcommit v1.0.0
+commit b
+git -C "$CUR" -c advice.detachedHead=false checkout -q "$(git -C "$CUR" rev-parse v1.0.0)"
+record
+
 # 브랜치명 언더스코어: feature/a_b 의 label 은 "a-b"(_ 가 - 로 sanitize, 원본 SanitizeName).
 newrepo branch_underscore_label main
 tagcommit v1.0.0

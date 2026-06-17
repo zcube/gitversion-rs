@@ -123,16 +123,20 @@ impl GitRepo {
 
     /// 현재 체크아웃된 브랜치 이름(friendly).
     ///
-    /// detached HEAD 면 원본 GitVersion 처럼 HEAD 커밋을 tip 으로 갖는 로컬 브랜치를
-    /// 찾는다. 정확히 하나면 그 브랜치명, 그 외(0개·여러개)는 `(no branch)`.
+    /// detached HEAD 면 원본 GitVersion(GitVersionContextFactory)처럼
+    /// `GetBranchesContainingCommit(...).OnlyOrDefault()` 로 결정한다: HEAD 커밋을 tip
+    /// 으로 갖는 브랜치(direct)가 있으면 그것, 없으면 HEAD 커밋을 포함(reachable)하는
+    /// 브랜치를 쓴다. 정확히 하나면 그 브랜치명, 그 외(0개·여러개)는 `(no branch)`.
+    /// (CI 가 태그를 detached 로 checkout 한 경우, HEAD 가 main tip 이 아니어도 main 으로
+    /// 인식해야 하므로 tip 일치만으로는 부족하다.)
     pub fn current_branch_name(&self) -> Result<String> {
         if let Some(name) = self.repo.head_name()? {
             Ok(name.shorten().to_string())
         } else {
             let head_sha = self.repo.head_commit()?.id().to_string();
-            let tips = self.local_branches_at(&head_sha);
-            if tips.len() == 1 {
-                Ok(tips.into_iter().next().unwrap())
+            let containing = self.branches_containing(&head_sha);
+            if containing.len() == 1 {
+                Ok(containing.into_iter().next().unwrap())
             } else {
                 Ok("(no branch)".to_string())
             }
@@ -147,6 +151,31 @@ impl GitRepo {
                 for reference in branches.flatten() {
                     if let Ok(id) = reference.clone().into_fully_peeled_id() {
                         if id.to_string() == sha {
+                            out.push(reference.name().shorten().to_string());
+                        }
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// 원본 `GetBranchesContainingCommit`: HEAD 커밋을 tip 으로 갖는 브랜치(direct)가
+    /// 있으면 그것, 없으면 HEAD 커밋을 포함(reachable, 브랜치 tip 의 조상)하는 로컬
+    /// 브랜치들. 로컬 브랜치만 대상으로 한다(원본도 tracked 브랜치 우선).
+    fn branches_containing(&self, head_sha: &str) -> Vec<String> {
+        let direct = self.local_branches_at(head_sha);
+        if !direct.is_empty() {
+            return direct;
+        }
+        let mut out = Vec::new();
+        if let Ok(platform) = self.repo.references() {
+            if let Ok(branches) = platform.local_branches() {
+                for reference in branches.flatten() {
+                    if let Ok(id) = reference.clone().into_fully_peeled_id() {
+                        let tip = id.to_string();
+                        // HEAD 커밋이 이 브랜치 tip 의 조상이면 브랜치가 HEAD 를 포함한다.
+                        if self.is_ancestor_of(head_sha, &tip).unwrap_or(false) {
                             out.push(reference.name().shorten().to_string());
                         }
                     }
