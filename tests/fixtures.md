@@ -176,13 +176,16 @@
 | buildagent_repo | 10개 CI 어댑터 출력 golden 전체 라인 비교 (update-build-number 기본 true) |
 | buildagent_no_ubn | update-build-number: false 면 빌드넘버 갱신 명령 제외 |
 
-검증 어댑터(12): TeamCity, AzurePipelines, ContinuaCi, MyGet, Drone, BitBucketPipelines,
-Jenkins, CodeBuild, BuildKite, SpaceAutomation, EnvRun, TravisCi. 로그/빈줄/
-UncommittedChanges(비결정적)만 제외하고 명령 라인 전체를 비교한다.
+검증 어댑터(14 golden + 1 단위): TeamCity, AzurePipelines, ContinuaCi, MyGet, Drone,
+BitBucketPipelines, Jenkins, CodeBuild, BuildKite, SpaceAutomation, EnvRun, TravisCi,
+GitLabCi, GitHubActions(golden) + AppVeyor(body 단위 테스트). 즉 원본 15개 전부 커버.
+로그/빈줄/UncommittedChanges(비결정적)만 제외하고 명령 라인 전체를 비교한다.
 - EnvRun: ENVRUN_DATABASE 경로의 파일이 존재해야 .NET 이 감지(golden 생성 시 db 파일 작성)
 - TravisCi: TRAVIS=true 와 CI=true 가 모두 있어야 감지
+- GitLabCi: gitversion.properties 파일 출력 + "Outputting variables ..." 안내
+- GitHubActions: $GITHUB_ENV 파일에 기록(테스트도 동일 env 설정), 변수 기록 안내 라인 비교
 - AppVeyor: stdout 명령이 아닌 HTTP REST(PUT api/build, POST api/build/variables)라
-  golden(stdout) 비교 불가. body 형식 단위 테스트로 별도 검증.
+  golden(stdout) 비교 불가. body(JSON) 형식 단위 테스트로 별도 검증.
 
 ---
 

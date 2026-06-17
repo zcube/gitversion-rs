@@ -55,6 +55,8 @@ fn build_agents_match_real_gitversion() {
         "SpaceAutomation",
         "EnvRun",
         "TravisCi",
+        "GitLabCi",
+        "GitHubActions",
     ];
     let mut failures = Vec::new();
     let mut checked = 0;
@@ -89,6 +91,12 @@ fn build_agents_match_real_gitversion() {
                 continue;
             };
             let agent = buildagent::by_name(agent_name).expect("알 수 없는 에이전트");
+            // GitHubActions 는 golden 생성 시 $GITHUB_ENV 를 주었으므로(변수 기록 안내
+            // 라인이 나옴), 비교 시에도 동일하게 임시 파일 경로를 설정한다.
+            if agent_name == "GitHubActions" {
+                let tmp = std::env::temp_dir().join(format!("gh_env_{}", std::process::id()));
+                unsafe { std::env::set_var("GITHUB_ENV", &tmp) };
+            }
             let golden_lines: Vec<&str> = golden.lines().filter(|l| keep(l)).collect();
             let mine: Vec<String> = agent
                 .write_integration(&vars, update_build_number)

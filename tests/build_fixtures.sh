@@ -348,6 +348,9 @@ gen_all_agents(){
   gen_agent EnvRun             "ENVRUN_DATABASE=$STAGE/envrun.db"
   # TravisCI 는 TRAVIS=true 와 CI=true 가 모두 있어야 감지된다.
   gen_agent TravisCi           "TRAVIS=true CI=true"
+  gen_agent GitLabCi           "GITLAB_CI=true"
+  # GitHubActions 는 $GITHUB_ENV 파일 경로가 있어야 변수 기록 안내가 나온다.
+  gen_agent GitHubActions      "GITHUB_ACTIONS=true GITHUB_ENV=$STAGE/gh_env"
 }
 gen_all_agents
 
