@@ -42,34 +42,42 @@ fn normalize_next_version(value: &str) -> String {
     }
 }
 
-/// 브랜치 정규식의 named capture, `{env:VAR}`, `?? fallback` 으로 label 을 치환.
-/// 원본 Formatting/StringFormatWithExtension.cs 의 동작을 단순화해 옮긴다.
+/// label 의 `{token}` 을 치환. 원본 `GetBranchSpecificLabel` + `BuildLabelPlaceholders`
+/// + `StringFormatWith` 동작을 옮긴다:
+/// - placeholder 는 브랜치 정규식의 **named capture** 뿐이며, 각 값에 SanitizeName
+///   (`[^a-zA-Z0-9-]` → `-`)을 적용한다(BuildLabelPlaceholders).
+/// - placeholder 에 없는 토큰은 **치환하지 않고 literal 로 유지**한다(FormatWith).
+///   따라서 named capture 가 없는 정규식(예: 사용자 정의 `^custom/`)에서 `{BranchName}`
+///   은 그대로 남는다(원본과 동일). 브랜치 마지막 세그먼트로의 fallback 은 하지 않는다.
+/// - 최종 label 전체에 대한 추가 sanitize 는 하지 않는다(원본도 하지 않음).
 fn resolve_label(label: &str, regex_src: &Option<String>, branch_name: &str) -> String {
-    // 브랜치 정규식의 named capture 수집.
+    let sanitize = |s: &str| {
+        Regex::new(r"[^a-zA-Z0-9-]")
+            .unwrap()
+            .replace_all(s, "-")
+            .into_owned()
+    };
+
+    // BuildLabelPlaceholders: 정규식이 비었거나 브랜치명이 비면 placeholder 없음.
     let mut captures: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     if let Some(src) = regex_src {
-        if let Ok(re) = Regex::new(&format!("(?i){src}")) {
-            if let Some(caps) = re.captures(branch_name) {
-                for name in re.capture_names().flatten() {
-                    if let Some(m) = caps.name(name) {
-                        captures.insert(name.to_string(), m.as_str().to_string());
+        if !src.trim().is_empty() && !branch_name.is_empty() {
+            if let Ok(re) = Regex::new(&format!("(?i){src}")) {
+                if let Some(caps) = re.captures(branch_name) {
+                    for name in re.capture_names().flatten() {
+                        if let Some(m) = caps.name(name) {
+                            captures.insert(name.to_string(), sanitize(m.as_str()));
+                        }
                     }
                 }
             }
         }
     }
-    // 미지정 BranchName 은 브랜치 마지막 세그먼트로.
-    captures.entry("BranchName".into()).or_insert_with(|| {
-        branch_name
-            .rsplit('/')
-            .next()
-            .unwrap_or(branch_name)
-            .to_string()
-    });
 
     let token_re = Regex::new(r"\{([^}]+)\}").unwrap();
-    let out = token_re
+    token_re
         .replace_all(label, |c: &regex::Captures| {
+            let whole = c[0].to_string();
             let inner = c[1].trim();
             // `?? "fallback"` 분리.
             let (expr, fallback) = match inner.split_once("??") {
@@ -82,17 +90,11 @@ fn resolve_label(label: &str, regex_src: &Option<String>, branch_name: &str) -> 
                 let var = var.split("??").next().unwrap_or(var).trim();
                 std::env::var(var).ok().filter(|v| !v.is_empty())
             } else {
-                captures.get(name).cloned().filter(|v| !v.is_empty())
+                captures.get(name).cloned()
             };
-            resolved.or(fallback).unwrap_or_default()
+            // 치환 실패 + 명시 fallback 없음 → 원본 토큰을 literal 로 유지.
+            resolved.or(fallback).unwrap_or(whole)
         })
-        .into_owned();
-
-    // 원본 SanitizeName 규칙("[^a-zA-Z0-9-]"): 영숫자·하이픈이 아닌 문자를 모두
-    // '-'로 교체한다(예: "(no branch)" → "-no-branch-", "a/b.c_d" → "a-b-c-d").
-    Regex::new(r"[^a-zA-Z0-9-]")
-        .unwrap()
-        .replace_all(&out, "-")
         .into_owned()
 }
 
@@ -333,6 +335,21 @@ mod tests {
         // feature/my-feat → label 에 {BranchName} 캡처가 "my-feat"로 치환됨.
         let eff = EffectiveConfiguration::resolve(&cfg, "feature/my-feat");
         assert_eq!(eff.label, "my-feat");
+    }
+
+    #[test]
+    fn resolve_label_unmatched_token_stays_literal() {
+        // named capture 가 없는 정규식: {BranchName} 은 치환되지 않고 literal 로 유지
+        // (원본 FormatWith: placeholder 없는 토큰은 그대로). 세그먼트 fallback 안 함.
+        let r = resolve_label("{BranchName}", &Some("^custom/".into()), "custom/x");
+        assert_eq!(r, "{BranchName}");
+        // named capture 가 있으면 치환 + SanitizeName.
+        let r = resolve_label(
+            "{BranchName}",
+            &Some(r"^features?[/-](?<BranchName>.+)".into()),
+            "feature/a_b",
+        );
+        assert_eq!(r, "a-b");
     }
 
     #[test]

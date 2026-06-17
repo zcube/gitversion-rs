@@ -221,11 +221,17 @@
 3. update-build-number (CI 빌드넘버 갱신 여부 — 버전 출력에 영향 없음)
 
 ### 알려진 차이 (재현 보류)
-- **custom 브랜치 + label 미지정**: config 에 정의된 사용자 브랜치가 label 을 생략하면
-  우리는 전역 label "{BranchName}"(브랜치명)을 적용하나, 원본은 비일관적이다
-  (source-branches 가 있으면 그 부모 label 상속, 없으면 "{BranchName}" 리터럴을
-  치환 없이 그대로 출력). 극히 드문 엣지이며 원본 자체가 비일관적이라 재현 보류.
-  실사용 프리셋(GitFlow/GitHubFlow/TrunkBased)은 모든 브랜치 label 이 정의되어 무관.
-  (label 을 명시하면 source-branches/is-source-branch-for 의 increment 상속은 일치)
+- **label 토큰 치환은 원본과 일치하게 수정됨** (resolve_label): 정규식 named capture
+  만 placeholder 로 쓰고(각 값 SanitizeName), capture 없으면 토큰을 literal 로 유지한다
+  (예: 사용자 정의 `^custom/` + `{BranchName}` 은 그대로 `{BranchName}`). 세그먼트
+  fallback 과 최종 전체 sanitize 는 제거. 원본 BuildLabelPlaceholders + FormatWith 동작.
+- **custom 브랜치의 미지정 필드 상속(보류)**: 원본 `BranchConfiguration.Inherit(parent)`
+  는 label·increment·mode 등 **모든 미지정 필드**를 source-branches 부모에서 `??` 로
+  채운다(`Label = Label ?? parent.Label`). 우리는 increment 만 source 상속(resolve_increment)
+  하고 label 등은 전역 fallback 한다. 그래서 custom 브랜치(사용자 정의 + 다중 필드 미지정)
+  에서 label/increment 가 원본과 다를 수 있다(예: custom + source-branches:[main] 일 때
+  원본은 label="" 상속, 우리는 전역 "{BranchName}"). EffectiveConfiguration 의 브랜치
+  Inherit 체인 전면 재설계가 필요한 대규모 작업이며, 실사용 프리셋은 모든 브랜치 필드가
+  정의되어 무관하므로 보류. label 을 명시하면 increment 상속은 일치한다.
 
 핵심 설정 키의 주요 값 분기는 모두 골든 테스트로 커버됨.
