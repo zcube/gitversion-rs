@@ -72,6 +72,7 @@ newrepo() { # $1 = name, $2 = initial branch
   mkdir -p "$REPO"
   git -C "$REPO" init -q -b "${2:-main}"
   git -C "$REPO" config commit.gpgsign false
+  git -C "$REPO" config tag.gpgsign false
   git -C "$REPO" config core.hooksPath /dev/null
   CUR="$REPO"
 }
@@ -1133,6 +1134,27 @@ record
 newrepo branch_underscore_label main
 tagcommit v1.0.0
 branch feature/a_b; commit f1
+record
+
+# 어노테이티드 태그(git tag -a): lightweight 와 동일하게 peel 되어 인식되어야 한다.
+newrepo annotated_tag main
+commit a
+git -C "$CUR" tag -a v1.0.0 -m "release 1.0.0"
+commit b
+record
+
+# +semver: breaking (major 별칭) - breaking 이 major 증분으로 인식.
+newrepo semver_breaking main
+tagcommit v1.0.0
+commit "feat
++semver: breaking"
+record
+
+# +semver: none - 증분 억제.
+newrepo semver_none main
+tagcommit v1.0.0
+commit "chore
++semver: none"
 record
 
 echo "압축: $OUT"

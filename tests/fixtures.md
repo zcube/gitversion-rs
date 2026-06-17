@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **131**
+- 현재 시나리오 수: **134**
 - golden 생성/비교 모두 **캐시·부수효과 배제**: record 는 `/nocache /nonormalize`
   (.NET 이 저장소 refs/브랜치를 수정하지 못함), 비교(fixtures.rs)는 `calculate()`
   직접 호출. 검증 결과 .NET 호출 전후 refs/출력 동일, tar 에 .NET 흔적 없음.
@@ -74,6 +74,8 @@
 | 시나리오 | 검증 내용 |
 |---|---|
 | semver_minor_main / semver_major_main | +semver: minor/major |
+| semver_breaking | +semver: breaking (major 별칭) |
+| semver_none | +semver: none (증분 억제) |
 | main_long_with_minor / main_long_with_major | 긴 체인 중간 +semver |
 | main_mixed_semver | 다중 +semver (최고 우선) |
 | develop_with_semver | develop +semver |
@@ -141,6 +143,7 @@
 | prerelease_release_same_commit | release 가 pre-release 보다 우선 |
 | numeric_prerelease_tag | numeric-only pre-release (v1.0.0-1) |
 | prerelease_tag | pre-release 태그 후 커밋 |
+| annotated_tag | 어노테이티드 태그(git tag -a) peel 인식 |
 | loose_four_part_tag / loose_format_four_part | 4-part 태그 (Strict 거부 / Loose 인식) |
 | loose_format_partial_tag / loose_format_branch | 부분 버전 (Loose) |
 | label_mismatch_prerelease | label 불일치 태그 무시 |
