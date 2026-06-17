@@ -123,7 +123,7 @@ fn inherit_label(
 }
 
 /// Increment == Inherit 를 source-branch 를 따라 해석.
-fn resolve_increment(
+pub(crate) fn resolve_increment(
     config: &GitVersionConfiguration,
     bc: &BranchConfiguration,
     depth: usize,
@@ -132,12 +132,14 @@ fn resolve_increment(
         .increment
         .or(config.increment)
         .unwrap_or(IncrementStrategy::Inherit);
-    if own != IncrementStrategy::Inherit || depth > 8 {
-        return if own == IncrementStrategy::Inherit {
-            IncrementStrategy::Patch
-        } else {
-            own
-        };
+    if own != IncrementStrategy::Inherit {
+        return own;
+    }
+    // 원본 EffectiveBranchConfigurationFinder: Inherit 는 source-branches 부모에서
+    // 해석한다. 끝까지 못 풀면 Inherit 가 남고, 이후 ToVersionField 단계에서 None
+    // (증분 없음)이 된다. 임의 Patch fallback 을 넣지 않고 None 으로 귀결시킨다.
+    if depth > 8 {
+        return IncrementStrategy::None;
     }
     for src in &bc.source_branches {
         if let Some(src_bc) = config.branches.get(src) {
@@ -147,7 +149,7 @@ fn resolve_increment(
             }
         }
     }
-    IncrementStrategy::Patch
+    IncrementStrategy::None
 }
 
 /// 브랜치에 적용되는 모든 설정값을 평탄화한 구조.

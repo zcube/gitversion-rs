@@ -353,11 +353,9 @@ fn resolve_inherit_via_git(
             };
             // merge-base 가 루트에서 멀수록(=깊을수록) 최근에 분기한 것.
             let depth = repo.commits_between(None, &mb)?.len() as i64;
-            let inc = src_bc
-                .increment
-                .or(config.increment)
-                .filter(|i| *i != IncrementStrategy::Inherit)
-                .unwrap_or(IncrementStrategy::Patch);
+            // source 브랜치의 effective increment 를 재귀 해석한다(원본처럼 Inherit 면
+            // 그 부모까지). 임의 Patch fallback 대신 못 풀면 None 으로 귀결.
+            let inc = crate::config::effective::resolve_increment(config, src_bc, 0);
             if best.map(|(d, _)| depth > d).unwrap_or(true) {
                 best = Some((depth, inc));
             }

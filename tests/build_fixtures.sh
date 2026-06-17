@@ -1095,6 +1095,18 @@ tagcommit v1.0.0
 branch custom/x; commit b
 record
 
+# custom 브랜치(source-branches·increment·label 모두 미지정): increment 를 끝까지
+# 풀지 못해 None(증분 없음)이 되고(원본 ToVersionField), label 은 전역 "{BranchName}"
+# 이 named capture 없는 정규식이라 literal 로 남는다. 결과 1.0.0-{BranchName}.1.
+newrepo cfg_custom_no_source main
+writeconfig 'workflow: GitFlow/v1
+branches:
+  custom:
+    regex: "^custom/"'
+tagcommit v1.0.0
+branch custom/x; commit b
+record
+
 # GitFlow unknown 브랜치(misc/foo): 명시 타입에 안 맞는 브랜치의 기본 동작.
 newrepo cfg_gitflow_unknown main
 tagcommit v1.0.0

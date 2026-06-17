@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **143**
+- 현재 시나리오 수: **144**
 - golden 생성/비교 모두 **캐시·부수효과 배제**: record 는 `/nocache /nonormalize`
   (.NET 이 저장소 refs/브랜치를 수정하지 못함), 비교(fixtures.rs)는 `calculate()`
   직접 호출. 검증 결과 .NET 호출 전후 refs/출력 동일, tar 에 .NET 흔적 없음.
@@ -132,6 +132,7 @@
 | cfg_is_source_branch_for | branches.main.is-source-branch-for | [custom](Major 상속 2.0.0) |
 | cfg_source_branches_inherit | branches.custom.source-branches | [main](Major 상속 2.0.0) |
 | cfg_source_branches_label_inherit | source-branches label 상속 | label 미지정이 main "" 상속(2.0.0-1) |
+| cfg_custom_no_source | custom 브랜치 전 필드 미지정 | increment None(증분 없음)+label literal(1.0.0-{BranchName}) |
 | cfg_gitflow_unknown | unknown 브랜치(misc/foo) | GitFlow |
 | cfg_githubflow_unknown | unknown 브랜치(misc/foo) | GitHubFlow |
 | cfg_release_mode_cd | branches.release.mode | ContinuousDeployment |
@@ -221,18 +222,18 @@
 2. assembly-file-versioning-scheme: MajorMinorPatch / MajorMinorPatchTag
 3. update-build-number (CI 빌드넘버 갱신 여부 — 버전 출력에 영향 없음)
 
-### 알려진 차이 (재현 보류)
-- **label 토큰 치환은 원본과 일치하게 수정됨** (resolve_label): 정규식 named capture
-  만 placeholder 로 쓰고(각 값 SanitizeName), capture 없으면 토큰을 literal 로 유지한다
-  (예: 사용자 정의 `^custom/` + `{BranchName}` 은 그대로 `{BranchName}`). 세그먼트
-  fallback 과 최종 전체 sanitize 는 제거. 원본 BuildLabelPlaceholders + FormatWith 동작.
-- **custom 브랜치 label/increment source 상속(구현됨)**: 원본 `BranchConfiguration.Inherit`
-  처럼 label 미지정 시 source-branches 부모에서 상속(inherit_label), increment Inherit 도
-  source 상속(resolve_increment). 예: custom + source-branches:[main] 은 main 의 label("")
-  과 increment(Major)를 상속해 2.0.0-1 (cfg_source_branches_label_inherit 로 검증).
-- **잔여(보류)**: custom 브랜치가 **source-branches 도 없고** increment 도 미지정인 경우,
-  원본은 증분하지 않으나(예: 1.0.0) 우리는 Patch fallback(1.0.1)한다. mode/track 등 그 외
-  미지정 필드의 source 상속도 미구현. 극히 드문 엣지(사용자 정의 브랜치 + 다중 필드 미지정 +
-  source 미지정)이고 실사용 프리셋은 모든 필드가 정의되어 무관하므로 보류.
+### custom 브랜치 / 상속 동작 (원본 로직 일치)
+- **label 토큰 치환**(resolve_label): named capture 만 placeholder(각 값 SanitizeName),
+  capture 없으면 토큰 literal 유지(예: `^custom/` + `{BranchName}` 은 그대로). 세그먼트
+  fallback·최종 전체 sanitize 없음. 원본 BuildLabelPlaceholders + FormatWith.
+- **label/increment source 상속**: 원본 `BranchConfiguration.Inherit` 처럼 label 미지정 시
+  source-branches 부모에서 상속(inherit_label), increment Inherit 도 source 상속
+  (resolve_increment). 예: custom + source:[main] 은 main 의 label("")·increment(Major)
+  상속(2.0.0-1).
+- **increment 를 끝까지 못 풀면 None**(증분 없음): 원본 ToVersionField 는 Inherit 를
+  변환하지 못하므로 None 으로 귀결한다. **임의 Patch fallback 을 쓰지 않는다**
+  (resolve_increment, resolve_inherit_via_git 둘 다). 예: custom + source 없음은
+  1.0.0-{BranchName}(증분 없음). cfg_custom_no_source 로 검증.
+- 잔여: mode/track 등 그 외 미지정 필드의 source 상속은 미구현(드문 엣지, 프리셋엔 무관).
 
 핵심 설정 키의 주요 값 분기는 모두 골든 테스트로 커버됨.
