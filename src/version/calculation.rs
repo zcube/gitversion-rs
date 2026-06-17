@@ -600,13 +600,11 @@ pub fn calculate(
     }
 
     if candidates.is_empty() {
-        // 안전망: 최소한 fallback.
-        candidates.push(BaseVersion::new(
-            "Fallback (0.0.0)",
-            SemanticVersion::new(0, 0, 0),
-            None,
-            VersionField::Patch,
-            Some(eff.label.clone()),
+        // 원본 NextVersionCalculator.CalculateNextVersion: 후보가 하나도 없으면
+        // 계산 실패. 임의 fallback(0.0.0)을 넣지 않는다. 기본 전략에는 Fallback 이
+        // 포함되어 이 경우는 strategies 에서 Fallback 을 명시 제외했을 때만 발생.
+        return Err(anyhow::anyhow!(
+            "No base versions determined on the current branch."
         ));
     }
 
