@@ -12,6 +12,11 @@ use sha1::{Digest, Sha1};
 use std::path::{Path, PathBuf};
 
 /// 캐시 키 계산: (refs 스냅샷 + HEAD + 설정파일 내용 + overrideconfig)의 SHA1 hex.
+///
+/// 원본 `GitVersionCacheKeyFactory` 의 4개 구성요소(gitSystemHash, repositorySnapshotHash,
+/// configFileHash, overrideConfigHash)에 대응한다. 원본과 동일하게 **GitVersion
+/// 자체 버전은 키에 포함하지 않으므로**, 계산 로직(코드)만 바뀌고 저장소/설정이
+/// 그대로면 기존 캐시가 그대로 재사용된다(개발 중에는 `--no-cache` 사용).
 pub fn compute_key(repo: &GitRepo, config_path: Option<&Path>, overrides: &[String]) -> String {
     let mut hasher = Sha1::new();
 

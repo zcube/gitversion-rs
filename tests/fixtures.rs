@@ -122,6 +122,9 @@ fn fixtures_match_real_gitversion() {
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| dir.clone());
         let configuration = config::loader::load(None, &workdir, Some(&workdir)).unwrap();
+        // 캐시를 경유하지 않고 calculate 를 직접 호출한다(디스크 캐시는 app.rs 의
+        // load/store 래퍼에서만 동작). golden 비교는 항상 재계산으로 수행해
+        // .NET 의 /nocache 출력과 1:1 로 맞춘다.
         let vars = match version::calculation::calculate(&repo, &configuration, None) {
             Ok(v) => v,
             Err(e) => {
