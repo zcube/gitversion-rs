@@ -1080,6 +1080,14 @@ tagcommit v1.0.0
 branch develop; commit d1; commit d2
 record
 
+# semantic-version-format: Loose + 부분 next-version("1"): Loose 는 "1" 을 1.0.0 으로
+# 파싱(Strict 는 파싱 실패로 계산 에러). next-version + format 조합 검증.
+newrepo cfg_nextversion_loose_partial main
+writeconfig 'semantic-version-format: Loose
+next-version: "1"'
+commit a; commit b
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"

@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **123**
+- 현재 시나리오 수: **124**
 
 ## 픽스쳐 시나리오
 
@@ -123,6 +123,7 @@
 | cfg_githubflow_unknown | unknown 브랜치(misc/foo) | GitHubFlow |
 | cfg_release_mode_cd | branches.release.mode | ContinuousDeployment |
 | cfg_develop_mode_manual | branches.develop.mode | ManualDeployment |
+| cfg_nextversion_loose_partial | semantic-version-format + next-version | Loose + "1"(1.0.0) |
 
 ### 머지 메시지 / 태그 파싱 엣지
 | 시나리오 | 검증 내용 |
@@ -161,7 +162,7 @@
 | 워크플로 × unknown 브랜치 | ✅ GitFlow, GitHubFlow | ❌ TrunkBased unknown(별도 있음) |
 | commit-message-incrementing | ✅ Enabled, Disabled, MergeMessageOnly | — |
 | tag-prefix | ✅ 기본, "ver" | — |
-| next-version | ✅ 정수/부분/full/pre-release | — |
+| next-version | ✅ full/pre-release(Strict), 부분(Loose) | Strict+부분버전은 계산 에러(원본 동작) |
 | semantic-version-format | ✅ Strict, Loose | — |
 | commit-date-format | ✅ 커스텀 | — |
 | ignore | ✅ sha, commits-before, paths | — |

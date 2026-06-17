@@ -509,8 +509,14 @@ pub fn calculate(
     for strat in &strategies {
         match strat {
             VersionStrategy::ConfiguredNextVersion => {
+                // 원본 ConfiguredNextVersionVersionStrategy: next-version 이 비었으면
+                // 스킵, 있으면 SemanticVersion.Parse(실패 시 throw). 즉 현재 format
+                // 으로 파싱 안 되는 next-version 은 전체 계산을 실패시킨다.
                 if let Some(nv) = &eff.next_version {
-                    if let Some(v) = parse_version(nv, &eff) {
+                    if !nv.is_empty() {
+                        let v = parse_version(nv, &eff).ok_or_else(|| {
+                            anyhow::anyhow!("Failed to parse {nv} into a Semantic Version")
+                        })?;
                         // pre-release label 이 있으면 현재 브랜치 label 과 일치해야 함.
                         // (.NET IsMatchForBranchSpecificLabel 동작)
                         let label_ok =
