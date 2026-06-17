@@ -1306,6 +1306,31 @@ commit "chore: y"
 commit "feat: z"
 record
 
+# branches.X.is-release-branch: true - custom 브랜치를 release 로 취급해
+# VersionInBranchName 전략이 활성화되고 브랜치명(custom/2.0.0)에서 2.0.0 추출.
+newrepo cfg_is_release_branch main
+writeconfig 'branches:
+  custom:
+    regex: "^custom/"
+    is-release-branch: true
+    label: rc'
+tagcommit v1.0.0
+branch custom/2.0.0; commit b
+record
+
+# branches.X.is-main-branch: true - custom 브랜치를 main 으로 취급(VersionInBranchName
+# 비활성, main 처럼 Patch 증분).
+newrepo cfg_is_main_branch main
+writeconfig 'branches:
+  custom:
+    regex: "^custom/"
+    is-main-branch: true
+    increment: Patch
+    label: ""'
+tagcommit v1.0.0
+branch custom/x; commit b
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"

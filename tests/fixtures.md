@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **147**
+- 현재 시나리오 수: **151**
 - golden 생성/비교 모두 **캐시·부수효과 배제**: record 는 `/nocache /nonormalize`
   (.NET 이 저장소 refs/브랜치를 수정하지 못함), 비교(fixtures.rs)는 `calculate()`
   직접 호출. 검증 결과 .NET 호출 전후 refs/출력 동일, tar 에 .NET 흔적 없음.
@@ -135,6 +135,8 @@
 | cfg_source_branches_inherit | branches.custom.source-branches | [main](Major 상속 2.0.0) |
 | cfg_source_branches_label_inherit | source-branches label 상속 | label 미지정이 main "" 상속(2.0.0-1) |
 | cfg_custom_no_source | custom 브랜치 전 필드 미지정 | increment None(증분 없음)+label literal(1.0.0-{BranchName}) |
+| cfg_is_release_branch | branches.custom.is-release-branch | true(VersionInBranchName 활성, 2.0.0-rc) |
+| cfg_is_main_branch | branches.custom.is-main-branch | true(main 처럼 Patch, 1.0.1) |
 | cfg_gitflow_unknown | unknown 브랜치(misc/foo) | GitFlow |
 | cfg_githubflow_unknown | unknown 브랜치(misc/foo) | GitHubFlow |
 | cfg_release_mode_cd | branches.release.mode | ContinuousDeployment |
@@ -202,7 +204,7 @@ GitLabCi, GitHubActions(golden) + AppVeyor(body 단위 테스트). 즉 원본 15
 | mode (deployment) | ✅ ContinuousDelivery, ContinuousDeployment, ManualDeployment (전역·브랜치별) | — |
 | 워크플로 × unknown 브랜치 | ✅ GitFlow, GitHubFlow, TrunkBased(trunkbased_unknown_tagged) | — |
 | commit-message-incrementing | ✅ Enabled, Disabled, MergeMessageOnly | — |
-| *-version-bump-message | ✅ 기본(+semver), 커스텀 패턴(단일·복수 커밋), 기본 대체 (잘못된 정규식은 에러) | — |
+| *-version-bump-message (major/minor/patch/no-bump) | ✅ 기본(+semver: major/minor/patch/none), 커스텀 패턴(단일·복수 커밋), 기본 대체 (잘못된 정규식은 에러) | — |
 | tag-prefix | ✅ 기본, "ver", 빈값 (잘못된 정규식은 에러) | — |
 | next-version | ✅ full/pre-release/build-metadata(Strict), 부분/정수(Loose) | Strict+부분버전은 계산 에러(원본 동작) |
 | next-version 정수 보정 | ✅ "1"은 "1.0", "2"는 "2.0"(원본 setter) | — |
@@ -218,6 +220,10 @@ GitLabCi, GitHubActions(golden) + AppVeyor(body 단위 테스트). 즉 원본 15
 | prevent-increment.when-branch-merged | ✅ true(효과), false(기본과 동일) | — |
 | prevent-increment.when-current-commit-tagged | ✅ false(효과), true(.NET 확인) | — |
 | tracks-release-branches | ✅ true (develop) | — |
+| is-release-branch | ✅ true(custom 직접: cfg_is_release_branch), release 브랜치 간접 | — |
+| is-main-branch | ✅ true(custom 직접: cfg_is_main_branch), main/mainline 간접 | — |
+| branches.{}.regex | ✅ 커스텀(cfg_version_pattern_custom, cfg_*_custom 등) | — |
+| exec (version hook) | 우리 확장 기능(.NET 미지원), golden 무관 — 별도 단위/통합 검증 | — |
 | track-merge-target | ✅ false, true(.NET 확인, 기본과 동일) | — |
 | track-merge-message | ✅ true(기본), false | — |
 | tag-pre-release-weight | ✅ 60000 | — |
