@@ -975,6 +975,27 @@ tagcommit v1.2.3
 commit a
 record
 
+# pull-request 브랜치 + label-number-pattern: PR 번호를 pre-release 번호로 추출.
+newrepo cfg_pr_label_number main
+writeconfig 'workflow: GitHubFlow/v1'
+tagcommit v1.0.0
+branch pull/123/merge
+commit f1
+record
+
+# increment: Inherit (브랜치별) - feature 가 부모(main) 증분을 상속.
+# main 을 Major 로 두고 feature 가 Inherit 이면 feature 도 Major 기반.
+newrepo cfg_increment_inherit main
+writeconfig 'workflow: GitHubFlow/v1
+branches:
+  main:
+    increment: Major
+  feature:
+    increment: Inherit'
+tagcommit v1.0.0
+branch feature/x; commit f1
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"
