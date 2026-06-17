@@ -343,6 +343,11 @@ gen_all_agents(){
   gen_agent CodeBuild          "CODEBUILD_WEBHOOK_HEAD_REF=refs/heads/main"
   gen_agent BuildKite          "BUILDKITE=true"
   gen_agent SpaceAutomation    "JB_SPACE_PROJECT_KEY=k"
+  # EnvRun 은 ENVRUN_DATABASE 경로의 파일이 실제 존재해야 감지된다.
+  echo db > "$STAGE/envrun.db"
+  gen_agent EnvRun             "ENVRUN_DATABASE=$STAGE/envrun.db"
+  # TravisCI 는 TRAVIS=true 와 CI=true 가 모두 있어야 감지된다.
+  gen_agent TravisCi           "TRAVIS=true CI=true"
 }
 gen_all_agents
 

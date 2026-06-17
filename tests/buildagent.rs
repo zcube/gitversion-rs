@@ -53,6 +53,8 @@ fn build_agents_match_real_gitversion() {
         "CodeBuild",
         "BuildKite",
         "SpaceAutomation",
+        "EnvRun",
+        "TravisCi",
     ];
     let mut failures = Vec::new();
     let mut checked = 0;

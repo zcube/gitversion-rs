@@ -180,7 +180,7 @@ fn key_value_line(name: &str, value: &str) -> Vec<String> {
 struct TravisCi;
 impl BuildAgent for TravisCi {
     fn name(&self) -> &'static str {
-        "TravisCI"
+        "TravisCi"
     }
     fn set_output_variable(&self, name: &str, value: &str) -> Vec<String> {
         key_value_line(name, value)
@@ -379,6 +379,25 @@ impl BuildAgent for AppVeyor {
     }
 }
 
+impl AppVeyor {
+    /// 원본 AppVeyor 는 stdout 명령이 아니라 REST API(PUT api/build,
+    /// POST api/build/variables)로 동작하므로 buildserver stdout golden 으로는
+    /// 비교할 수 없다. 대신 원본이 보내는 요청 body(JSON) 형식을 그대로 만들어
+    /// 단위 테스트로 검증한다(실제 전송은 환경 의존이라 하지 않는다).
+    #[cfg(test)]
+    fn build_number_body(vars: &VersionVariables, build_number: &str) -> String {
+        format!(
+            r#"{{"version":"{}.build.{}"}}"#,
+            vars.full_sem_ver, build_number
+        )
+    }
+
+    #[cfg(test)]
+    fn output_variable_body(name: &str, value: &str) -> String {
+        format!(r#"{{"name":"GitVersion_{name}","value":"{value}"}}"#)
+    }
+}
+
 /// 에이전트 이름(GetType().Name)으로 인스턴스 생성. 테스트/명시 선택용.
 pub fn by_name(name: &str) -> Option<Box<dyn BuildAgent>> {
     let agent: Box<dyn BuildAgent> = match name {
@@ -387,7 +406,7 @@ pub fn by_name(name: &str) -> Option<Box<dyn BuildAgent>> {
         "AzurePipelines" => Box::new(AzurePipelines),
         "ContinuaCi" => Box::new(ContinuaCi),
         "EnvRun" => Box::new(EnvRun),
-        "TravisCI" => Box::new(TravisCi),
+        "TravisCI" | "TravisCi" => Box::new(TravisCi),
         "Drone" => Box::new(Drone),
         "GitLabCi" => Box::new(GitLabCi),
         "Jenkins" => Box::new(Jenkins),
@@ -453,6 +472,23 @@ mod tests {
             full_sem_ver: "1.0.1-1".into(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn appveyor_http_body_matches_dotnet() {
+        // 원본 AppVeyor 의 PUT api/build / POST api/build/variables 요청 body 형식.
+        let vars = VersionVariables {
+            full_sem_ver: "1.2.3-beta.1".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            AppVeyor::build_number_body(&vars, "42"),
+            r#"{"version":"1.2.3-beta.1.build.42"}"#
+        );
+        assert_eq!(
+            AppVeyor::output_variable_body("Major", "1"),
+            r#"{"name":"GitVersion_Major","value":"1"}"#
+        );
     }
 
     #[test]
