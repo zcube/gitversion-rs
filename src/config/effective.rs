@@ -33,6 +33,15 @@ pub fn find_branch_config<'a>(
     unknown
 }
 
+/// next-version 정규화. 원본 `GitVersionConfiguration.NextVersion` setter 는 값이
+/// 정수면 `"{major}.0"` 으로 보정한다(예: "1" 은 "1.0", "2" 는 "2.0"). 그 외는 그대로.
+fn normalize_next_version(value: &str) -> String {
+    match value.trim().parse::<i64>() {
+        Ok(major) => format!("{major}.0"),
+        Err(_) => value.to_string(),
+    }
+}
+
 /// 브랜치 정규식의 named capture, `{env:VAR}`, `?? fallback` 으로 label 을 치환.
 /// 원본 Formatting/StringFormatWithExtension.cs 의 동작을 단순화해 옮긴다.
 fn resolve_label(label: &str, regex_src: &Option<String>, branch_name: &str) -> String {
@@ -236,7 +245,7 @@ impl EffectiveConfiguration {
                 .version_in_branch_pattern
                 .clone()
                 .unwrap_or_else(|| r"(?<version>[vV]?\d+(\.\d+)?(\.\d+)?).*".into()),
-            next_version: config.next_version.clone(),
+            next_version: config.next_version.as_deref().map(normalize_next_version),
             semantic_version_format: config
                 .semantic_version_format
                 .unwrap_or(SemanticVersionFormat::Strict),
@@ -306,6 +315,16 @@ mod tests {
         assert!(result.is_some());
         let (key, _) = result.unwrap();
         assert_eq!(key, "develop");
+    }
+
+    #[test]
+    fn normalize_next_version_pads_integer() {
+        // 원본 setter: 정수는 "{major}.0" 으로 보정, 그 외는 그대로.
+        assert_eq!(normalize_next_version("1"), "1.0");
+        assert_eq!(normalize_next_version("2"), "2.0");
+        assert_eq!(normalize_next_version("1.0"), "1.0");
+        assert_eq!(normalize_next_version("1.2.3"), "1.2.3");
+        assert_eq!(normalize_next_version("1.0.0-beta"), "1.0.0-beta");
     }
 
     #[test]

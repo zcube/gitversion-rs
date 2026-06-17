@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **134**
+- 현재 시나리오 수: **135**
 - golden 생성/비교 모두 **캐시·부수효과 배제**: record 는 `/nocache /nonormalize`
   (.NET 이 저장소 refs/브랜치를 수정하지 못함), 비교(fixtures.rs)는 `calculate()`
   직접 호출. 검증 결과 .NET 호출 전후 refs/출력 동일, tar 에 .NET 흔적 없음.
@@ -129,6 +129,7 @@
 | cfg_release_mode_cd | branches.release.mode | ContinuousDeployment |
 | cfg_develop_mode_manual | branches.develop.mode | ManualDeployment |
 | cfg_nextversion_loose_partial | semantic-version-format + next-version | Loose + "1"(1.0.0) |
+| cfg_nextver_integer | next-version 정수 | 2(setter 가 "2.0" 보정) |
 | cfg_nextver_build | next-version | "1.0.0+build5"(build metadata) |
 | cfg_nextver_prerelease | next-version | "1.0.0-beta.3"(label 불일치 무시) |
 | cfg_empty_tagprefix | tag-prefix | ""(빈 prefix, v태그 무시) |
@@ -180,7 +181,8 @@
 | commit-message-incrementing | ✅ Enabled, Disabled, MergeMessageOnly | — |
 | *-version-bump-message | ✅ 기본(+semver) (잘못된 정규식은 에러) | ❌ 커스텀 bump 패턴 |
 | tag-prefix | ✅ 기본, "ver", 빈값 (잘못된 정규식은 에러) | — |
-| next-version | ✅ full/pre-release/build-metadata(Strict), 부분(Loose) | Strict+부분버전은 계산 에러(원본 동작) |
+| next-version | ✅ full/pre-release/build-metadata(Strict), 부분/정수(Loose) | Strict+부분버전은 계산 에러(원본 동작) |
+| next-version 정수 보정 | ✅ "1"은 "1.0", "2"는 "2.0"(원본 setter) | — |
 | semantic-version-format | ✅ Strict, Loose | — |
 | commit-date-format | ✅ 커스텀 | — |
 | ignore | ✅ sha, commits-before, paths | — |

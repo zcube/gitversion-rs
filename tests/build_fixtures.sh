@@ -1091,6 +1091,13 @@ next-version: "1"'
 commit a; commit b
 record
 
+# 정수 next-version(2) + Loose: 원본 setter 가 "2.0" 으로 보정 후 2.0.0 으로 파싱.
+newrepo cfg_nextver_integer main
+writeconfig 'semantic-version-format: Loose
+next-version: 2'
+commit a; commit b
+record
+
 # next-version + build metadata("1.0.0+build5"): build 부분이 있어도 정상 파싱.
 newrepo cfg_nextver_build main
 writeconfig 'next-version: "1.0.0+build5"'
