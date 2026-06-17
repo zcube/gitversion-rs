@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **145**
+- 현재 시나리오 수: **146**
 - golden 생성/비교 모두 **캐시·부수효과 배제**: record 는 `/nocache /nonormalize`
   (.NET 이 저장소 refs/브랜치를 수정하지 못함), 비교(fixtures.rs)는 `calculate()`
   직접 호출. 검증 결과 .NET 호출 전후 refs/출력 동일, tar 에 .NET 흔적 없음.
@@ -126,6 +126,7 @@
 | cfg_increment_inherit | branches.feature.increment | Inherit(부모 Major 상속) |
 | cfg_branch_increment_none | branches.main.increment | None(1.0.0 유지) |
 | cfg_assembly_file_scheme_none | assembly-file-versioning-scheme | None(빈 문자열) |
+| cfg_assembly_file_scheme_patchtag | assembly-file-versioning-scheme | MajorMinorPatchTag(1.2.4.1) |
 | cfg_label_number_custom | branches.feature.label-number-pattern | 커스텀 |
 | cfg_assembly_file_scheme_major | assembly-file-versioning-scheme | Major |
 | cfg_track_merge_target_false | branches.develop.track-merge-target | false |
@@ -183,11 +184,11 @@
 | 설정 키 | 테스트된 값 | 미테스트 값 |
 |---|---|---|
 | workflow | ✅ GitFlow(기본), GitHubFlow/v1, TrunkBased/preview1 | — |
-| strategies | ✅ Mainline, ConfiguredNextVersion 등 | ❌ 개별 조합 일부 |
-| increment (전역) | ✅ Major, None, Patch(기본) | ❌ Minor(직접), Inherit |
+| strategies | ✅ Mainline, ConfiguredNextVersion, TaggedCommit 등 주요 조합 | 전체 2^5 조합은 미열거 |
+| increment (전역) | ✅ Major, Minor, None (모두 브랜치 increment 가 우선해 main 은 1.0.1) | — |
 | increment (브랜치별 직접) | ✅ Major, Minor, None, Inherit | — |
 | mode (deployment) | ✅ ContinuousDelivery, ContinuousDeployment, ManualDeployment (전역·브랜치별) | — |
-| 워크플로 × unknown 브랜치 | ✅ GitFlow, GitHubFlow | ❌ TrunkBased unknown(별도 있음) |
+| 워크플로 × unknown 브랜치 | ✅ GitFlow, GitHubFlow, TrunkBased(trunkbased_unknown_tagged) | — |
 | commit-message-incrementing | ✅ Enabled, Disabled, MergeMessageOnly | — |
 | *-version-bump-message | ✅ 기본(+semver), 커스텀 패턴(단일·복수 커밋), 기본 대체 (잘못된 정규식은 에러) | — |
 | tag-prefix | ✅ 기본, "ver", 빈값 (잘못된 정규식은 에러) | — |
@@ -198,14 +199,14 @@
 | ignore | ✅ sha, commits-before, paths | — |
 | assembly-versioning-scheme | ✅ Major, MajorMinor, MajorMinorPatch, MajorMinorPatchTag, None | — |
 | assembly-versioning-format | ✅ 커스텀, 알 수 없는 토큰은 에러(원본 동작) | — |
-| assembly-file-versioning-scheme | ✅ Major, MajorMinor, None | ❌ MajorMinorPatch 등 |
+| assembly-file-versioning-scheme | ✅ Major, MajorMinor, MajorMinorPatchTag, None | MajorMinorPatch(기본) |
 | assembly-file-versioning-format | ✅ 커스텀 | — |
 | assembly-informational-format | ✅ 커스텀 | — |
-| prevent-increment.of-merged-branch | ✅ true | ❌ false(명시) |
-| prevent-increment.when-branch-merged | ✅ true | ❌ false(명시) |
-| prevent-increment.when-current-commit-tagged | ✅ false | ❌ true(명시) |
+| prevent-increment.of-merged-branch | ✅ true(효과), false(기본과 동일) | — |
+| prevent-increment.when-branch-merged | ✅ true(효과), false(기본과 동일) | — |
+| prevent-increment.when-current-commit-tagged | ✅ false(효과), true(.NET 확인) | — |
 | tracks-release-branches | ✅ true (develop) | — |
-| track-merge-target | ✅ false | ❌ true(명시) |
+| track-merge-target | ✅ false, true(.NET 확인, 기본과 동일) | — |
 | track-merge-message | ✅ true(기본), false | — |
 | tag-pre-release-weight | ✅ 60000 | — |
 | pre-release-weight | ✅ 5000(커스텀) | — |
@@ -215,7 +216,7 @@
 | merge-message-formats | ✅ 내장 8종, 커스텀 | — |
 | source-branches | ✅ [main], increment Inherit 상속 | — |
 | is-source-branch-for | ✅ [custom], increment Inherit 상속 | — |
-| update-build-number | ❌ | ❌ (출력 영향 적음) |
+| update-build-number | — | 버전 출력 변수에 영향 없음(CI 빌드넘버 갱신 여부) |
 | semantic-version-threshold | ✅ 1.0.0 | — |
 
 ### 남은 갭 (출력 영향 적거나 변별 어려움)

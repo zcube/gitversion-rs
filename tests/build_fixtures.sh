@@ -1015,6 +1015,13 @@ tagcommit v1.2.3
 commit a
 record
 
+# assembly-file-versioning-scheme: MajorMinorPatchTag - AssemblySemFileVer=M.m.p.PreNum.
+newrepo cfg_assembly_file_scheme_patchtag main
+writeconfig 'assembly-file-versioning-scheme: MajorMinorPatchTag'
+tagcommit v1.2.3
+commit a
+record
+
 # branches.feature.label-number-pattern: 커스텀 - 비표준 번호 추출 패턴.
 newrepo cfg_label_number_custom main
 writeconfig 'workflow: GitHubFlow/v1
