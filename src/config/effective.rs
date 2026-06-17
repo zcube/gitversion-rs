@@ -98,6 +98,30 @@ fn resolve_label(label: &str, regex_src: &Option<String>, branch_name: &str) -> 
         .into_owned()
 }
 
+/// label 미지정 시 source-branches 부모에서 상속(원본 `BranchConfiguration.Inherit`
+/// 의 `Label = Label ?? parent.Label`). 자기 label 이 있으면 그대로, 없으면 source
+/// 부모를 순회하며 첫 정의된 label 을 사용. 모두 없으면 None(전역 fallback 으로).
+fn inherit_label(
+    config: &GitVersionConfiguration,
+    bc: &BranchConfiguration,
+    depth: usize,
+) -> Option<String> {
+    if let Some(l) = &bc.label {
+        return Some(l.clone());
+    }
+    if depth > 8 {
+        return None;
+    }
+    for src in &bc.source_branches {
+        if let Some(src_bc) = config.branches.get(src) {
+            if let Some(l) = inherit_label(config, src_bc, depth + 1) {
+                return Some(l);
+            }
+        }
+    }
+    None
+}
+
 /// Increment == Inherit 를 source-branch 를 따라 해석.
 fn resolve_increment(
     config: &GitVersionConfiguration,
@@ -179,9 +203,7 @@ impl EffectiveConfiguration {
         let pi_global = config.prevent_increment.clone().unwrap_or_default();
         let coalesce_bool = |b: Option<bool>, g: Option<bool>| b.or(g).unwrap_or(false);
 
-        let raw_label = bc
-            .label
-            .clone()
+        let raw_label = inherit_label(config, &bc, 0)
             .or_else(|| config.label.clone())
             .unwrap_or_default();
         let label = resolve_label(&raw_label, &bc.regex, branch_name);

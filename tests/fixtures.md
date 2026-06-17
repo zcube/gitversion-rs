@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **142**
+- 현재 시나리오 수: **143**
 - golden 생성/비교 모두 **캐시·부수효과 배제**: record 는 `/nocache /nonormalize`
   (.NET 이 저장소 refs/브랜치를 수정하지 못함), 비교(fixtures.rs)는 `calculate()`
   직접 호출. 검증 결과 .NET 호출 전후 refs/출력 동일, tar 에 .NET 흔적 없음.
@@ -131,6 +131,7 @@
 | cfg_source_branches | branches.feature.source-branches | [main] |
 | cfg_is_source_branch_for | branches.main.is-source-branch-for | [custom](Major 상속 2.0.0) |
 | cfg_source_branches_inherit | branches.custom.source-branches | [main](Major 상속 2.0.0) |
+| cfg_source_branches_label_inherit | source-branches label 상속 | label 미지정이 main "" 상속(2.0.0-1) |
 | cfg_gitflow_unknown | unknown 브랜치(misc/foo) | GitFlow |
 | cfg_githubflow_unknown | unknown 브랜치(misc/foo) | GitHubFlow |
 | cfg_release_mode_cd | branches.release.mode | ContinuousDeployment |
@@ -225,13 +226,13 @@
   만 placeholder 로 쓰고(각 값 SanitizeName), capture 없으면 토큰을 literal 로 유지한다
   (예: 사용자 정의 `^custom/` + `{BranchName}` 은 그대로 `{BranchName}`). 세그먼트
   fallback 과 최종 전체 sanitize 는 제거. 원본 BuildLabelPlaceholders + FormatWith 동작.
-- **custom 브랜치의 미지정 필드 상속(보류)**: 원본 `BranchConfiguration.Inherit(parent)`
-  는 label·increment·mode 등 **모든 미지정 필드**를 source-branches 부모에서 `??` 로
-  채운다(`Label = Label ?? parent.Label`). 우리는 increment 만 source 상속(resolve_increment)
-  하고 label 등은 전역 fallback 한다. 그래서 custom 브랜치(사용자 정의 + 다중 필드 미지정)
-  에서 label/increment 가 원본과 다를 수 있다(예: custom + source-branches:[main] 일 때
-  원본은 label="" 상속, 우리는 전역 "{BranchName}"). EffectiveConfiguration 의 브랜치
-  Inherit 체인 전면 재설계가 필요한 대규모 작업이며, 실사용 프리셋은 모든 브랜치 필드가
-  정의되어 무관하므로 보류. label 을 명시하면 increment 상속은 일치한다.
+- **custom 브랜치 label/increment source 상속(구현됨)**: 원본 `BranchConfiguration.Inherit`
+  처럼 label 미지정 시 source-branches 부모에서 상속(inherit_label), increment Inherit 도
+  source 상속(resolve_increment). 예: custom + source-branches:[main] 은 main 의 label("")
+  과 increment(Major)를 상속해 2.0.0-1 (cfg_source_branches_label_inherit 로 검증).
+- **잔여(보류)**: custom 브랜치가 **source-branches 도 없고** increment 도 미지정인 경우,
+  원본은 증분하지 않으나(예: 1.0.0) 우리는 Patch fallback(1.0.1)한다. mode/track 등 그 외
+  미지정 필드의 source 상속도 미구현. 극히 드문 엣지(사용자 정의 브랜치 + 다중 필드 미지정 +
+  source 미지정)이고 실사용 프리셋은 모든 필드가 정의되어 무관하므로 보류.
 
 핵심 설정 키의 주요 값 분기는 모두 골든 테스트로 커버됨.

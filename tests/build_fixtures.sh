@@ -1081,6 +1081,20 @@ tagcommit v1.0.0
 branch custom/x; commit b
 record
 
+# source-branches 로 label 상속: custom(label 미지정)이 main(label="", Major)에서
+# label 과 increment 를 모두 상속해 2.0.0-1(label 없는 pre-release).
+newrepo cfg_source_branches_label_inherit main
+writeconfig 'branches:
+  main:
+    increment: Major
+  custom:
+    regex: "^custom/"
+    increment: Inherit
+    source-branches: [main]'
+tagcommit v1.0.0
+branch custom/x; commit b
+record
+
 # GitFlow unknown 브랜치(misc/foo): 명시 타입에 안 맞는 브랜치의 기본 동작.
 newrepo cfg_gitflow_unknown main
 tagcommit v1.0.0
