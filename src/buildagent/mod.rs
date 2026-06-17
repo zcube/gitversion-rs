@@ -45,7 +45,12 @@ fn base_integration(
     let mut out = Vec::new();
     if update_build_number {
         out.push(format!("Set Build Number for '{}'.", agent.name()));
-        out.push(agent.set_build_number(vars));
+        // set_build_number 가 빈 문자열인 에이전트(BuildKite, SpaceAutomation 등)는
+        // 빌드넘버 명령 라인을 출력하지 않는다(원본 동작).
+        let bn = agent.set_build_number(vars);
+        if !bn.is_empty() {
+            out.push(bn);
+        }
     }
     out.push(format!("Set Output Variables for '{}'.", agent.name()));
     for (key, value) in vars.to_map() {
@@ -243,13 +248,14 @@ impl BuildAgent for CodeBuild {
         key_value_line(name, value)
     }
     fn write_integration(&self, vars: &VersionVariables, ubn: bool) -> Vec<String> {
-        let out = base_integration(self, vars, ubn);
+        let mut out = base_integration(self, vars, ubn);
         write_properties_file(vars);
+        out.push("Outputting variables to 'gitversion.properties' ... ".into());
         out
     }
 }
 
-/// BitBucket Pipelines: 대문자 키, export 파일.
+/// BitBucket Pipelines: 대문자 키. properties(Bash)/ps1(Powershell) 파일과 상세 안내 출력.
 struct BitBucketPipelines;
 impl BuildAgent for BitBucketPipelines {
     fn name(&self) -> &'static str {
@@ -260,13 +266,33 @@ impl BuildAgent for BitBucketPipelines {
     }
     fn write_integration(&self, vars: &VersionVariables, ubn: bool) -> Vec<String> {
         let mut out = base_integration(self, vars, ubn);
+        let pf = "gitversion.properties";
+        let ps1 = "gitversion.ps1";
         let exports: Vec<String> = vars
             .to_map()
             .iter()
             .map(|(k, v)| format!("export GITVERSION_{}={v}", k.to_uppercase()))
             .collect();
-        let _ = std::fs::write("gitversion.properties", exports.join("\n") + "\n");
-        out.push("Outputting variables to 'gitversion.properties' ... ".into());
+        let _ = std::fs::write(pf, exports.join("\n") + "\n");
+        // 원본 BitBucketPipelines.WriteIntegration 의 안내 라인(Bash/Powershell).
+        out.push(format!("Outputting variables to '{pf}' for Bash,"));
+        out.push(format!("and to '{ps1}' for Powershell ... "));
+        out.push(
+            "To import the file into your build environment, add the following line to your build step:"
+                .into(),
+        );
+        out.push("Bash:".into());
+        out.push(format!("  - source {pf}"));
+        out.push("Powershell:".into());
+        out.push(format!("  - . .\\{ps1}"));
+        out.push(String::new());
+        out.push("To reuse the file across build steps, add the file as a build artifact:".into());
+        out.push("Bash:".into());
+        out.push("  artifacts:".into());
+        out.push(format!("    - {pf}"));
+        out.push("Powershell:".into());
+        out.push("  artifacts:".into());
+        out.push(format!("    - {ps1}"));
         out
     }
 }

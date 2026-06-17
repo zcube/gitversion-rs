@@ -11,18 +11,6 @@ use std::path::{Path, PathBuf};
 use flate2::read::GzDecoder;
 use gitversion_rs::{buildagent, config, git, version};
 
-/// 에이전트별 비교 대상 라인 접두어(golden 생성 시의 grep 필터와 동일).
-fn line_prefixes(agent: &str) -> &'static [&'static str] {
-    match agent {
-        "TeamCity" => &["##teamcity", "Set "],
-        "AzurePipelines" => &["##vso", "Set "],
-        "ContinuaCi" => &["@@continua", "Set "],
-        "MyGet" => &["##myget", "Set "],
-        "Drone" => &["GitVersion_", "Set "],
-        _ => &["Set "],
-    }
-}
-
 fn extract_fixtures() -> PathBuf {
     let archive = Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata/fixtures.tar.gz");
     assert!(
@@ -43,19 +31,29 @@ fn extract_fixtures() -> PathBuf {
     dest
 }
 
-fn keep(line: &str, prefixes: &[&str]) -> bool {
+fn keep(line: &str) -> bool {
     // UncommittedChanges 는 작업트리의 untracked/수정 파일에 의존하는 비결정적
-    // 값이라 비교에서 제외한다(포맷이 아닌 값 litter 문제).
-    if line.contains("UncommittedChanges") {
-        return false;
-    }
-    prefixes.iter().any(|p| line.starts_with(p))
+    // 값이라 비교에서 제외한다. golden 은 생성 시 로그/빈줄을 이미 제거했고, 우리
+    // write_integration 도 명령 라인만 만들므로 그 외에는 전체 라인을 비교한다.
+    // 키 대문자화(GITVERSION_UNCOMMITTEDCHANGES) 어댑터도 있으므로 대소문자 무관 비교.
+    !line.is_empty() && !line.to_uppercase().contains("UNCOMMITTEDCHANGES")
 }
 
 #[test]
 fn build_agents_match_real_gitversion() {
     let root = extract_fixtures();
-    let agents = ["TeamCity", "AzurePipelines", "ContinuaCi", "MyGet", "Drone"];
+    let agents = [
+        "TeamCity",
+        "AzurePipelines",
+        "ContinuaCi",
+        "MyGet",
+        "Drone",
+        "BitBucketPipelines",
+        "Jenkins",
+        "CodeBuild",
+        "BuildKite",
+        "SpaceAutomation",
+    ];
     let mut failures = Vec::new();
     let mut checked = 0;
 
@@ -89,12 +87,11 @@ fn build_agents_match_real_gitversion() {
                 continue;
             };
             let agent = buildagent::by_name(agent_name).expect("알 수 없는 에이전트");
-            let prefixes = line_prefixes(agent_name);
-            let golden_lines: Vec<&str> = golden.lines().filter(|l| keep(l, prefixes)).collect();
+            let golden_lines: Vec<&str> = golden.lines().filter(|l| keep(l)).collect();
             let mine: Vec<String> = agent
                 .write_integration(&vars, update_build_number)
                 .into_iter()
-                .filter(|l| keep(l, prefixes))
+                .filter(|l| keep(l))
                 .collect();
 
             if mine.len() != golden_lines.len() {

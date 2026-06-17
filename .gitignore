@@ -12,3 +12,7 @@ Cargo.lock.bak
 
 # Claude Code 세션/스케줄 데이터
 /.claude/
+
+# 빌드에이전트 테스트가 cwd 에 생성하는 산출물
+gitversion.properties
+gitversion.ps1

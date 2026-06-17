@@ -325,16 +325,26 @@ newrepo buildagent_repo main
 tagcommit v1.0.0; commit b
 record   # expected.json (일반 JSON)
 git -C "$CUR" remote add origin https://example.com/r.git
-gen_agent(){ # $1=AgentName  $2=env assignments  $3=grep filter
+# 각 CI 어댑터 golden 생성. 출력 형식이 어댑터마다 다르므로(##명령, @@명령,
+# env export, 값 라인 등) prefix 필터 대신 로그/빈줄만 제거한 전체 명령 라인을 저장한다.
+gen_agent(){ # $1=AgentName  $2=env assignments
   env $2 "$GV" "$CUR" /nocache /nonormalize /output buildserver 2>/dev/null \
-    | grep -E "$3" > "$CUR/agent_$1.txt" || true
-  printf '  buildagent/%-16s -> %s줄\n' "$1" "$(wc -l < "$CUR/agent_$1.txt" | tr -d ' ')"
+    | grep -vE "INFO |WARN |ERROR |^$" > "$CUR/agent_$1.txt" || true
+  printf '  buildagent/%-18s -> %s줄\n' "$1" "$(wc -l < "$CUR/agent_$1.txt" | tr -d ' ')"
 }
-gen_agent TeamCity       "TEAMCITY_VERSION=2020 Git_Branch=main" '^##teamcity|^Set '
-gen_agent AzurePipelines "TF_BUILD=True"                          '^##vso|^Set '
-gen_agent ContinuaCi     "ContinuaCI.Version=1"                   '^@@continua|^Set '
-gen_agent MyGet          "BuildRunner=MyGet"                      '^##myget|^Set '
-gen_agent Drone          "DRONE=true"                             '^GitVersion_|^Set '
+gen_all_agents(){
+  gen_agent TeamCity           "TEAMCITY_VERSION=2020 Git_Branch=main"
+  gen_agent AzurePipelines     "TF_BUILD=True"
+  gen_agent ContinuaCi         "ContinuaCI.Version=1"
+  gen_agent MyGet              "BuildRunner=MyGet"
+  gen_agent Drone              "DRONE=true"
+  gen_agent BitBucketPipelines "BITBUCKET_WORKSPACE=ws BITBUCKET_BRANCH=main"
+  gen_agent Jenkins            "JENKINS_URL=http://x BRANCH_NAME=main"
+  gen_agent CodeBuild          "CODEBUILD_WEBHOOK_HEAD_REF=refs/heads/main"
+  gen_agent BuildKite          "BUILDKITE=true"
+  gen_agent SpaceAutomation    "JB_SPACE_PROJECT_KEY=k"
+}
+gen_all_agents
 
 # update-build-number: false - 빌드넘버 갱신 명령("Set Build Number"/buildNumber)이
 # 출력에서 제외되어야 한다. 같은 저장소·에이전트로 golden 을 생성해 설정 반영을 검증.
@@ -343,11 +353,7 @@ writeconfig 'update-build-number: false'
 tagcommit v1.0.0; commit b
 record
 git -C "$CUR" remote add origin https://example.com/r.git
-gen_agent TeamCity       "TEAMCITY_VERSION=2020 Git_Branch=main" '^##teamcity|^Set '
-gen_agent AzurePipelines "TF_BUILD=True"                          '^##vso|^Set '
-gen_agent ContinuaCi     "ContinuaCI.Version=1"                   '^@@continua|^Set '
-gen_agent MyGet          "BuildRunner=MyGet"                      '^##myget|^Set '
-gen_agent Drone          "DRONE=true"                             '^GitVersion_|^Set '
+gen_all_agents
 
 # ignore.paths: docs/ 만 건드리는 커밋은 버전 계산에서 제외
 newrepo ignore_paths main
