@@ -113,7 +113,8 @@ pub struct Cli {
     #[arg(long, value_enum, default_value = "normal")]
     pub verbosity: Verbosity,
 
-    /// Write log output to a file (upstream `/l`). Logs append; stdout stays clean.
+    /// Write log output to a file (upstream `/l`), or `console` for stderr.
+    /// Logs append; stdout stays clean.
     #[arg(long = "log", short = 'l', value_name = "FILE")]
     pub log_file: Option<PathBuf>,
 

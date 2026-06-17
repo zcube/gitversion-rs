@@ -46,11 +46,18 @@ fn run() -> Result<()> {
     } else {
         args.verbosity.to_level()
     };
-    // 로그 대상: --log <FILE> 이면 파일(append), 아니면 stderr.
-    // stdout 은 항상 버전 결과 전용으로 비워 둔다(`$(gitversion ...)` 캡처가 깨끗하게 유지됨).
+    // 로그 대상: --log <FILE> 이면 파일(append), `--log console` 이면 콘솔(stderr),
+    // 미지정이면 stderr. stdout 은 항상 버전 결과 전용으로 비워 둔다
+    // (`$(gitversion ...)` 캡처가 깨끗하게 유지됨).
     let mut builder = env_logger::Builder::new();
     builder.filter_level(level).parse_default_env();
     match &args.log_file {
+        // 원본 GitVersion 의 `/l console` 대응: 파일이 아니라 콘솔(stderr)로 로그.
+        Some(path) if path.as_os_str().eq_ignore_ascii_case("console") => {
+            builder
+                .format_timestamp(None)
+                .target(env_logger::Target::Stderr);
+        }
         Some(path) => {
             let file = std::fs::OpenOptions::new()
                 .create(true)
