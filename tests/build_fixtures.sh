@@ -1052,6 +1052,35 @@ tagcommit v1.0.0
 branch feature/x; commit f1
 record
 
+# is-source-branch-for + increment Inherit: custom 이 main(Major)을 source 로 상속해
+# Major 증분(2.0.0). label 은 명시(cust)해 sanitize/fallback 변수를 배제.
+newrepo cfg_is_source_branch_for main
+writeconfig 'branches:
+  main:
+    increment: Major
+    is-source-branch-for: [custom]
+  custom:
+    regex: "^custom/"
+    increment: Inherit
+    label: cust'
+tagcommit v1.0.0
+branch custom/x; commit b
+record
+
+# source-branches 로 increment Inherit 상속: custom 이 main(Major) 상속(2.0.0).
+newrepo cfg_source_branches_inherit main
+writeconfig 'branches:
+  main:
+    increment: Major
+  custom:
+    regex: "^custom/"
+    increment: Inherit
+    source-branches: [main]
+    label: cust'
+tagcommit v1.0.0
+branch custom/x; commit b
+record
+
 # GitFlow unknown 브랜치(misc/foo): 명시 타입에 안 맞는 브랜치의 기본 동작.
 newrepo cfg_gitflow_unknown main
 tagcommit v1.0.0

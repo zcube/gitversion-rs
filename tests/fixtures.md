@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **140**
+- 현재 시나리오 수: **142**
 - golden 생성/비교 모두 **캐시·부수효과 배제**: record 는 `/nocache /nonormalize`
   (.NET 이 저장소 refs/브랜치를 수정하지 못함), 비교(fixtures.rs)는 `calculate()`
   직접 호출. 검증 결과 .NET 호출 전후 refs/출력 동일, tar 에 .NET 흔적 없음.
@@ -129,6 +129,8 @@
 | cfg_assembly_file_scheme_major | assembly-file-versioning-scheme | Major |
 | cfg_track_merge_target_false | branches.develop.track-merge-target | false |
 | cfg_source_branches | branches.feature.source-branches | [main] |
+| cfg_is_source_branch_for | branches.main.is-source-branch-for | [custom](Major 상속 2.0.0) |
+| cfg_source_branches_inherit | branches.custom.source-branches | [main](Major 상속 2.0.0) |
 | cfg_gitflow_unknown | unknown 브랜치(misc/foo) | GitFlow |
 | cfg_githubflow_unknown | unknown 브랜치(misc/foo) | GitHubFlow |
 | cfg_release_mode_cd | branches.release.mode | ContinuousDeployment |
@@ -208,15 +210,22 @@
 | label-number-pattern | ✅ 기본(PR 번호), 커스텀 | — |
 | version-in-branch-pattern | ✅ 기본, 커스텀(separator split) | — |
 | merge-message-formats | ✅ 내장 8종, 커스텀 | — |
-| source-branches | ✅ [main] | — |
-| is-source-branch-for | ❌ | ❌ 커스텀 |
+| source-branches | ✅ [main], increment Inherit 상속 | — |
+| is-source-branch-for | ✅ [custom], increment Inherit 상속 | — |
 | update-build-number | ❌ | ❌ (출력 영향 적음) |
 | semantic-version-threshold | ✅ 1.0.0 | — |
 
 ### 남은 갭 (출력 영향 적거나 변별 어려움)
-1. is-source-branch-for (source-branches 의 역방향 정의)
-2. track-merge-target: true (기본값 명시)
-3. assembly-file-versioning-scheme: MajorMinorPatch / MajorMinorPatchTag
-4. update-build-number (CI 빌드넘버 갱신 여부 — 버전 출력에 영향 없음)
+1. track-merge-target: true (기본값 명시)
+2. assembly-file-versioning-scheme: MajorMinorPatch / MajorMinorPatchTag
+3. update-build-number (CI 빌드넘버 갱신 여부 — 버전 출력에 영향 없음)
+
+### 알려진 차이 (재현 보류)
+- **custom 브랜치 + label 미지정**: config 에 정의된 사용자 브랜치가 label 을 생략하면
+  우리는 전역 label "{BranchName}"(브랜치명)을 적용하나, 원본은 비일관적이다
+  (source-branches 가 있으면 그 부모 label 상속, 없으면 "{BranchName}" 리터럴을
+  치환 없이 그대로 출력). 극히 드문 엣지이며 원본 자체가 비일관적이라 재현 보류.
+  실사용 프리셋(GitFlow/GitHubFlow/TrunkBased)은 모든 브랜치 label 이 정의되어 무관.
+  (label 을 명시하면 source-branches/is-source-branch-for 의 increment 상속은 일치)
 
 핵심 설정 키의 주요 값 분기는 모두 골든 테스트로 커버됨.
