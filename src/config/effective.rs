@@ -79,8 +79,12 @@ fn resolve_label(label: &str, regex_src: &Option<String>, branch_name: &str) -> 
         })
         .into_owned();
 
-    // SemVer pre-release 식별자와 파일시스템 안전을 위해 '/'와 '.'을 '-'로 교체.
-    out.replace(['/', '.'], "-")
+    // 원본 SanitizeName 규칙("[^a-zA-Z0-9-]"): 영숫자·하이픈이 아닌 문자를 모두
+    // '-'로 교체한다(예: "(no branch)" → "-no-branch-", "a/b.c_d" → "a-b-c-d").
+    Regex::new(r"[^a-zA-Z0-9-]")
+        .unwrap()
+        .replace_all(&out, "-")
+        .into_owned()
 }
 
 /// Increment == Inherit 를 source-branch 를 따라 해석.

@@ -1121,6 +1121,20 @@ branch feature/y; commit b
 git -C "$CUR" -c advice.detachedHead=false checkout -q "$(git -C "$CUR" rev-parse HEAD)"
 record
 
+# detached HEAD + 여러 브랜치 동일 커밋: BranchName="(no branch)", label sanitize 검증
+# ("(no branch)" 가 pre-release label 로 "-no-branch-" 로 정규화).
+newrepo detached_no_branch main
+tagcommit v1.0.0; commit b
+git -C "$CUR" branch feature/x
+git -C "$CUR" -c advice.detachedHead=false checkout -q "$(git -C "$CUR" rev-parse HEAD)"
+record
+
+# 브랜치명 언더스코어: feature/a_b 의 label 은 "a-b"(_ 가 - 로 sanitize, 원본 SanitizeName).
+newrepo branch_underscore_label main
+tagcommit v1.0.0
+branch feature/a_b; commit f1
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"
