@@ -92,7 +92,7 @@ checkout() { git -C "$CUR" checkout -q "$1"; }
 merge() { # $1=branch to merge, $2=message
   TICK=$((TICK + 60))
   GIT_AUTHOR_DATE="$TICK +0000" GIT_COMMITTER_DATE="$TICK +0000" \
-    git -C "$CUR" merge --no-ff -q "$1" -m "$2"
+    git -C "$CUR" merge --no-ff --no-verify -q "$1" -m "$2"
 }
 writeconfig() { printf '%s\n' "$1" > "$CUR/GitVersion.yml"; }
 writefile() { # $1=상대경로  $2=내용
@@ -785,6 +785,23 @@ newrepo numeric_prerelease_tag main
 commit a
 git -C "$CUR" tag v1.0.0-1
 commit b
+record
+
+# BitBucketPullv7 머지 메시지: "Pull request #N\n\nMerge in X from Y to Z" 멀티라인 포맷.
+# SourceBranch=release/2.0.0 에서 버전 2.0.0 을 추출해야 한다(MergeMessage 전략).
+newrepo merge_bitbucket_v7 main
+tagcommit v1.0.0
+branch release/2.0.0; commit r1; commit r2
+checkout main
+merge release/2.0.0 "$(printf 'Pull request #7: Release 2.0.0\n\nMerge in MYPROJ/myrepo from release/2.0.0 to main')"
+record
+
+# 4-part loose SemVer 태그(v1.2.3.4): 4번째 숫자는 commits-since-tag 로 해석되고
+# 코어는 1.2.3 으로 인식되어야 한다(원본 ParseLoose). 미지원이면 태그가 버려져 fallback.
+newrepo loose_four_part_tag main
+commit init
+git -C "$CUR" tag v1.2.3.4
+commit a; commit b
 record
 
 echo "압축: $OUT"

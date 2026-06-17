@@ -333,6 +333,9 @@ const BUILTIN_MERGE_FORMATS: &[&str] = &[
     r"^Finish (?<SourceBranch>[^\s]*)(?: into (?<TargetBranch>[^\s]*))*",
     // BitBucketPull
     r"^Merge pull request #(?<PullRequestNumber>\d+) (from|in) (?<Source>.*) from (?<SourceBranch>[^\s]*) to (?<TargetBranch>[^\s]*)",
+    // BitBucketPullv7 (멀티라인: "Pull request #N\n\nMerge in X from Y to Z").
+    // (?s) 전역 적용이므로 첫 줄/Source 는 [^\r\n] 으로 한정해 .NET 동작과 맞춘다.
+    r"^Pull request #(?<PullRequestNumber>\d+)[^\r\n]*\r?\n\r?\nMerge in (?<Source>[^\r\n]*) from (?<SourceBranch>[^\s]*) to (?<TargetBranch>[^\s]*)",
     // BitBucketCloudPull
     r"^Merged in (?<SourceBranch>[^\s]*) \(pull request #(?<PullRequestNumber>\d+)\)",
     // GitHubPull

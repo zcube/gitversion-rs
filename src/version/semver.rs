@@ -188,6 +188,10 @@ impl SemanticVersion {
             let re = regex::Regex::new(&format!("^({})", tag_prefix)).ok()?;
             re.replace(trimmed, "").into_owned()
         };
+        // 주의: 원본 ParseLooseRegex 에는 4번째 숫자 파트(FourthPart)가 있으나,
+        // 실제 태그/버전 파싱 경로(SemanticVersionFormat=Strict 가 기본)에서는
+        // `1.2.3.4` 같은 4-part 가 버전으로 인식되지 않는다(태그 무시 → fallback).
+        // 따라서 여기서도 4-part 는 매칭하지 않아 원본과 동작을 맞춘다.
         let re = regex::Regex::new(
             r"^(?<major>\d+)(\.(?<minor>\d+))?(\.(?<patch>\d+))?(-(?<tag>[0-9A-Za-z\-.]+))?(\+(?<meta>[0-9A-Za-z\-.]+))?$",
         )
@@ -362,6 +366,16 @@ mod tests {
         assert_eq!((v.major, v.minor, v.patch), (1, 2, 0));
         let v = SemanticVersion::parse_with("v1", "[vV]?", false).unwrap();
         assert_eq!((v.major, v.minor, v.patch), (1, 0, 0));
+    }
+
+    #[test]
+    fn loose_rejects_four_part_version() {
+        // 원본 GitVersion 의 태그 파싱(SemanticVersionFormat=Strict 기본)은 `1.2.3.4`
+        // 같은 4-part 를 버전으로 인식하지 않는다. 우리도 거부해 동작을 맞춘다.
+        assert!(SemanticVersion::parse_with("1.2.3.4", "[vV]?", false).is_none());
+        assert!(SemanticVersion::parse_with("v1.2.3.4", "[vV]?", false).is_none());
+        // 3-part 는 정상 파싱된다.
+        assert!(SemanticVersion::parse_with("1.2.3", "[vV]?", false).is_some());
     }
 
     #[test]
