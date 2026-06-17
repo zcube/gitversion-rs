@@ -253,6 +253,26 @@ fn parse_version(input: &str, eff: &EffectiveConfiguration) -> Option<SemanticVe
     SemanticVersion::parse_with(input, &eff.tag_prefix, strict)
 }
 
+/// 설정의 정규식 값들을 미리 컴파일 검증한다. 원본 GitVersion 은 잘못된
+/// tag-prefix / *-version-bump-message 정규식을 만나면 계산을 실패시키므로,
+/// 우리도 조용히 무시하지 않고 에러를 반환해 동작을 맞춘다. (version-in-branch-pattern
+/// 은 release 브랜치에서만 사용되어 main 등에서는 검증되지 않으므로 제외.)
+fn validate_config_regexes(eff: &EffectiveConfiguration) -> Result<()> {
+    let check = |label: &str, pat: &str| -> Result<()> {
+        Regex::new(pat)
+            .map(|_| ())
+            .map_err(|e| anyhow::anyhow!("Invalid {label} regex '{pat}': {e}"))
+    };
+    check("tag-prefix", &eff.tag_prefix)?;
+    if eff.commit_message_incrementing != CommitMessageIncrementMode::Disabled {
+        check("major-version-bump-message", &eff.major_bump_message)?;
+        check("minor-version-bump-message", &eff.minor_bump_message)?;
+        check("patch-version-bump-message", &eff.patch_bump_message)?;
+        check("no-bump-message", &eff.no_bump_message)?;
+    }
+    Ok(())
+}
+
 /// 메시지/브랜치명에서 버전 토큰 추출(원본 ReferenceNameExtensions).
 ///
 /// 원본은 브랜치명을 separator 로 split 한 각 part 에 `^{pattern}` 을 매칭한다.
@@ -479,6 +499,8 @@ pub fn calculate(
         None => (repo.head_commit()?, repo.current_branch_name()?),
     };
     let mut eff = EffectiveConfiguration::resolve(config, &branch_name);
+    // 잘못된 정규식 설정은 원본처럼 계산 에러로 처리한다(조용히 무시하지 않음).
+    validate_config_regexes(&eff)?;
     let ignore = IgnoreSet::from_config(config);
 
     // Mainline 전략이 활성화되어 있으면 per-commit 누적 방식으로 계산.
@@ -1306,6 +1328,26 @@ mod tests {
     fn default_eff() -> EffectiveConfiguration {
         let cfg = defaults::gitflow();
         EffectiveConfiguration::resolve(&cfg, "main")
+    }
+
+    #[test]
+    fn validate_config_regexes_rejects_bad_patterns() {
+        // 기본 설정은 통과.
+        let eff = default_eff();
+        assert!(validate_config_regexes(&eff).is_ok());
+        // 잘못된 tag-prefix 정규식은 에러(원본 동작).
+        let mut bad_prefix = default_eff();
+        bad_prefix.tag_prefix = "(unclosed".to_string();
+        assert!(validate_config_regexes(&bad_prefix).is_err());
+        // 잘못된 bump-message 정규식도 에러.
+        let mut bad_bump = default_eff();
+        bad_bump.major_bump_message = "[invalid".to_string();
+        assert!(validate_config_regexes(&bad_bump).is_err());
+        // commit-message-incrementing=Disabled 면 bump-message 는 검증하지 않는다.
+        let mut disabled = default_eff();
+        disabled.major_bump_message = "[invalid".to_string();
+        disabled.commit_message_incrementing = CommitMessageIncrementMode::Disabled;
+        assert!(validate_config_regexes(&disabled).is_ok());
     }
 
     #[test]

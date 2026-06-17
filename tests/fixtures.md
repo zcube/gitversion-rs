@@ -167,7 +167,8 @@
 | mode (deployment) | ✅ ContinuousDelivery, ContinuousDeployment, ManualDeployment (전역·브랜치별) | — |
 | 워크플로 × unknown 브랜치 | ✅ GitFlow, GitHubFlow | ❌ TrunkBased unknown(별도 있음) |
 | commit-message-incrementing | ✅ Enabled, Disabled, MergeMessageOnly | — |
-| tag-prefix | ✅ 기본, "ver", 빈값 | — |
+| *-version-bump-message | ✅ 기본(+semver) (잘못된 정규식은 에러) | ❌ 커스텀 bump 패턴 |
+| tag-prefix | ✅ 기본, "ver", 빈값 (잘못된 정규식은 에러) | — |
 | next-version | ✅ full/pre-release/build-metadata(Strict), 부분(Loose) | Strict+부분버전은 계산 에러(원본 동작) |
 | semantic-version-format | ✅ Strict, Loose | — |
 | commit-date-format | ✅ 커스텀 | — |
