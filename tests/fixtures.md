@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **116**
+- 현재 시나리오 수: **119**
 
 ## 픽스쳐 시나리오
 
@@ -116,6 +116,9 @@
 | cfg_branch_increment_none | branches.main.increment | None(1.0.0 유지) |
 | cfg_assembly_file_scheme_none | assembly-file-versioning-scheme | None(빈 문자열) |
 | cfg_label_number_custom | branches.feature.label-number-pattern | 커스텀 |
+| cfg_assembly_file_scheme_major | assembly-file-versioning-scheme | Major |
+| cfg_track_merge_target_false | branches.develop.track-merge-target | false |
+| cfg_source_branches | branches.feature.source-branches | [main] |
 
 ### 머지 메시지 / 태그 파싱 엣지
 | 시나리오 | 검증 내용 |
@@ -159,14 +162,14 @@
 | ignore | ✅ sha, commits-before, paths | — |
 | assembly-versioning-scheme | ✅ Major, MajorMinor, MajorMinorPatch, MajorMinorPatchTag, None | — |
 | assembly-versioning-format | ✅ 커스텀 | — |
-| assembly-file-versioning-scheme | ✅ MajorMinor, None | ❌ Major/MajorMinorPatch 등 |
+| assembly-file-versioning-scheme | ✅ Major, MajorMinor, None | ❌ MajorMinorPatch 등 |
 | assembly-file-versioning-format | ✅ 커스텀 | — |
 | assembly-informational-format | ✅ 커스텀 | — |
 | prevent-increment.of-merged-branch | ✅ true | ❌ false(명시) |
 | prevent-increment.when-branch-merged | ✅ true | ❌ false(명시) |
 | prevent-increment.when-current-commit-tagged | ✅ false | ❌ true(명시) |
 | tracks-release-branches | ✅ true (develop) | — |
-| track-merge-target | ❌ | ❌ true/false |
+| track-merge-target | ✅ false | ❌ true(명시) |
 | track-merge-message | ✅ true(기본), false | — |
 | tag-pre-release-weight | ✅ 60000 | — |
 | pre-release-weight | ✅ 5000(커스텀) | — |
@@ -174,12 +177,15 @@
 | label-number-pattern | ✅ 기본(PR 번호), 커스텀 | — |
 | version-in-branch-pattern | ✅ 기본, 커스텀(separator split) | — |
 | merge-message-formats | ✅ 내장 8종, 커스텀 | — |
-| source-branches / is-source-branch-for | ❌ | ❌ 커스텀 |
+| source-branches | ✅ [main] | — |
+| is-source-branch-for | ❌ | ❌ 커스텀 |
 | update-build-number | ❌ | ❌ (출력 영향 적음) |
 | semantic-version-threshold | ✅ 1.0.0 | — |
 
-### 다음 추가 대상 (우선순위)
-1. track-merge-target true/false
-2. source-branches / is-source-branch-for
-3. assembly-file-versioning-scheme 그 외 값 (Major/MajorMinorPatch)
-4. update-build-number (출력 영향 적음, 후순위)
+### 남은 갭 (출력 영향 적거나 변별 어려움)
+1. is-source-branch-for (source-branches 의 역방향 정의)
+2. track-merge-target: true (기본값 명시)
+3. assembly-file-versioning-scheme: MajorMinorPatch / MajorMinorPatchTag
+4. update-build-number (CI 빌드넘버 갱신 여부 — 버전 출력에 영향 없음)
+
+핵심 설정 키의 주요 값 분기는 모두 골든 테스트로 커버됨.

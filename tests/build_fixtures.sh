@@ -1022,6 +1022,33 @@ tagcommit v1.0.0
 branch feature/issue-42; commit f1
 record
 
+# assembly-file-versioning-scheme: Major - AssemblySemFileVer = Major.0.0.0.
+newrepo cfg_assembly_file_scheme_major main
+writeconfig 'assembly-file-versioning-scheme: Major'
+tagcommit v1.2.3
+commit a
+record
+
+# branches.develop.track-merge-target: false - 머지 타겟 추적 비활성 분기.
+newrepo cfg_track_merge_target_false main
+writeconfig 'branches:
+  develop:
+    track-merge-target: false'
+tagcommit v1.0.0
+branch develop; commit d1; commit d2
+record
+
+# branches.feature.source-branches: 명시 - feature 의 부모 브랜치 정의.
+newrepo cfg_source_branches main
+writeconfig 'workflow: GitHubFlow/v1
+branches:
+  feature:
+    source-branches:
+      - main'
+tagcommit v1.0.0
+branch feature/x; commit f1
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"
