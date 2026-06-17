@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **113**
+- 현재 시나리오 수: **116**
 
 ## 픽스쳐 시나리오
 
@@ -113,6 +113,9 @@
 | cfg_assembly_scheme_default | assembly-versioning-scheme | MajorMinorPatch |
 | cfg_pr_label_number | label-number-pattern | PR 번호 추출(pull/123/merge) |
 | cfg_increment_inherit | branches.feature.increment | Inherit(부모 Major 상속) |
+| cfg_branch_increment_none | branches.main.increment | None(1.0.0 유지) |
+| cfg_assembly_file_scheme_none | assembly-file-versioning-scheme | None(빈 문자열) |
+| cfg_label_number_custom | branches.feature.label-number-pattern | 커스텀 |
 
 ### 머지 메시지 / 태그 파싱 엣지
 | 시나리오 | 검증 내용 |
@@ -146,7 +149,7 @@
 | workflow | ✅ GitFlow(기본), GitHubFlow/v1, TrunkBased/preview1 | — |
 | strategies | ✅ Mainline, ConfiguredNextVersion 등 | ❌ 개별 조합 일부 |
 | increment (전역) | ✅ Major, None, Patch(기본) | ❌ Minor(직접), Inherit |
-| increment (브랜치별 직접) | ✅ Major, Minor, Inherit | ❌ None |
+| increment (브랜치별 직접) | ✅ Major, Minor, None, Inherit | — |
 | mode (deployment) | ✅ ContinuousDelivery, Manual, ContinuousDeployment | — |
 | commit-message-incrementing | ✅ Enabled, Disabled, MergeMessageOnly | — |
 | tag-prefix | ✅ 기본, "ver" | — |
@@ -156,7 +159,7 @@
 | ignore | ✅ sha, commits-before, paths | — |
 | assembly-versioning-scheme | ✅ Major, MajorMinor, MajorMinorPatch, MajorMinorPatchTag, None | — |
 | assembly-versioning-format | ✅ 커스텀 | — |
-| assembly-file-versioning-scheme | ✅ MajorMinor | ❌ 그 외 값 |
+| assembly-file-versioning-scheme | ✅ MajorMinor, None | ❌ Major/MajorMinorPatch 등 |
 | assembly-file-versioning-format | ✅ 커스텀 | — |
 | assembly-informational-format | ✅ 커스텀 | — |
 | prevent-increment.of-merged-branch | ✅ true | ❌ false(명시) |
@@ -168,7 +171,7 @@
 | tag-pre-release-weight | ✅ 60000 | — |
 | pre-release-weight | ✅ 5000(커스텀) | — |
 | label (브랜치) | ✅ 기본(alpha 등), 커스텀(preview) | — |
-| label-number-pattern | ✅ 기본(PR 번호 추출) | ❌ 커스텀 패턴 |
+| label-number-pattern | ✅ 기본(PR 번호), 커스텀 | — |
 | version-in-branch-pattern | ✅ 기본, 커스텀(separator split) | — |
 | merge-message-formats | ✅ 내장 8종, 커스텀 | — |
 | source-branches / is-source-branch-for | ❌ | ❌ 커스텀 |
@@ -178,7 +181,5 @@
 ### 다음 추가 대상 (우선순위)
 1. track-merge-target true/false
 2. source-branches / is-source-branch-for
-3. increment 브랜치별 None
-4. assembly-file-versioning-scheme 그 외 값 (Major/None 등)
-5. label-number-pattern 커스텀 패턴
-6. update-build-number (출력 영향 적음, 후순위)
+3. assembly-file-versioning-scheme 그 외 값 (Major/MajorMinorPatch)
+4. update-build-number (출력 영향 적음, 후순위)

@@ -996,6 +996,32 @@ tagcommit v1.0.0
 branch feature/x; commit f1
 record
 
+# branches.main.increment: None - 증분 안 함. 태그 후 커밋도 코어 동일(1.0.0).
+newrepo cfg_branch_increment_none main
+writeconfig 'branches:
+  main:
+    increment: None'
+tagcommit v1.0.0
+commit a
+record
+
+# assembly-file-versioning-scheme: None - AssemblySemFileVer 가 빈 문자열.
+newrepo cfg_assembly_file_scheme_none main
+writeconfig 'assembly-file-versioning-scheme: None'
+tagcommit v1.2.3
+commit a
+record
+
+# branches.feature.label-number-pattern: 커스텀 - 비표준 번호 추출 패턴.
+newrepo cfg_label_number_custom main
+writeconfig 'workflow: GitHubFlow/v1
+branches:
+  feature:
+    label-number-pattern: "[/-](?<number>[0-9]+)"'
+tagcommit v1.0.0
+branch feature/issue-42; commit f1
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"
