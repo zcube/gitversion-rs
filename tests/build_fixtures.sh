@@ -1107,6 +1107,18 @@ tagcommit v1.0.0
 branch custom/x; commit b
 record
 
+# Mainline + custom 브랜치(전 필드 미지정): mainline 의 trunk_default 도 resolve_increment
+# 기반이라 increment None(임의 Patch fallback 없음), label literal 로 원본과 일치.
+newrepo cfg_mainline_custom_no_source main
+writeconfig 'strategies:
+- Mainline
+branches:
+  custom:
+    regex: "^custom/"'
+tagcommit v1.0.0
+branch custom/x; commit b
+record
+
 # GitFlow unknown 브랜치(misc/foo): 명시 타입에 안 맞는 브랜치의 기본 동작.
 newrepo cfg_gitflow_unknown main
 tagcommit v1.0.0

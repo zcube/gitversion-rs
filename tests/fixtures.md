@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **144**
+- 현재 시나리오 수: **145**
 - golden 생성/비교 모두 **캐시·부수효과 배제**: record 는 `/nocache /nonormalize`
   (.NET 이 저장소 refs/브랜치를 수정하지 못함), 비교(fixtures.rs)는 `calculate()`
   직접 호출. 검증 결과 .NET 호출 전후 refs/출력 동일, tar 에 .NET 흔적 없음.
@@ -69,6 +69,7 @@
 | mainline_manual | Manual 모드 |
 | mainline_long / mainline_tag_mixed / mainline_deep_feature | 깊은 체인 / 혼합 +semver |
 | mainline_when_branch_merged | when-branch-merged=true 증분 미적용 |
+| cfg_mainline_custom_no_source | custom 전 필드 미지정, increment None+label literal(1.0.0-{BranchName}) |
 
 ### 버전 소스 / 증분 메시지
 | 시나리오 | 검증 내용 |
@@ -235,5 +236,10 @@
   (resolve_increment, resolve_inherit_via_git 둘 다). 예: custom + source 없음은
   1.0.0-{BranchName}(증분 없음). cfg_custom_no_source 로 검증.
 - 잔여: mode/track 등 그 외 미지정 필드의 source 상속은 미구현(드문 엣지, 프리셋엔 무관).
+- **mainline fallback 검토 완료**: mainline 도 임의 Patch/0.0.0 fallback 없음.
+  trunk_default 는 strategy_to_field(resolve_increment 결과)라 Inherit 미해결 시 None.
+  merge_branch_increment 는 병합 브랜치의 명시 increment 만 floor 로 적용(Inherit 면 None,
+  원본과 일치). mainline+custom 전 필드 미지정도 1.0.0-{BranchName} 로 원본 일치
+  (cfg_mainline_custom_no_source).
 
 핵심 설정 키의 주요 값 분기는 모두 골든 테스트로 커버됨.
