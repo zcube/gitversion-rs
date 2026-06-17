@@ -905,6 +905,44 @@ tagcommit v1.2.3
 commit a
 record
 
+# branches.feature.label: 커스텀 pre-release label - PreReleaseLabel 분기.
+newrepo cfg_branch_label_custom main
+writeconfig 'workflow: GitHubFlow/v1
+branches:
+  feature:
+    label: preview'
+tagcommit v1.0.0
+branch feature/x; commit f1
+record
+
+# version-in-branch-pattern: 커스텀 - release/2.3.0 에서 버전 추출(yaml escape 회피 [.]).
+newrepo cfg_version_pattern_custom main
+writeconfig 'version-in-branch-pattern: "^[vV]?(?<version>[0-9]+[.][0-9]+[.][0-9]+)"'
+tagcommit v1.0.0
+branch release/2.3.0; commit r1
+record
+
+# merge-message-formats: 커스텀 포맷 - 비표준 머지 메시지에서 SourceBranch 추출.
+newrepo cfg_merge_format_custom main
+writeconfig 'merge-message-formats:
+  mycompany: "^Integrate (?<SourceBranch>[^ ]+) complete"'
+tagcommit v1.0.0
+branch release/2.0.0; commit r1; commit r2
+checkout main
+merge release/2.0.0 "Integrate release/2.0.0 complete"
+record
+
+# branches.main.track-merge-message: false - 머지 메시지 버전 추적 비활성.
+newrepo cfg_track_merge_msg_false main
+writeconfig 'branches:
+  main:
+    track-merge-message: false'
+tagcommit v1.0.0
+branch release/2.0.0; commit r1; commit r2
+checkout main
+merge release/2.0.0 "Merge branch '\''release/2.0.0'\''"
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"

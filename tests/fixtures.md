@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **103**
+- 현재 시나리오 수: **107**
 
 ## 픽스쳐 시나리오
 
@@ -103,6 +103,10 @@
 | cfg_mode_cd_branch | branches.main.mode | ContinuousDeployment |
 | cfg_assembly_file_scheme | assembly-file-versioning-scheme | MajorMinor |
 | cfg_assembly_info_format | assembly-informational-format | 커스텀 |
+| cfg_branch_label_custom | branches.feature.label | preview |
+| cfg_version_pattern_custom | version-in-branch-pattern | 커스텀(separator split 검증) |
+| cfg_merge_format_custom | merge-message-formats | 커스텀 |
+| cfg_track_merge_msg_false | branches.main.track-merge-message | false |
 
 ### 머지 메시지 / 태그 파싱 엣지
 | 시나리오 | 검증 내용 |
@@ -154,23 +158,23 @@
 | prevent-increment.when-current-commit-tagged | ✅ false | ❌ true(명시) |
 | tracks-release-branches | ✅ true (develop) | — |
 | track-merge-target | ❌ | ❌ true/false |
-| track-merge-message | ✅ true(기본, merge_pr) | ❌ false |
+| track-merge-message | ✅ true(기본), false | — |
 | tag-pre-release-weight | ✅ 60000 | — |
 | pre-release-weight | ❌ | ❌ 커스텀 |
-| label (브랜치) | ✅ 기본(alpha 등) | ❌ 커스텀 직접 |
+| label (브랜치) | ✅ 기본(alpha 등), 커스텀(preview) | — |
 | label-number-pattern | ❌ | ❌ 커스텀 |
-| version-in-branch-pattern | ✅ 기본 | ❌ 커스텀 |
-| merge-message-formats | ✅ 내장 8종 | ❌ 커스텀 추가 |
+| version-in-branch-pattern | ✅ 기본, 커스텀(separator split) | — |
+| merge-message-formats | ✅ 내장 8종, 커스텀 | — |
 | source-branches / is-source-branch-for | ❌ | ❌ 커스텀 |
 | update-build-number | ❌ | ❌ (출력 영향 적음) |
 | semantic-version-threshold | ✅ 1.0.0 | — |
 
 ### 다음 추가 대상 (우선순위)
-1. label 커스텀 / label-number-pattern
-2. version-in-branch-pattern 커스텀
-3. merge-message-formats 커스텀
-4. track-merge-message: false / track-merge-target
-5. source-branches / is-source-branch-for
-6. increment 브랜치별 Inherit (feature 가 부모 증분 상속)
-7. pre-release-weight 커스텀
-8. assembly-file-versioning-format 커스텀
+1. label-number-pattern 커스텀
+2. track-merge-target true/false
+3. source-branches / is-source-branch-for
+4. increment 브랜치별 Inherit (feature 가 부모 증분 상속)
+5. pre-release-weight 커스텀
+6. assembly-file-versioning-format 커스텀
+7. commit-message-incrementing: Enabled(명시)
+8. assembly-versioning-scheme: MajorMinorPatch(기본 명시)

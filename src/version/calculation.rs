@@ -253,16 +253,37 @@ fn parse_version(input: &str, eff: &EffectiveConfiguration) -> Option<SemanticVe
     SemanticVersion::parse_with(input, &eff.tag_prefix, strict)
 }
 
-/// 메시지/브랜치명에서 버전 토큰 추출. 추출된 토큰은 설정의
-/// semantic-version-format(Strict/Loose)에 맞춰 파싱한다(원본 ReferenceNameExtensions).
+/// 메시지/브랜치명에서 버전 토큰 추출(원본 ReferenceNameExtensions).
+///
+/// 원본은 브랜치명을 separator 로 split 한 각 part 에 `^{pattern}` 을 매칭한다.
+/// separator 는 `/` 를 포함하거나 `-` 를 포함하지 않으면 `/`, 아니면 `-`.
+/// 추출된 토큰은 설정의 semantic-version-format(Strict/Loose)에 맞춰 파싱한다.
 fn extract_version(text: &str, eff: &EffectiveConfiguration) -> Option<SemanticVersion> {
-    let re = Regex::new(&format!("(?i){}", eff.version_in_branch_pattern)).ok()?;
-    let caps = re.captures(text)?;
-    let raw = caps
-        .name("version")
-        .map(|m| m.as_str())
-        .unwrap_or_else(|| caps.get(0).unwrap().as_str());
-    parse_version(raw, eff)
+    let pattern = format!(
+        "(?i)^{}",
+        eff.version_in_branch_pattern.trim_start_matches('^')
+    );
+    let re = Regex::new(&pattern).ok()?;
+    let sep = if text.contains('/') || !text.contains('-') {
+        '/'
+    } else {
+        '-'
+    };
+    for part in text.split(sep) {
+        if part.is_empty() {
+            continue;
+        }
+        if let Some(caps) = re.captures(part) {
+            let raw = caps
+                .name("version")
+                .map(|m| m.as_str())
+                .unwrap_or_else(|| caps.get(0).unwrap().as_str());
+            if let Some(v) = parse_version(raw, eff) {
+                return Some(v);
+            }
+        }
+    }
+    None
 }
 
 /// Inherit 증분을 git 조상 기반으로 해석. 현재 브랜치가 분기된 source 브랜치
