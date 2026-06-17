@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **146**
+- 현재 시나리오 수: **147**
 - golden 생성/비교 모두 **캐시·부수효과 배제**: record 는 `/nocache /nonormalize`
   (.NET 이 저장소 refs/브랜치를 수정하지 못함), 비교(fixtures.rs)는 `calculate()`
   직접 호출. 검증 결과 .NET 호출 전후 refs/출력 동일, tar 에 .NET 흔적 없음.
@@ -170,10 +170,11 @@
 | detached_no_branch | detached HEAD + 여러 브랜치 동일 커밋, "(no branch)" label sanitize |
 | branch_underscore_label | feature/a_b 의 label 은 "a-b"(SanitizeName: 비영숫자는 -) |
 
-### 빌드 에이전트
+### 빌드 에이전트 (tests/buildagent.rs)
 | 시나리오 | 검증 내용 |
 |---|---|
-| buildagent_repo | 각 CI 어댑터 출력 golden |
+| buildagent_repo | 각 CI 어댑터 출력 golden (update-build-number 기본 true) |
+| buildagent_no_ubn | update-build-number: false 면 빌드넘버 갱신 명령 제외 |
 
 ---
 
@@ -216,7 +217,7 @@
 | merge-message-formats | ✅ 내장 8종, 커스텀 | — |
 | source-branches | ✅ [main], increment Inherit 상속 | — |
 | is-source-branch-for | ✅ [custom], increment Inherit 상속 | — |
-| update-build-number | — | 버전 출력 변수에 영향 없음(CI 빌드넘버 갱신 여부) |
+| update-build-number | ✅ true(빌드넘버 명령 포함), false(제외) | — |
 | semantic-version-threshold | ✅ 1.0.0 | — |
 
 ### 남은 갭 (출력 영향 적거나 변별 어려움)

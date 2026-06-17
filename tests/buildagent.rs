@@ -55,57 +55,65 @@ fn keep(line: &str, prefixes: &[&str]) -> bool {
 #[test]
 fn build_agents_match_real_gitversion() {
     let root = extract_fixtures();
-    let repo_dir = root.join("buildagent_repo");
-    assert!(
-        repo_dir.join("expected.json").exists(),
-        "buildagent_repo 시나리오가 없습니다"
-    );
-
-    // 우리 엔진으로 변수 계산.
-    let repo = git::GitRepo::discover(&repo_dir).unwrap();
-    let workdir = repo
-        .workdir()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| repo_dir.clone());
-    let configuration = config::loader::load(None, &workdir, Some(&workdir)).unwrap();
-    let vars = version::calculation::calculate(&repo, &configuration, None).unwrap();
-
     let agents = ["TeamCity", "AzurePipelines", "ContinuaCi", "MyGet", "Drone"];
     let mut failures = Vec::new();
     let mut checked = 0;
 
-    for agent_name in agents {
-        let golden_path = repo_dir.join(format!("agent_{agent_name}.txt"));
-        let Ok(golden) = fs::read_to_string(&golden_path) else {
-            failures.push(format!(
-                "[{agent_name}] golden 파일 없음: {}",
-                golden_path.display()
-            ));
+    // buildagent_repo: update-build-number 기본(true) / buildagent_no_ubn: false.
+    // 각 시나리오의 config 에서 update-build-number 를 읽어 write_integration 에 반영해,
+    // 빌드넘버 갱신 명령의 포함/제외가 설정대로 동작하는지 golden 과 비교한다.
+    for scenario in ["buildagent_repo", "buildagent_no_ubn"] {
+        let repo_dir = root.join(scenario);
+        if !repo_dir.join("expected.json").exists() {
+            failures.push(format!("{scenario} 시나리오가 없습니다"));
             continue;
-        };
-        let agent = buildagent::by_name(agent_name).expect("알 수 없는 에이전트");
-        let prefixes = line_prefixes(agent_name);
-        let golden_lines: Vec<&str> = golden.lines().filter(|l| keep(l, prefixes)).collect();
-        let mine: Vec<String> = agent
-            .write_integration(&vars, true)
-            .into_iter()
-            .filter(|l| keep(l, prefixes))
-            .collect();
+        }
 
-        if mine.len() != golden_lines.len() {
-            failures.push(format!(
-                "[{agent_name}] 라인 수 불일치: real={} mine={}",
-                golden_lines.len(),
-                mine.len()
-            ));
-            continue;
-        }
-        for (i, (g, m)) in golden_lines.iter().zip(mine.iter()).enumerate() {
-            if g != m {
-                failures.push(format!("[{agent_name}] line {i}: real={g:?} mine={m:?}"));
+        let repo = git::GitRepo::discover(&repo_dir).unwrap();
+        let workdir = repo
+            .workdir()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| repo_dir.clone());
+        let configuration = config::loader::load(None, &workdir, Some(&workdir)).unwrap();
+        // update-build-number 설정 반영(미지정이면 원본 기본값 true).
+        let update_build_number = configuration.update_build_number.unwrap_or(true);
+        let vars = version::calculation::calculate(&repo, &configuration, None).unwrap();
+
+        for agent_name in agents {
+            let golden_path = repo_dir.join(format!("agent_{agent_name}.txt"));
+            let Ok(golden) = fs::read_to_string(&golden_path) else {
+                failures.push(format!(
+                    "[{scenario}/{agent_name}] golden 파일 없음: {}",
+                    golden_path.display()
+                ));
+                continue;
+            };
+            let agent = buildagent::by_name(agent_name).expect("알 수 없는 에이전트");
+            let prefixes = line_prefixes(agent_name);
+            let golden_lines: Vec<&str> = golden.lines().filter(|l| keep(l, prefixes)).collect();
+            let mine: Vec<String> = agent
+                .write_integration(&vars, update_build_number)
+                .into_iter()
+                .filter(|l| keep(l, prefixes))
+                .collect();
+
+            if mine.len() != golden_lines.len() {
+                failures.push(format!(
+                    "[{scenario}/{agent_name}] 라인 수 불일치: real={} mine={}",
+                    golden_lines.len(),
+                    mine.len()
+                ));
+                continue;
             }
+            for (i, (g, m)) in golden_lines.iter().zip(mine.iter()).enumerate() {
+                if g != m {
+                    failures.push(format!(
+                        "[{scenario}/{agent_name}] line {i}: real={g:?} mine={m:?}"
+                    ));
+                }
+            }
+            checked += 1;
         }
-        checked += 1;
     }
 
     let _ = fs::remove_dir_all(&root);

@@ -336,6 +336,19 @@ gen_agent ContinuaCi     "ContinuaCI.Version=1"                   '^@@continua|^
 gen_agent MyGet          "BuildRunner=MyGet"                      '^##myget|^Set '
 gen_agent Drone          "DRONE=true"                             '^GitVersion_|^Set '
 
+# update-build-number: false - 빌드넘버 갱신 명령("Set Build Number"/buildNumber)이
+# 출력에서 제외되어야 한다. 같은 저장소·에이전트로 golden 을 생성해 설정 반영을 검증.
+newrepo buildagent_no_ubn main
+writeconfig 'update-build-number: false'
+tagcommit v1.0.0; commit b
+record
+git -C "$CUR" remote add origin https://example.com/r.git
+gen_agent TeamCity       "TEAMCITY_VERSION=2020 Git_Branch=main" '^##teamcity|^Set '
+gen_agent AzurePipelines "TF_BUILD=True"                          '^##vso|^Set '
+gen_agent ContinuaCi     "ContinuaCI.Version=1"                   '^@@continua|^Set '
+gen_agent MyGet          "BuildRunner=MyGet"                      '^##myget|^Set '
+gen_agent Drone          "DRONE=true"                             '^GitVersion_|^Set '
+
 # ignore.paths: docs/ 만 건드리는 커밋은 버전 계산에서 제외
 newrepo ignore_paths main
 tagcommit v1.0.0
