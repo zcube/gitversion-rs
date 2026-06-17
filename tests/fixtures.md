@@ -5,7 +5,7 @@
 `tests/fixtures.rs` 가 우리 엔진 출력과 비교한다.
 
 - 재생성: `GITVERSION_BIN=/opt/homebrew/bin/gitversion ./tests/build_fixtures.sh`
-- 현재 시나리오 수: **98**
+- 현재 시나리오 수: **103**
 
 ## 픽스쳐 시나리오
 
@@ -98,6 +98,11 @@
 | cfg_msg_inc_mergeonly | commit-message-incrementing | MergeMessageOnly |
 | cfg_increment_major | increment | Major (전역; main override 로 1.0.1) |
 | cfg_increment_none | increment | None (전역; main override 로 1.0.1) |
+| cfg_branch_increment_major | branches.main.increment | Major (실제 적용 2.0.0) |
+| cfg_branch_increment_minor | branches.main.increment | Minor (실제 적용 1.1.0) |
+| cfg_mode_cd_branch | branches.main.mode | ContinuousDeployment |
+| cfg_assembly_file_scheme | assembly-file-versioning-scheme | MajorMinor |
+| cfg_assembly_info_format | assembly-informational-format | 커스텀 |
 
 ### 머지 메시지 / 태그 파싱 엣지
 | 시나리오 | 검증 내용 |
@@ -131,8 +136,8 @@
 | workflow | ✅ GitFlow(기본), GitHubFlow/v1, TrunkBased/preview1 | — |
 | strategies | ✅ Mainline, ConfiguredNextVersion 등 | ❌ 개별 조합 일부 |
 | increment (전역) | ✅ Major, None, Patch(기본) | ❌ Minor(직접), Inherit |
-| increment (브랜치별 직접) | ❌ | ❌ Major/Minor/None/Inherit |
-| mode (deployment) | ✅ ContinuousDelivery, Manual (mainline) | ❌ ContinuousDeployment(직접) |
+| increment (브랜치별 직접) | ✅ Major, Minor | ❌ None, Inherit |
+| mode (deployment) | ✅ ContinuousDelivery, Manual, ContinuousDeployment | — |
 | commit-message-incrementing | ✅ Disabled, MergeMessageOnly | ❌ Enabled(명시) |
 | tag-prefix | ✅ 기본, "ver" | — |
 | next-version | ✅ 정수/부분/full/pre-release | — |
@@ -141,9 +146,9 @@
 | ignore | ✅ sha, commits-before, paths | — |
 | assembly-versioning-scheme | ✅ Major, MajorMinor, MajorMinorPatchTag, None | ❌ MajorMinorPatch(기본 명시) |
 | assembly-versioning-format | ✅ 커스텀 | — |
-| assembly-file-versioning-scheme | ❌ | ❌ 전체 |
+| assembly-file-versioning-scheme | ✅ MajorMinor | ❌ 그 외 값 |
 | assembly-file-versioning-format | ❌ | ❌ 전체 |
-| assembly-informational-format | ❌ | ❌ 커스텀 |
+| assembly-informational-format | ✅ 커스텀 | — |
 | prevent-increment.of-merged-branch | ✅ true | ❌ false(명시) |
 | prevent-increment.when-branch-merged | ✅ true | ❌ false(명시) |
 | prevent-increment.when-current-commit-tagged | ✅ false | ❌ true(명시) |
@@ -161,11 +166,11 @@
 | semantic-version-threshold | ✅ 1.0.0 | — |
 
 ### 다음 추가 대상 (우선순위)
-1. mode: ContinuousDeployment (직접)
-2. increment: 브랜치별 직접 적용 (Major/Minor/Inherit) — 전역 override 우회
-3. assembly-file-versioning-scheme / assembly-informational-format
-4. label 커스텀 / label-number-pattern
-5. version-in-branch-pattern 커스텀
-6. merge-message-formats 커스텀
-7. track-merge-message: false
-8. source-branches / is-source-branch-for
+1. label 커스텀 / label-number-pattern
+2. version-in-branch-pattern 커스텀
+3. merge-message-formats 커스텀
+4. track-merge-message: false / track-merge-target
+5. source-branches / is-source-branch-for
+6. increment 브랜치별 Inherit (feature 가 부모 증분 상속)
+7. pre-release-weight 커스텀
+8. assembly-file-versioning-format 커스텀

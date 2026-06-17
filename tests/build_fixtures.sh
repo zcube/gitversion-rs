@@ -864,6 +864,47 @@ tagcommit v1.0.0
 commit a
 record
 
+# branches.main.increment: Major - 브랜치별 직접 increment(전역과 달리 실제 적용).
+newrepo cfg_branch_increment_major main
+writeconfig 'branches:
+  main:
+    increment: Major'
+tagcommit v1.0.0
+commit a
+record
+
+# branches.main.increment: Minor - 브랜치별 직접 increment.
+newrepo cfg_branch_increment_minor main
+writeconfig 'branches:
+  main:
+    increment: Minor'
+tagcommit v1.0.0
+commit a
+record
+
+# branches.main.mode: ContinuousDeployment - 연속 배포 모드(deployment mode 분기).
+newrepo cfg_mode_cd_branch main
+writeconfig 'branches:
+  main:
+    mode: ContinuousDeployment'
+tagcommit v1.0.0
+commit a; commit b
+record
+
+# assembly-file-versioning-scheme: MajorMinor - AssemblySemFileVer 분기.
+newrepo cfg_assembly_file_scheme main
+writeconfig 'assembly-file-versioning-scheme: MajorMinor'
+tagcommit v1.2.3
+commit a
+record
+
+# assembly-informational-format: 커스텀 - InformationalVersion 포맷 분기.
+newrepo cfg_assembly_info_format main
+writeconfig "assembly-informational-format: '{Major}.{Minor}.{Patch}-info'"
+tagcommit v1.2.3
+commit a
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"
