@@ -188,18 +188,43 @@ impl SemanticVersion {
             let re = regex::Regex::new(&format!("^({})", tag_prefix)).ok()?;
             re.replace(trimmed, "").into_owned()
         };
-        // 주의: 원본 ParseLooseRegex 에는 4번째 숫자 파트(FourthPart)가 있으나,
-        // 실제 태그/버전 파싱 경로(SemanticVersionFormat=Strict 가 기본)에서는
-        // `1.2.3.4` 같은 4-part 가 버전으로 인식되지 않는다(태그 무시 → fallback).
-        // 따라서 여기서도 4-part 는 매칭하지 않아 원본과 동작을 맞춘다.
+        let body = body.trim();
+        if strict {
+            Self::parse_strict(body)
+        } else {
+            Self::parse_loose(body)
+        }
+    }
+
+    /// 원본 `ParseStrictRegex`: major.minor.patch 모두 필수, leading-zero 금지
+    /// (`0|[1-9]\d*`), SemVer 2.0 형식의 pre-release/build metadata.
+    fn parse_strict(body: &str) -> Option<Self> {
         let re = regex::Regex::new(
-            r"^(?<major>\d+)(\.(?<minor>\d+))?(\.(?<patch>\d+))?(-(?<tag>[0-9A-Za-z\-.]+))?(\+(?<meta>[0-9A-Za-z\-.]+))?$",
+            r"^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<tag>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?<meta>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$",
         )
         .ok()?;
-        let c = re.captures(body.trim())?;
-        if strict && (c.name("minor").is_none() || c.name("patch").is_none()) {
-            return None;
-        }
+        let c = re.captures(body)?;
+        Some(Self {
+            major: c.name("major")?.as_str().parse().ok()?,
+            minor: c.name("minor")?.as_str().parse().ok()?,
+            patch: c.name("patch")?.as_str().parse().ok()?,
+            pre_release_tag: c
+                .name("tag")
+                .map(|m| PreReleaseTag::parse(m.as_str()))
+                .unwrap_or_default(),
+            build_metadata: BuildMetaData::default(),
+        })
+    }
+
+    /// 원본 `ParseLooseRegex`: minor/patch 생략 가능, leading-zero 허용(`\d+`),
+    /// 4번째 숫자 파트(FourthPart)는 commits-since-tag 로 해석, pre-release 태그는
+    /// `+` 직전까지 느슨하게 받는다.
+    fn parse_loose(body: &str) -> Option<Self> {
+        let re = regex::Regex::new(
+            r"^(?<major>\d+)(\.(?<minor>\d+))?(\.(?<patch>\d+))?(\.(?<fourth>\d+))?(-(?<tag>[^+]*))?(\+(?<meta>.*))?$",
+        )
+        .ok()?;
+        let c = re.captures(body)?;
         let major = c.name("major")?.as_str().parse().ok()?;
         let minor = c
             .name("minor")
@@ -213,12 +238,16 @@ impl SemanticVersion {
             .name("tag")
             .map(|m| PreReleaseTag::parse(m.as_str()))
             .unwrap_or_default();
+        let build_metadata = BuildMetaData {
+            commits_since_tag: c.name("fourth").and_then(|m| m.as_str().parse().ok()),
+            ..Default::default()
+        };
         Some(Self {
             major,
             minor,
             patch,
             pre_release_tag,
-            build_metadata: BuildMetaData::default(),
+            build_metadata,
         })
     }
 
@@ -369,13 +398,25 @@ mod tests {
     }
 
     #[test]
-    fn loose_rejects_four_part_version() {
-        // 원본 GitVersion 의 태그 파싱(SemanticVersionFormat=Strict 기본)은 `1.2.3.4`
-        // 같은 4-part 를 버전으로 인식하지 않는다. 우리도 거부해 동작을 맞춘다.
-        assert!(SemanticVersion::parse_with("1.2.3.4", "[vV]?", false).is_none());
-        assert!(SemanticVersion::parse_with("v1.2.3.4", "[vV]?", false).is_none());
-        // 3-part 는 정상 파싱된다.
-        assert!(SemanticVersion::parse_with("1.2.3", "[vV]?", false).is_some());
+    fn strict_rejects_four_part_and_leading_zero() {
+        // Strict(원본 ParseStrictRegex): 4-part 거부, leading-zero 거부.
+        assert!(SemanticVersion::parse_with("1.2.3.4", "[vV]?", true).is_none());
+        assert!(SemanticVersion::parse_with("01.02.03", "[vV]?", true).is_none());
+        assert!(SemanticVersion::parse_with("1.2.3", "[vV]?", true).is_some());
+    }
+
+    #[test]
+    fn loose_accepts_four_part_and_leading_zero() {
+        // Loose(원본 ParseLooseRegex): 4번째 파트는 commits-since-tag 로 해석.
+        let v = SemanticVersion::parse_with("1.2.3.4", "[vV]?", false).unwrap();
+        assert_eq!((v.major, v.minor, v.patch), (1, 2, 3));
+        assert_eq!(v.build_metadata.commits_since_tag, Some(4));
+        // leading-zero 허용: 01.02.03 → 1.2.3.
+        let v = SemanticVersion::parse_with("01.02.03", "[vV]?", false).unwrap();
+        assert_eq!((v.major, v.minor, v.patch), (1, 2, 3));
+        // 3-part 는 commits-since-tag 가 없다.
+        let v = SemanticVersion::parse_with("1.2.3", "[vV]?", false).unwrap();
+        assert_eq!(v.build_metadata.commits_since_tag, None);
     }
 
     #[test]

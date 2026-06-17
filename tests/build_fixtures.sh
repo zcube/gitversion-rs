@@ -796,12 +796,42 @@ checkout main
 merge release/2.0.0 "$(printf 'Pull request #7: Release 2.0.0\n\nMerge in MYPROJ/myrepo from release/2.0.0 to main')"
 record
 
-# 4-part loose SemVer 태그(v1.2.3.4): 4번째 숫자는 commits-since-tag 로 해석되고
-# 코어는 1.2.3 으로 인식되어야 한다(원본 ParseLoose). 미지원이면 태그가 버려져 fallback.
+# 4-part 태그(v1.2.3.4) + 기본 Strict 포맷: Strict 는 4-part 를 버전으로 인식하지 않아
+# 태그가 버려지고 fallback(0.0.x) 이 된다(원본 ParseStrict).
 newrepo loose_four_part_tag main
 commit init
 git -C "$CUR" tag v1.2.3.4
 commit a; commit b
+record
+
+# semantic-version-format: Loose + 4-part 태그(v1.2.3.4): Strict 와 달리 코어 1.2.3 인식.
+newrepo loose_format_four_part main
+writeconfig 'semantic-version-format: Loose'
+commit init
+git -C "$CUR" tag v1.2.3.4
+commit a; commit b
+record
+
+# semantic-version-format: Loose + 부분 버전 태그(v1.2): 1.2.0 으로 인식되어야 한다.
+newrepo loose_format_partial_tag main
+writeconfig 'semantic-version-format: Loose'
+commit init
+git -C "$CUR" tag v1.2
+commit a; commit b
+record
+
+# 기본 Strict + 부분 버전 태그(v1.2): Strict 는 부분 버전을 거부해 태그가 버려진다.
+newrepo strict_partial_tag main
+commit init
+git -C "$CUR" tag v1.2
+commit a; commit b
+record
+
+# semantic-version-format: Loose + 부분 버전 브랜치명(release/1.3): 1.3.0 추출.
+newrepo loose_format_branch main
+writeconfig 'semantic-version-format: Loose'
+tagcommit v1.0.0
+branch release/1.3; commit r1
 record
 
 echo "압축: $OUT"

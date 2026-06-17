@@ -253,15 +253,16 @@ fn parse_version(input: &str, eff: &EffectiveConfiguration) -> Option<SemanticVe
     SemanticVersion::parse_with(input, &eff.tag_prefix, strict)
 }
 
-/// 메시지/브랜치명에서 버전 토큰 추출.
-fn extract_version(text: &str, pattern: &str, tag_prefix: &str) -> Option<SemanticVersion> {
-    let re = Regex::new(&format!("(?i){pattern}")).ok()?;
+/// 메시지/브랜치명에서 버전 토큰 추출. 추출된 토큰은 설정의
+/// semantic-version-format(Strict/Loose)에 맞춰 파싱한다(원본 ReferenceNameExtensions).
+fn extract_version(text: &str, eff: &EffectiveConfiguration) -> Option<SemanticVersion> {
+    let re = Regex::new(&format!("(?i){}", eff.version_in_branch_pattern)).ok()?;
     let caps = re.captures(text)?;
     let raw = caps
         .name("version")
         .map(|m| m.as_str())
         .unwrap_or_else(|| caps.get(0).unwrap().as_str());
-    SemanticVersion::parse(raw, tag_prefix)
+    parse_version(raw, eff)
 }
 
 /// Inherit 증분을 git 조상 기반으로 해석. 현재 브랜치가 분기된 source 브랜치
@@ -353,8 +354,7 @@ fn parse_merge_message(
     eff: &EffectiveConfiguration,
 ) -> Option<(String, SemanticVersion)> {
     let from_branch = |sb: &str| -> Option<SemanticVersion> {
-        SemanticVersion::parse(sb, &eff.tag_prefix)
-            .or_else(|| extract_version(sb, &eff.version_in_branch_pattern, &eff.tag_prefix))
+        parse_version(sb, eff).or_else(|| extract_version(sb, eff))
     };
 
     // 사용자 정의 포맷 우선, 이어서 8종 내장 포맷.
@@ -372,7 +372,7 @@ fn parse_merge_message(
         let branch = sb.as_str().to_string();
         if let Some(v) = caps
             .name("Version")
-            .and_then(|m| SemanticVersion::parse(m.as_str(), &eff.tag_prefix))
+            .and_then(|m| parse_version(m.as_str(), eff))
         {
             return Some((branch, v));
         }
@@ -518,11 +518,7 @@ pub fn calculate(
             }
             VersionStrategy::VersionInBranchName => {
                 if eff.is_release_branch {
-                    if let Some(v) = extract_version(
-                        &branch_name,
-                        &eff.version_in_branch_pattern,
-                        &eff.tag_prefix,
-                    ) {
+                    if let Some(v) = extract_version(&branch_name, &eff) {
                         candidates.push(BaseVersion::new(
                             "VersionInBranchName",
                             v,
@@ -1036,7 +1032,7 @@ fn gather_track_release(
         if !(re.is_match(&rb) || re.is_match(short)) {
             continue;
         }
-        if let Some(v) = extract_version(&rb, &eff.version_in_branch_pattern, &eff.tag_prefix) {
+        if let Some(v) = extract_version(&rb, eff) {
             let base_src = repo.merge_base(branch_name, &rb)?;
             out.push(BaseVersion::new(
                 format!("TrackReleaseBranches: {rb}"),
