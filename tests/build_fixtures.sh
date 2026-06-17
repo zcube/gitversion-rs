@@ -834,6 +834,36 @@ tagcommit v1.0.0
 branch release/1.3; commit r1
 record
 
+# commit-message-incrementing: Disabled - +semver 메시지를 무시하고 기본 증분만 적용.
+newrepo cfg_msg_inc_disabled main
+writeconfig 'commit-message-incrementing: Disabled'
+tagcommit v1.0.0
+commit "feat
++semver: major"
+record
+
+# commit-message-incrementing: MergeMessageOnly - 일반 커밋의 +semver 는 무시.
+newrepo cfg_msg_inc_mergeonly main
+writeconfig 'commit-message-incrementing: MergeMessageOnly'
+tagcommit v1.0.0
+commit "feat
++semver: minor"
+record
+
+# increment: Major (전역) - 기본 증분 필드를 Major 로. 태그 후 커밋은 2.0.0.
+newrepo cfg_increment_major main
+writeconfig 'increment: Major'
+tagcommit v1.0.0
+commit a
+record
+
+# increment: None (전역) - 증분하지 않음. 태그 후 커밋도 코어 동일.
+newrepo cfg_increment_none main
+writeconfig 'increment: None'
+tagcommit v1.0.0
+commit a
+record
+
 echo "압축: $OUT"
 tar -C "$STAGE" -czf "$OUT" .
 echo "완료. 시나리오 수: $(ls "$STAGE" | wc -l | tr -d ' ')"
