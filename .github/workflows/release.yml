@@ -34,6 +34,12 @@ jobs:
         with:
           ref: refs/tags/${{ github.event.inputs.tag || github.ref_name }}
           fetch-depth: 0 # gitversion 은 전체 히스토리와 태그가 필요하다.
+      - name: 기본 브랜치 ref 확보 (detached 태그에서 브랜치 인식)
+        # 태그를 detached 로 checkout 하면 HEAD 가 어느 브랜치 tip 도 아니라서
+        # gitversion 이 "(no branch)"(orphaned) 로 판정해 잘못된 버전/라벨을 낸다.
+        # 태그가 속한 main 을 로컬 ref 로 가져오면 HEAD 를 포함하는 reachable 브랜치로
+        # 인식된다(원본 GetBranchesContainingCommit 와 동일).
+        run: git fetch origin +refs/heads/main:refs/heads/main 2>/dev/null || true
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build gitversion-rs (bootstrap)
