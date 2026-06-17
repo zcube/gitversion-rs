@@ -13,6 +13,8 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum OutputFormat {
     Json,
+    /// 원본 `/output file`: JSON 을 `--outputfile` 로 기록(JSON 과 동일 렌더).
+    File,
     DotEnv,
     BuildServer,
 }

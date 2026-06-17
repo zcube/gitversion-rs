@@ -210,7 +210,11 @@ fn run() -> Result<()> {
             rendered.push('\n');
         }
         match fmt {
-            OutputFormat::Json => rendered.push_str(&output::generator::to_json(&variables)?),
+            // File 은 원본 `/output file` 대응: JSON 과 동일하게 렌더하고 emit 이
+            // --outputfile 로 파일에 기록한다.
+            OutputFormat::Json | OutputFormat::File => {
+                rendered.push_str(&output::generator::to_json(&variables)?)
+            }
             OutputFormat::DotEnv => rendered.push_str(&output::generator::to_dotenv(&variables)),
             OutputFormat::BuildServer => match buildagent::detect() {
                 Some(agent) => {
