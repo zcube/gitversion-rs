@@ -84,6 +84,38 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: refs/tags/${{ needs.release.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Install gitversion-rs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          GV_TAG=$(gh release view --repo zcube/gitversion-rs --json tagName -q .tagName)
+          case "${{ runner.os }}" in
+            Linux)
+              gh release download "$GV_TAG" --repo zcube/gitversion-rs \
+                --pattern "gitversion-rs-${GV_TAG}-x86_64-unknown-linux-musl.tar.gz" --dir /tmp/gv
+              tar xzf /tmp/gv/gitversion-rs-${GV_TAG}-x86_64-unknown-linux-musl.tar.gz -C /tmp/gv
+              sudo install -m 0755 /tmp/gv/gitversion-rs /usr/local/bin/gitversion-rs
+              ;;
+            macOS)
+              gh release download "$GV_TAG" --repo zcube/gitversion-rs \
+                --pattern "gitversion-rs-${GV_TAG}-${{ matrix.target }}.tar.gz" --dir /tmp/gv
+              tar xzf /tmp/gv/gitversion-rs-${GV_TAG}-${{ matrix.target }}.tar.gz -C /tmp/gv
+              sudo install -m 0755 /tmp/gv/gitversion-rs /usr/local/bin/gitversion-rs
+              ;;
+            Windows)
+              gh release download "$GV_TAG" --repo zcube/gitversion-rs \
+                --pattern "gitversion-rs-${GV_TAG}-x86_64-pc-windows-msvc.zip" --dir /tmp/gv
+              unzip /tmp/gv/gitversion-rs-${GV_TAG}-x86_64-pc-windows-msvc.zip -d /tmp/gv
+              cp /tmp/gv/gitversion-rs.exe /usr/local/bin/gitversion-rs.exe
+              ;;
+          esac
+          gitversion-rs --version
+
+      - name: Set version via gitversion-rs
+        run: gitversion-rs --updatepackagefiles
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
