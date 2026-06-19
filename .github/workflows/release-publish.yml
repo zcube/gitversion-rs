@@ -1,0 +1,186 @@
+name: Release Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    name: Publish release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.gv.outputs.SemVer }}
+      tag: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Fetch main branch
+        run: git fetch origin +refs/heads/main:refs/heads/main 2>/dev/null || true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build gitversion-rs (bootstrap)
+        run: cargo build --release --bin gitversion-rs
+
+      - name: Compute version
+        run: ./target/release/gitversion-rs --output build-server
+
+      - name: Export version output
+        id: gv
+        run: echo "SemVer=${GitVersion_SemVer}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          VERSION: ${{ steps.gv.outputs.SemVer }}
+        run: gh release edit "$TAG" --draft=false --title "v${VERSION}"
+
+  crates-io:
+    name: Publish to crates.io
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.publish.outputs.tag }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Inject version into Cargo.toml
+        shell: bash
+        env:
+          GV_VERSION: ${{ needs.publish.outputs.version }}
+        run: |
+          python3 - "$GV_VERSION" <<'PY'
+          import re, sys
+          v = sys.argv[1]
+          s = open("Cargo.toml", encoding="utf-8").read()
+          s = re.sub(r'(?m)^version = "[^"]*"', f'version = "{v}"', s, count=1)
+          open("Cargo.toml", "w", encoding="utf-8").write(s)
+          print(f"Cargo.toml version set to {v}")
+          PY
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --allow-dirty
+
+  homebrew:
+    name: Update Homebrew tap
+    needs: publish
+    if: ${{ !contains(needs.publish.outputs.version, '-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compute SHA256 for release archives
+        id: sha
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.publish.outputs.tag }}
+        run: |
+          mkdir -p /tmp/brew
+          sha() {
+            gh release download "$TAG" --repo zcube/gitversion-rs \
+              --pattern "$1" --dir /tmp/brew --clobber
+            sha256sum "/tmp/brew/$1" | awk '{print $1}'
+          }
+          echo "mac_arm=$(sha "gitversion-rs-${TAG}-aarch64-apple-darwin.tar.gz")" >> "$GITHUB_OUTPUT"
+          echo "mac_x86=$(sha "gitversion-rs-${TAG}-x86_64-apple-darwin.tar.gz")" >> "$GITHUB_OUTPUT"
+          echo "lin_arm=$(sha "gitversion-rs-${TAG}-aarch64-unknown-linux-gnu.tar.gz")" >> "$GITHUB_OUTPUT"
+          echo "lin_x86=$(sha "gitversion-rs-${TAG}-x86_64-unknown-linux-gnu.tar.gz")" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: zcube/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update formula
+        env:
+          TAG: ${{ needs.publish.outputs.tag }}
+          VERSION: ${{ needs.publish.outputs.version }}
+          MAC_ARM_SHA: ${{ steps.sha.outputs.mac_arm }}
+          MAC_X86_SHA: ${{ steps.sha.outputs.mac_x86 }}
+          LIN_ARM_SHA: ${{ steps.sha.outputs.lin_arm }}
+          LIN_X86_SHA: ${{ steps.sha.outputs.lin_x86 }}
+        run: |
+          mkdir -p homebrew-tap/Formula
+          python3 - <<'PY'
+          import os
+          v      = os.environ["VERSION"]
+          tag    = os.environ["TAG"]
+          base   = f"https://github.com/zcube/gitversion-rs/releases/download/{tag}"
+          formula = f'''class GitversionRs < Formula
+            desc "Rust port of GitVersion - semantic versioning from Git history"
+            homepage "https://github.com/zcube/gitversion-rs"
+            version "{v}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "{base}/gitversion-rs-{tag}-aarch64-apple-darwin.tar.gz"
+                sha256 "{os.environ["MAC_ARM_SHA"]}"
+              end
+              on_intel do
+                url "{base}/gitversion-rs-{tag}-x86_64-apple-darwin.tar.gz"
+                sha256 "{os.environ["MAC_X86_SHA"]}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "{base}/gitversion-rs-{tag}-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "{os.environ["LIN_ARM_SHA"]}"
+              end
+              on_intel do
+                url "{base}/gitversion-rs-{tag}-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "{os.environ["LIN_X86_SHA"]}"
+              end
+            end
+
+            def install
+              bin.install "gitversion-rs"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{{bin}}/gitversion-rs --version")
+            end
+          end
+          '''
+          open("homebrew-tap/Formula/gitversion-rs.rb", "w", encoding="utf-8").write(formula)
+          print(f"rendered gitversion-rs formula for {v}")
+          PY
+
+      - name: Commit and push formula
+        env:
+          VERSION: ${{ needs.publish.outputs.version }}
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/gitversion-rs.rb
+          if git diff --cached --quiet; then
+            echo "No formula changes."
+            exit 0
+          fi
+          git commit -m "chore: bump gitversion-rs to ${VERSION}"
+          git push

@@ -5,6 +5,9 @@ edition = "2021"
 rust-version = "1.88"
 description = "Rust port of GitVersion — calculates semantic versions from Git history. Full feature port with a Ratatui TUI."
 license = "MIT"
+repository = "https://github.com/zcube/gitversion-rs"
+homepage = "https://github.com/zcube/gitversion-rs"
+keywords = ["gitversion", "semver", "git", "versioning", "changelog"]
 default-run = "gitversion-rs"
 
 # 라이브러리 크레이트 이름은 gitversion-rs(임포트 시 gitversion_rs).

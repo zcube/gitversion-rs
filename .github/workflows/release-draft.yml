@@ -1,0 +1,159 @@
+name: Release Draft
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Create draft release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.gv.outputs.SemVer }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Fetch main branch
+        run: git fetch origin +refs/heads/main:refs/heads/main 2>/dev/null || true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build gitversion-rs (bootstrap)
+        run: cargo build --release --bin gitversion-rs
+
+      - name: Compute version
+        run: ./target/release/gitversion-rs --output build-server
+
+      - name: Export version output
+        id: gv
+        run: echo "SemVer=${GitVersion_SemVer}" >> "$GITHUB_OUTPUT"
+
+      - name: Set tag metadata
+        id: meta
+        run: echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Install git-cliff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CLIFF_TAG=$(gh release view --repo orhun/git-cliff --json tagName -q .tagName)
+          gh release download "$CLIFF_TAG" --repo orhun/git-cliff \
+            --pattern "git-cliff-*-x86_64-unknown-linux-musl.tar.gz" \
+            --dir /tmp/cliff
+          tar xzf /tmp/cliff/git-cliff-*-x86_64-unknown-linux-musl.tar.gz -C /tmp/cliff
+          find /tmp/cliff -maxdepth 2 -name "git-cliff" -type f \
+            -exec sudo install -m 0755 {} /usr/local/bin/git-cliff \;
+          git-cliff --version
+
+      - name: Generate changelog
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: git-cliff --tag "$TAG" --output CHANGELOG.md
+
+      - name: Create or update GitHub draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.gv.outputs.SemVer }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --draft --title "v${VERSION}" --notes-file CHANGELOG.md
+          else
+            gh release create "$TAG" --draft --title "v${VERSION}" --notes-file CHANGELOG.md
+          fi
+
+  build:
+    name: Build (${{ matrix.target }})
+    needs: release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu,   os: ubuntu-latest }
+          - { target: aarch64-unknown-linux-gnu,  os: ubuntu-latest }
+          - { target: x86_64-unknown-linux-musl,  os: ubuntu-latest }
+          - { target: x86_64-apple-darwin,        os: macos-latest }
+          - { target: aarch64-apple-darwin,       os: macos-latest }
+          - { target: x86_64-pc-windows-msvc,     os: windows-latest }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.release.outputs.tag }}
+
+      - name: Inject version into Cargo.toml
+        shell: bash
+        env:
+          GV_VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          python3 - "$GV_VERSION" <<'PY'
+          import re, sys
+          v = sys.argv[1]
+          s = open("Cargo.toml", encoding="utf-8").read()
+          s = re.sub(r'(?m)^version = "[^"]*"', f'version = "{v}"', s, count=1)
+          open("Cargo.toml", "w", encoding="utf-8").write(s)
+          print(f"Cargo.toml version set to {v}")
+          PY
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build and upload
+        uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: gitversion-rs
+          target: ${{ matrix.target }}
+          include: README.md,README.ko.md,README.ja.md,README.zh.md,LICENSE
+          archive: gitversion-rs-$tag-$target
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  sign:
+    name: Sign release artifacts
+    needs: [release, build]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Download artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          mkdir -p /tmp/artifacts
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "*.tar.gz" --pattern "*.zip" --dir /tmp/artifacts
+
+      - name: Generate checksums
+        working-directory: /tmp/artifacts
+        run: sha256sum gitversion-rs-* > checksums.txt
+
+      - name: Sign checksums
+        working-directory: /tmp/artifacts
+        run: cosign sign-blob --yes checksums.txt --bundle checksums.txt.sigstore.json
+
+      - name: Upload checksums and signature
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            /tmp/artifacts/checksums.txt /tmp/artifacts/checksums.txt.sigstore.json
