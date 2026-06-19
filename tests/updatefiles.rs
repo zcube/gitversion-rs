@@ -149,6 +149,49 @@ fn update_package_files_cargo_workspace_layout() {
 }
 
 #[test]
+fn update_package_files_cargo_workspace_syncs_internal_deps() {
+    // Full git-warden-style layout: root declares the version and an internal path dep;
+    // members inherit both the package version and the dependency via `workspace = true`.
+    let dir = temp_dir("updpkg-wsdeps");
+    write(
+        &dir.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"crates/*\"]\n\n\
+         [workspace.package]\nversion = \"0.0.1\"\n\n\
+         [workspace.dependencies]\n\
+         git-warden-core = { path = \"crates/git-warden-core\", version = \"0.0.1\" }\n",
+    );
+    write(
+        &dir.join("crates/git-warden/Cargo.toml"),
+        "[package]\nname = \"git-warden\"\nversion.workspace = true\n\n\
+         [dependencies]\ngit-warden-core.workspace = true\n",
+    );
+    write(
+        &dir.join("crates/git-warden-core/Cargo.toml"),
+        "[package]\nname = \"git-warden-core\"\nversion.workspace = true\n",
+    );
+
+    let updated = update_package_files(&vars("0.1.0"), &dir, &[]).unwrap();
+
+    // Only the root changes: it owns both the version and the path-dep requirement.
+    assert_eq!(
+        updated.len(),
+        1,
+        "only the workspace root should update: {updated:?}"
+    );
+    let root = read(&dir.join("Cargo.toml"));
+    assert!(root.contains("[workspace.package]\nversion = \"0.1.0\""));
+    assert!(root
+        .contains("git-warden-core = { path = \"crates/git-warden-core\", version = \"0.1.0\" }"));
+    // Inheriting members are untouched.
+    assert!(read(&dir.join("crates/git-warden/Cargo.toml")).contains("version.workspace = true"));
+    assert!(
+        read(&dir.join("crates/git-warden-core/Cargo.toml")).contains("version.workspace = true")
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn update_package_files_npm_workspace_layout() {
     // npm-style workspace: the private root has no version (skipped), members do.
     let dir = temp_dir("updpkg-npm");

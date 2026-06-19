@@ -44,7 +44,8 @@ variable.
 - **Package manifests**: `--updatepackagefiles` updates the version in `package.json` (Node.js),
   `Cargo.toml` (Rust, incl. `[workspace.package]`), and `pyproject.toml` (Python, PEP 621/Poetry)
   using format-preserving parsers (serde_json/toml_edit). Cargo workspace members that inherit
-  via `version.workspace = true` are left untouched
+  via `version.workspace = true` are left untouched, and internal path dependencies
+  (`{ path = "…", version = "…" }`) have their version requirement bumped in lockstep
 - **External command hooks (exec)**: like semantic-release's exec plugin, run shell commands in
   lifecycle hooks (`verify`/`prepare`/`publish`/`success`/`fail`). Version variables are exposed
   as `GitVersion_*` env vars and `{Variable}`/`{env:VAR}` templates. The `version` hook modifies

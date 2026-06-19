@@ -396,6 +396,34 @@ fn update_package_json(content: &str, version: &str) -> Result<Option<String>> {
     Ok(Some(out))
 }
 
+/// Sync the `version` of internal path dependencies in a dependency table to `version`.
+///
+/// An entry is treated as an internal (sibling) crate when it is a table with both a
+/// `path` and a string `version` — exactly the form crates.io validates on publish, e.g.
+/// `dep = { path = "crates/dep", version = "0.0.1" }`. External deps (no `path`) and
+/// inherited deps (`dep.workspace = true`, no string `version`) are left untouched.
+/// The value's surrounding formatting is preserved. Returns true if anything changed.
+fn sync_path_dep_versions(deps: &mut dyn toml_edit::TableLike, version: &str) -> bool {
+    let mut changed = false;
+    for (_key, item) in deps.iter_mut() {
+        let Some(dep) = item.as_table_like_mut() else {
+            continue;
+        };
+        if dep.get("path").is_none() {
+            continue;
+        }
+        if let Some(val) = dep.get_mut("version").and_then(|i| i.as_value_mut()) {
+            if val.is_str() {
+                let decor = val.decor().clone();
+                *val = toml_edit::Value::from(version);
+                *val.decor_mut() = decor;
+                changed = true;
+            }
+        }
+    }
+    changed
+}
+
 /// Update the version in Cargo.toml (format-preserving).
 ///
 /// Handles both plain packages and Cargo workspaces:
@@ -403,8 +431,11 @@ fn update_package_json(content: &str, version: &str) -> Result<Option<String>> {
 /// - `[workspace.package]` with a string `version` (the inherited version source) is updated.
 /// - A member that inherits via `version.workspace = true` is left untouched (its `version`
 ///   is not a string), so workspace inheritance is preserved rather than overwritten.
+/// - Internal path dependencies (`{ path = "...", version = "..." }`) in `[workspace.dependencies]`
+///   and `[dependencies]`/`[dev-dependencies]`/`[build-dependencies]` have their version
+///   requirement bumped in lockstep, so sibling crates in a monorepo still publish.
 ///
-/// Returns `None` when no string version field is present (nothing to update).
+/// Returns `None` when nothing needed updating.
 fn update_cargo_toml(content: &str, version: &str) -> Result<Option<String>> {
     let mut doc = content
         .parse::<toml_edit::DocumentMut>()
@@ -434,6 +465,22 @@ fn update_cargo_toml(content: &str, version: &str) -> Result<Option<String>> {
         .and_then(|p| p.as_table_mut())
     {
         changed |= update_string_version(ws_pkg);
+    }
+
+    // [workspace.dependencies] — internal path deps share the workspace version.
+    if let Some(ws_deps) = doc
+        .get_mut("workspace")
+        .and_then(|w| w.as_table_mut())
+        .and_then(|w| w.get_mut("dependencies"))
+        .and_then(|d| d.as_table_like_mut())
+    {
+        changed |= sync_path_dep_versions(ws_deps, version);
+    }
+    // Per-crate dependency tables (members declaring sibling path deps directly).
+    for table_name in ["dependencies", "dev-dependencies", "build-dependencies"] {
+        if let Some(deps) = doc.get_mut(table_name).and_then(|d| d.as_table_like_mut()) {
+            changed |= sync_path_dep_versions(deps, version);
+        }
     }
 
     Ok(if changed { Some(doc.to_string()) } else { None })
@@ -616,6 +663,51 @@ mod tests {
         // A member that inherits via `version.workspace = true` must NOT be rewritten.
         let src = "[package]\nname = \"member\"\nversion.workspace = true\n";
         assert!(update_cargo_toml(src, "1.2.3").unwrap().is_none());
+    }
+
+    #[test]
+    fn cargo_toml_workspace_syncs_internal_path_dep_versions() {
+        let src = "[workspace.package]\nversion = \"0.0.1\"\n\n\
+                   [workspace.dependencies]\n\
+                   git-warden-core = { path = \"crates/git-warden-core\", version = \"0.0.1\" }\n\
+                   serde = \"1\"\n\
+                   regex = { version = \"1\" }\n";
+        let out = update_cargo_toml(src, "0.1.0").unwrap().unwrap();
+        // Workspace version + the internal path dep are both bumped (formatting preserved).
+        assert!(out.contains("[workspace.package]\nversion = \"0.1.0\""));
+        assert!(out.contains(
+            "git-warden-core = { path = \"crates/git-warden-core\", version = \"0.1.0\" }"
+        ));
+        // External deps (no `path`) are untouched.
+        assert!(out.contains("serde = \"1\""));
+        assert!(out.contains("regex = { version = \"1\" }"));
+    }
+
+    #[test]
+    fn cargo_toml_member_syncs_sibling_path_dep() {
+        let src = "[package]\nname = \"app\"\nversion = \"0.0.1\"\n\n\
+                   [dependencies]\n\
+                   core = { path = \"../core\", version = \"0.0.1\" }\n";
+        let out = update_cargo_toml(src, "0.1.0").unwrap().unwrap();
+        assert!(out.contains("core = { path = \"../core\", version = \"0.1.0\" }"));
+    }
+
+    #[test]
+    fn cargo_toml_path_dep_without_version_is_untouched() {
+        // A purely local path dep (no version) must not gain a version field.
+        let src = "[dependencies]\nlocal = { path = \"../local\" }\n";
+        assert!(update_cargo_toml(src, "1.0.0").unwrap().is_none());
+    }
+
+    #[test]
+    fn cargo_toml_syncs_path_dep_in_full_table_form() {
+        let src = "[workspace.package]\nversion = \"0.0.1\"\n\n\
+                   [workspace.dependencies.core]\n\
+                   path = \"crates/core\"\n\
+                   version = \"0.0.1\"\n";
+        let out = update_cargo_toml(src, "2.0.0").unwrap().unwrap();
+        // Both the workspace version and the path dep's version become 2.0.0.
+        assert_eq!(out.matches("\"2.0.0\"").count(), 2);
     }
 
     #[test]
