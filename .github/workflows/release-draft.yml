@@ -52,7 +52,7 @@ jobs:
       - name: Generate changelog
         env:
           TAG: ${{ steps.meta.outputs.tag }}
-        run: git-cliff --tag "$TAG" --output CHANGELOG.md
+        run: git-cliff --latest --tag "$TAG" --output CHANGELOG.md
 
       - name: Create or update GitHub draft release
         env:
