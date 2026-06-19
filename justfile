@@ -11,9 +11,9 @@ check level="patch":
 #        just bump minor
 #        just bump major
 bump level="patch":
-    cargo release {{level}} --execute
+    cargo release {{level}} --execute --no-confirm
 
 # Publish the tagged commit to crates.io
 # Run after `just bump` has pushed the tag
 publish:
-    cargo release publish --execute
+    cargo release publish --execute --no-confirm
