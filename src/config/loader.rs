@@ -8,7 +8,11 @@ use anyhow::{Context, Result};
 use rust_i18n::t;
 use std::path::{Path, PathBuf};
 
-/// Configuration file names searched in order.
+/// Configuration file names searched in priority order.
+///
+/// Matching is case-insensitive (see `locate`), mirroring upstream's
+/// `StringComparison.OrdinalIgnoreCase`, so e.g. `.gitversion.yml` is also recognised
+/// (GitVersion's own repository uses that lowercase spelling).
 const CANDIDATES: [&str; 4] = [
     "GitVersion.yml",
     "GitVersion.yaml",
@@ -17,6 +21,10 @@ const CANDIDATES: [&str; 4] = [
 ];
 
 /// Search for a configuration file in `dir` and `repo_root`.
+///
+/// Each directory's entries are matched against `CANDIDATES` case-insensitively, so the
+/// canonical names are found regardless of spelling and regardless of whether the
+/// filesystem is case-sensitive (e.g. `.gitversion.yml` on Linux).
 pub fn locate(dir: &Path, repo_root: Option<&Path>) -> Option<PathBuf> {
     let mut search_dirs = vec![dir.to_path_buf()];
     if let Some(root) = repo_root {
@@ -25,10 +33,21 @@ pub fn locate(dir: &Path, repo_root: Option<&Path>) -> Option<PathBuf> {
         }
     }
     for d in search_dirs {
-        for name in CANDIDATES {
-            let p = d.join(name);
-            if p.is_file() {
-                return Some(p);
+        // Snapshot the directory's files once, then resolve candidates by priority.
+        let Ok(entries) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        let files: Vec<(String, PathBuf)> = entries
+            .flatten()
+            .filter(|e| e.path().is_file())
+            .filter_map(|e| e.file_name().to_str().map(|s| (s.to_string(), e.path())))
+            .collect();
+        for cand in CANDIDATES {
+            if let Some((_, path)) = files
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case(cand))
+            {
+                return Some(path.clone());
             }
         }
     }
@@ -278,6 +297,48 @@ mod tests {
         let c =
             config_from("branches:\n  custom:\n    regex: '^c$'\n    source-branches: [main]\n");
         assert!(validate(&c).is_ok());
+    }
+
+    fn unique_temp_dir(tag: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("gv-loader-{tag}-{}-{nanos}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn locate_matches_lowercase_dotted_name() {
+        // GitVersion's own repo uses the all-lowercase `.gitversion.yml`; it must be found.
+        let dir = unique_temp_dir("lower");
+        std::fs::write(dir.join(".gitversion.yml"), "workflow: GitHubFlow/v1\n").unwrap();
+        let found = locate(&dir, None).expect("config should be located");
+        assert_eq!(found.file_name().unwrap(), ".gitversion.yml");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn locate_matches_yaml_extension() {
+        // The `.yaml` extension (here lowercase, non-dotted) is recognised too.
+        let dir = unique_temp_dir("yaml");
+        std::fs::write(dir.join("gitversion.yaml"), "workflow: GitHubFlow/v1\n").unwrap();
+        let found = locate(&dir, None).expect("yaml config should be located");
+        assert_eq!(found.file_name().unwrap(), "gitversion.yaml");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn locate_prefers_non_dotted_by_priority() {
+        // Both present (case-insensitive): the non-dotted candidate wins regardless of casing.
+        let dir = unique_temp_dir("priority");
+        std::fs::write(dir.join("gitversion.yml"), "workflow: GitHubFlow/v1\n").unwrap();
+        std::fs::write(dir.join(".gitversion.yaml"), "workflow: GitHubFlow/v1\n").unwrap();
+        let found = locate(&dir, None).unwrap();
+        assert_eq!(found.file_name().unwrap(), "gitversion.yml");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
