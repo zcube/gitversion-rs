@@ -1,6 +1,6 @@
 [package]
 name = "gitversion-rs"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.88"
 description = "Rust port of GitVersion — calculates semantic versions from Git history. Full feature port with a Ratatui TUI."
