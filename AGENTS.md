@@ -101,6 +101,87 @@ This project computes its own version with itself (dogfooding).
 - To change the next cycle's baseline, update `next-version` in `GitVersion.yml`, or simply create
   a higher `v*` tag (the tag always wins).
 
+## Recommended pattern for consuming Rust projects
+
+This section documents the recommended way to integrate gitversion-rs into a Rust project.
+
+### Tool roles
+
+| Tool | Responsibility |
+|---|---|
+| **cargo-release** | Version number management — bumps `Cargo.toml`, commits, tags |
+| **gitversion-rs `--exec`** | Build-time metadata injection — sets `CARGO_PKG_VERSION_PRE`, `GitVersion_*` env vars |
+
+`Cargo.toml` is the source of truth for the version number. `gitversion-rs` provides the
+`PreReleaseTag` and `InformationalVersion` (SHA + branch) at build time without touching the commit
+history.
+
+### How `--exec` works
+
+`gitversion-rs --exec "cargo build"` (or the `exec.prepare` hook in `GitVersion.yml`) runs the
+given command with the following environment variables pre-set in the child process:
+
+```
+CARGO_PKG_VERSION       = SemVer          (e.g. "0.2.0" or "0.2.0-alpha.1")
+CARGO_PKG_VERSION_MAJOR = Major
+CARGO_PKG_VERSION_MINOR = Minor
+CARGO_PKG_VERSION_PATCH = Patch
+CARGO_PKG_VERSION_PRE   = PreReleaseTag   (e.g. "" on a release tag, "5" on an untagged commit)
+GitVersion_SemVer       = SemVer
+GitVersion_InformationalVersion = "0.2.0+Branch.main.Sha.abc1234"
+... (all GitVersion_* variables)
+```
+
+`CARGO_PKG_VERSION_PRE` is the key variable: it carries the `PreReleaseTag` computed from git
+history, so a release build gets `""` and a dev build gets the commit distance (`"5"`) or branch
+tag (`"alpha.1"`).
+
+### build.rs pattern
+
+```rust
+fn main() {
+    // gitversion-rs --exec sets GitVersion_InformationalVersion; fall back to CARGO_PKG_VERSION.
+    let info = std::env::var("GitVersion_InformationalVersion")
+        .unwrap_or_else(|_| std::env::var("CARGO_PKG_VERSION").unwrap_or_default());
+
+    println!("cargo:rustc-env=APP_INFO_VERSION={info}");
+    println!("cargo:rerun-if-env-changed=GitVersion_InformationalVersion");
+}
+```
+
+`CARGO_PKG_VERSION_PRE` is available in source files directly without a `build.rs`:
+
+```rust
+const PRE: &str = env!("CARGO_PKG_VERSION_PRE");  // "" on release, "5" on dev, "alpha.1" on pre-release
+```
+
+### Release workflow
+
+```bash
+# 1. Bump version, commit, and tag — Cargo.toml becomes the record
+cargo release minor    # 0.1.x → 0.2.0: updates Cargo.toml, commits "chore: release v0.2.0", tags v0.2.0
+
+# 2. Build with gitversion-rs injecting CARGO_PKG_VERSION_PRE and InformationalVersion
+gitversion-rs --exec "cargo build --release"
+```
+
+In CI:
+
+```yaml
+- run: gitversion-rs --exec "cargo build --release"
+```
+
+No `--allow-dirty` or separate version-injection step is needed: `cargo-release` has already set
+the correct version in `Cargo.toml` before the build starts.
+
+### Fallback hierarchy (no git / no gitversion-rs)
+
+`crates.io` installs have no git repository. In that case:
+- `GitVersion_*` env vars are absent → `build.rs` falls back to `CARGO_PKG_VERSION`
+- `CARGO_PKG_VERSION_PRE` is set by Cargo from `Cargo.toml` (e.g. `""` for a release)
+- The binary version is always correct because `cargo-release` stamped the right version into
+  `Cargo.toml` before publishing
+
 ## Dependency updates (Renovate)
 
 - `.github/renovate.json` drives Renovate. Schedule: before 9am on Monday; concurrent PR limit 5.
