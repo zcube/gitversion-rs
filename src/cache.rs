@@ -1,9 +1,9 @@
-//! 버전 계산 결과 디스크 캐시.
+//! Disk cache for version calculation results.
 //!
-//! 원본 `GitVersion.Core/VersionCalculation/Caching` 대응. 저장소 상태(refs +
-//! HEAD), 설정 파일 내용, overrideconfig 값을 SHA1 으로 해시한 키로 결과를
-//! `<.git>/gitversion_cache/<키>.json` 에 저장하고 재사용한다. 저장소 상태나 설정이
-//! 바뀌면 키가 달라져 자동으로 무효화된다.
+//! Corresponds to `GitVersion.Core/VersionCalculation/Caching`. Caches results
+//! under `<.git>/gitversion_cache/<key>.json`, keyed by a SHA1 hash of the
+//! repository state (refs + HEAD), config file content, and overrideconfig values.
+//! The cache is automatically invalidated when the repository state or config changes.
 
 use crate::git::GitRepo;
 use crate::output::VersionVariables;
@@ -11,35 +11,36 @@ use rust_i18n::t;
 use sha1::{Digest, Sha1};
 use std::path::{Path, PathBuf};
 
-/// 캐시 키 계산: (refs 스냅샷 + HEAD + 설정파일 내용 + overrideconfig)의 SHA1 hex.
+/// Compute cache key: SHA1 hex of (refs snapshot + HEAD + config file content + overrideconfig).
 ///
-/// 원본 `GitVersionCacheKeyFactory` 의 4개 구성요소(gitSystemHash, repositorySnapshotHash,
-/// configFileHash, overrideConfigHash)에 대응한다. 원본과 동일하게 **GitVersion
-/// 자체 버전은 키에 포함하지 않으므로**, 계산 로직(코드)만 바뀌고 저장소/설정이
-/// 그대로면 기존 캐시가 그대로 재사용된다(개발 중에는 `--no-cache` 사용).
+/// Corresponds to the four components of `GitVersionCacheKeyFactory`
+/// (gitSystemHash, repositorySnapshotHash, configFileHash, overrideConfigHash).
+/// The GitVersion binary version is intentionally **not** included in the key,
+/// so the cache is reused as long as the repository and config are unchanged
+/// (use `--no-cache` during development).
 pub fn compute_key(repo: &GitRepo, config_path: Option<&Path>, overrides: &[String]) -> String {
     let mut hasher = Sha1::new();
 
-    // 1) refs 스냅샷(모든 브랜치/태그의 이름+target).
+    // 1) refs snapshot (name + target for all branches/tags).
     for line in repo.refs_snapshot().unwrap_or_default() {
         hasher.update(line.as_bytes());
         hasher.update(b"\n");
     }
     hasher.update(b"--head--");
-    // 2) HEAD ref 이름 + tip sha.
+    // 2) HEAD ref name + tip SHA.
     hasher.update(repo.head_ref_name().as_bytes());
     if let Ok(head) = repo.head_commit() {
         hasher.update(head.sha.as_bytes());
     }
     hasher.update(b"--config--");
-    // 3) 설정 파일 내용.
+    // 3) Config file content.
     if let Some(p) = config_path {
         if let Ok(content) = std::fs::read_to_string(p) {
             hasher.update(content.as_bytes());
         }
     }
     hasher.update(b"--override--");
-    // 4) overrideconfig 값.
+    // 4) overrideconfig values.
     for o in overrides {
         hasher.update(o.as_bytes());
         hasher.update(b"\n");
@@ -53,14 +54,14 @@ pub fn compute_key(repo: &GitRepo, config_path: Option<&Path>, overrides: &[Stri
     hex
 }
 
-/// 캐시 파일 경로: `<.git>/gitversion_cache/<키>.json`.
+/// Path to the cache file: `<.git>/gitversion_cache/<key>.json`.
 fn cache_file(repo: &GitRepo, key: &str) -> PathBuf {
     repo.git_dir()
         .join("gitversion_cache")
         .join(format!("{key}.json"))
 }
 
-/// 캐시에서 변수 로드. 없거나 손상되면 None(손상 시 삭제).
+/// Load variables from cache. Returns None if missing or corrupt (deletes corrupt entries).
 pub fn load(repo: &GitRepo, key: &str) -> Option<VersionVariables> {
     let path = cache_file(repo, key);
     if !path.is_file() {
@@ -83,7 +84,7 @@ pub fn load(repo: &GitRepo, key: &str) -> Option<VersionVariables> {
     }
 }
 
-/// 변수를 캐시에 기록.
+/// Write variables to the cache.
 pub fn store(repo: &GitRepo, key: &str, vars: &VersionVariables) {
     let path = cache_file(repo, key);
     if let Some(parent) = path.parent() {

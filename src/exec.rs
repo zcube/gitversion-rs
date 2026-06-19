@@ -1,8 +1,9 @@
-//! 외부 명령 실행 훅(semantic-release exec 플러그인 유사).
+//! External command execution hooks (similar to the semantic-release exec plugin).
 //!
-//! 계산된 버전 변수를 `GitVersion_*` 환경변수와 `{Variable}`/`{env:VAR}` 템플릿으로
-//! 노출하고, 라이프사이클 훅 명령을 실행한다. `version` 훅은 명령의 표준출력으로
-//! 버전 정보를 수정(next-version 덮어쓰기 후 재계산)할 수 있다.
+//! Exposes computed version variables as `GitVersion_*` environment variables and
+//! `{Variable}`/`{env:VAR}` template tokens, then runs lifecycle hook commands.
+//! The `version` hook can modify the version by writing to stdout
+//! (which overwrites `next-version` and triggers a recalculation).
 
 use crate::output::VersionVariables;
 use anyhow::{bail, Context, Result};
@@ -12,10 +13,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-/// side-effect 훅 실행 순서.
+/// Execution order for side-effect hooks.
 pub const HOOK_ORDER: [&str; 4] = ["verify", "prepare", "publish", "success"];
 
-/// 명령 문자열의 `{Variable}` / `{env:VAR}` 토큰을 치환(미지의 토큰은 그대로 둠).
+/// Substitute `{Variable}` / `{env:VAR}` tokens in a command string (unknown tokens are left as-is).
 fn render(cmd: &str, map: &BTreeMap<String, String>) -> String {
     let re = Regex::new(r"\{(?<t>[A-Za-z0-9_:]+)\}").unwrap();
     re.replace_all(cmd, |c: &regex::Captures| {
@@ -25,13 +26,13 @@ fn render(cmd: &str, map: &BTreeMap<String, String>) -> String {
         } else if let Some(v) = map.get(t) {
             v.clone()
         } else {
-            format!("{{{t}}}") // 미지의 토큰은 보존.
+            format!("{{{t}}}") // Unknown tokens are preserved as-is.
         }
     })
     .into_owned()
 }
 
-/// 버전 변수를 `GitVersion_*` 환경변수로 변환.
+/// Convert version variables to `GitVersion_*` environment variable pairs.
 fn env_vars(vars: &VersionVariables) -> Vec<(String, String)> {
     vars.to_map()
         .into_iter()
@@ -39,7 +40,7 @@ fn env_vars(vars: &VersionVariables) -> Vec<(String, String)> {
         .collect()
 }
 
-/// 쉘로 명령을 실행. `capture` 면 stdout 을 수집해 반환, 아니면 상속 출력.
+/// Run a command via the shell. If `capture` is true, collect stdout and return it; otherwise inherit.
 fn run_command(
     cmd: &str,
     vars: &VersionVariables,
@@ -103,8 +104,8 @@ fn run_command(
     }
 }
 
-/// `version` 훅(또는 --exec-version) 실행. stdout 의 첫 비어있지 않은 줄을 반환.
-/// 그 값은 호출자가 next-version 으로 적용해 재계산한다.
+/// Run the `version` hook (or `--exec-version`). Returns the first non-empty line from stdout.
+/// The caller applies the result as `next-version` and recalculates.
 pub fn run_version_hook(
     cmd: &str,
     vars: &VersionVariables,
@@ -120,9 +121,9 @@ pub fn run_version_hook(
     }))
 }
 
-/// side-effect 훅(verify/prepare/publish/success)을 순서대로 실행.
-/// 실패 시 `fail` 훅이 있으면 실행하고 에러를 전파한다.
-/// `extra_prepare` 는 --exec 로 준 임시 prepare 명령(설정 prepare 다음에 실행).
+/// Run side-effect hooks (verify/prepare/publish/success) in order.
+/// On failure, runs the `fail` hook if present and then propagates the error.
+/// `extra_prepare` is the temporary prepare command supplied via `--exec` (run after the config's prepare).
 pub fn run_hooks(
     hooks: &BTreeMap<String, String>,
     extra_prepare: Option<&str>,
@@ -166,9 +167,9 @@ mod tests {
         let mut m = BTreeMap::new();
         m.insert("SemVer".to_string(), "1.2.3".to_string());
         assert_eq!(render("echo {SemVer}", &m), "echo 1.2.3");
-        // 미지의 토큰은 보존.
+        // Unknown tokens are preserved.
         assert_eq!(render("echo {Unknown}", &m), "echo {Unknown}");
-        // 쉘 변수($)는 영향 없음.
+        // Shell variables ($) are not affected.
         assert_eq!(render("echo $HOME {SemVer}", &m), "echo $HOME 1.2.3");
     }
 }

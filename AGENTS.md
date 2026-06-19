@@ -18,7 +18,9 @@ cargo clippy --all-targets -- -D warnings   # lint (keep zero warnings)
 ```
 
 - **lefthook** (install: `lefthook install`)
-  - pre-commit: `cargo fmt` (auto-format + re-stage) and `clippy -D warnings` on staged `*.rs`
+  - pre-commit: `cargo fmt` (auto-format + re-stage), `clippy -D warnings` on staged `*.rs`, `git-warden diff`
+  - commit-msg: `git-warden msg` (language + policy check)
+  - prepare-commit-msg: `git-warden prepare-msg`
   - pre-push: `cargo test`
 - **CI** (`.github/workflows/ci.yml`): fmt --check, clippy -D warnings, build/test on 3 OSes,
   MSRV build (currently 1.88, the transitive-dependency floor). Runs on pushes to main and PRs.
@@ -26,7 +28,7 @@ cargo clippy --all-targets -- -D warnings   # lint (keep zero warnings)
 ## Commit conventions
 
 - **Conventional Commits** type prefix required: `feat|fix|ci|chore|test|docs|refactor|perf|style|build|revert`.
-- Commit messages must be written in **Korean** (enforced by the commit-msg hook).
+- Commit messages must be written in **English** (enforced by `git-warden` via the commit-msg hook).
 - **No AI co-author trailers** (e.g. Co-Authored-By), and no special characters such as arrows or
   emoji (the commit-msg hook rejects them).
 - For throwaway test repos, `git commit --no-verify` is fine.

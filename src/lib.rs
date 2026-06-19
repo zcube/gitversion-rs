@@ -1,12 +1,12 @@
-//! GitVersion (Rust 포트) 라이브러리 표면.
+//! Library surface of gitversion-rs (Rust port of GitVersion).
 //!
-//! 바이너리(`main.rs`)와 통합 테스트(`tests/`)가 공유하는 모듈을 노출한다.
+//! Exposes modules shared by the binary (`main.rs`) and integration tests (`tests/`).
 
-// 원본 GitVersion 의 공개 API 를 옮기는 과정에서 현 바이너리가 직접 호출하지
-// 않는 헬퍼(예: tags_on_commit, format_short)도 의도적으로 포함한다.
+// Some helpers (e.g. tags_on_commit, format_short) are intentionally included even though
+// the binary does not call them directly, as they are part of the ported public API.
 #![allow(dead_code)]
 
-// 다국어: 영어 기본, ko/ja/zh 는 locales/ 의 YAML 에서 로드.
+// Multilingual: English by default; ko/ja/zh loaded from YAML files in locales/.
 rust_i18n::i18n!("locales", fallback = "en");
 
 pub mod i18n;

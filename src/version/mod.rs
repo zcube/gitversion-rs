@@ -1,13 +1,13 @@
-//! 버전 데이터 모델과 계산 엔진.
+//! Version data model and calculation engine.
 
 pub mod calculation;
 pub mod semver;
 
 pub use semver::{BuildMetaData, PreReleaseTag, SemanticVersion};
 
-/// 증분 대상 필드. 원본 `GitVersion.Core/SemVer/VersionField.cs`.
+/// Version field to increment. Corresponds to `GitVersion.Core/SemVer/VersionField.cs`.
 ///
-/// 정렬 순서가 곧 우선순위: `None < Patch < Minor < Major`.
+/// Sort order is also priority: `None < Patch < Minor < Major`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum VersionField {
     #[default]

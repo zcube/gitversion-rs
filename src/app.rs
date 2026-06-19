@@ -1,4 +1,4 @@
-//! 애플리케이션 진입 로직(바이너리에서 호출). t! 매크로를 쓰기 위해 lib 안에 둔다.
+//! Application entry logic (called from the binary). Lives inside the lib so the `t!` macro is available.
 
 use crate::cli::{Cli, OutputFormat};
 use crate::{buildagent, cache, cli, config, exec, git, i18n, output, remote, tui, version};
@@ -8,8 +8,8 @@ use rust_i18n::t;
 use std::io::Write;
 use std::path::PathBuf;
 
-/// clap 파싱 전에 `--lang`/환경변수로 로케일을 먼저 정한다(헬프도 로케일을 따르도록).
-/// `--lang ko` 와 `--lang=ko` 두 형태를 모두 인식한다.
+/// Detect the locale from `--lang` or environment variables before clap parsing, so that
+/// `--help` and `--version` output also respects the locale. Recognises both `--lang ko` and `--lang=ko`.
 fn pre_detect_lang(raw: &[String]) -> Option<String> {
     let mut it = raw.iter();
     while let Some(a) = it.next() {
@@ -23,7 +23,7 @@ fn pre_detect_lang(raw: &[String]) -> Option<String> {
     None
 }
 
-/// 바이너리 main: 실행하고 에러 시 메시지 출력 후 종료.
+/// Binary entry point: run the application and print an error message then exit on failure.
 pub fn main() {
     if let Err(e) = run() {
         eprintln!("{}", t!("error.generic", error = format!("{e:#}")));
@@ -32,27 +32,27 @@ pub fn main() {
 }
 
 fn run() -> Result<()> {
-    // 로케일을 파싱 전에 먼저 정한다(--help/--version 출력도 로케일을 따르도록).
+    // Set the locale before parsing so --help/--version output also uses it.
     let raw: Vec<String> = std::env::args().collect();
     i18n::init(pre_detect_lang(&raw).as_deref());
 
-    // 로케일이 반영된 헬프/about 으로 파싱(--help/--version 은 여기서 종료).
+    // Parse with the localised help/about text (--help/--version exits here).
     let matches = cli::localized_command().get_matches();
     let args = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
 
-    // 로깅 초기화: RUST_LOG 가 있으면 우선, 없으면 verbosity/diag 기반.
+    // Logging: RUST_LOG takes priority; otherwise derive the level from --verbosity / --diag.
     let level = if args.diag {
         log::LevelFilter::Trace
     } else {
         args.verbosity.to_level()
     };
-    // 로그 대상: --log <FILE> 이면 파일(append), `--log console` 이면 콘솔(stderr),
-    // 미지정이면 stderr. stdout 은 항상 버전 결과 전용으로 비워 둔다
-    // (`$(gitversion ...)` 캡처가 깨끗하게 유지됨).
+    // Log destination: file (append) with --log <FILE>, stderr with --log console,
+    // or stderr by default. stdout is always reserved for the version output so that
+    // `$(gitversion ...)` captures stay clean.
     let mut builder = env_logger::Builder::new();
     builder.filter_level(level).parse_default_env();
     match &args.log_file {
-        // 원본 GitVersion 의 `/l console` 대응: 파일이 아니라 콘솔(stderr)로 로그.
+        // Mirrors the original GitVersion `/l console`: log to the console (stderr) rather than a file.
         Some(path) if path.as_os_str().eq_ignore_ascii_case("console") => {
             builder
                 .format_timestamp(None)
@@ -64,7 +64,7 @@ fn run() -> Result<()> {
                 .append(true)
                 .open(path)
                 .with_context(|| t!("error.log_open", path = path.display()))?;
-            // 파일 로그에는 타임스탬프를 남긴다(원본 GitVersion 로그 파일과 동일한 성격).
+            // Include timestamps in file logs (matching the character of the original GitVersion log files).
             builder.target(env_logger::Target::Pipe(Box::new(file)));
         }
         None => {
@@ -75,7 +75,7 @@ fn run() -> Result<()> {
     }
     builder.init();
 
-    // --url 이 주어지면 원격 저장소를 동적으로 clone 해 그 경로를 대상으로 사용.
+    // If --url is given, clone the remote repository dynamically and use the clone path as the target.
     let target = if let Some(url) = &args.url {
         let opts = remote::DynamicRepoOptions {
             url: url.clone(),
@@ -110,7 +110,7 @@ fn run() -> Result<()> {
         return tui::run(repo, configuration, work_dir);
     }
 
-    // 캐시 키 입력: overrideconfig + 브랜치 오버라이드.
+    // Cache key inputs: overrideconfig values + branch override.
     let mut key_inputs = args.override_config.clone();
     if let Some(b) = &args.branch {
         key_inputs.push(format!("branch={b}"));
@@ -141,7 +141,7 @@ fn run() -> Result<()> {
         }
     };
 
-    // version 훅: 외부 명령 출력으로 버전 정보를 수정하고 재계산.
+    // version hook: modify the version via external command output and recalculate.
     let version_cmd = args
         .exec_version
         .clone()
@@ -155,7 +155,7 @@ fn run() -> Result<()> {
         }
     }
 
-    // 파일 출력.
+    // File output.
     if let Some(files) = &args.update_assembly_info {
         for p in output::files::update_assembly_info(
             &variables,
@@ -181,7 +181,7 @@ fn run() -> Result<()> {
         }
     }
 
-    // 외부 명령 훅.
+    // External command hooks.
     if !configuration.exec.is_empty() || args.exec.is_some() {
         exec::run_hooks(
             &configuration.exec,
@@ -192,7 +192,7 @@ fn run() -> Result<()> {
         )?;
     }
 
-    // 단일 변수 / 포맷 문자열.
+    // Single variable / format string.
     if let Some(name) = &args.show_variable {
         return emit(&args, output::generator::show_variable(&variables, name)?);
     }

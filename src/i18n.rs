@@ -1,9 +1,9 @@
-//! 로케일 선택 헬퍼.
+//! Locale selection helper.
 //!
-//! 번역 자체는 [`rust_i18n`] 이 `locales/` 의 YAML 로 처리한다(영어 기본).
-//! 본 모듈은 `--lang` 인자/환경변수를 rust-i18n 로케일로 매핑한다.
+//! Translations themselves are handled by [`rust_i18n`] from YAML files in `locales/` (English default).
+//! This module maps the `--lang` argument or environment variables to a rust-i18n locale code.
 
-/// 문자열(예: "en", "ja", "zh-CN", "en_US.UTF-8")을 로케일 코드로 정규화.
+/// Normalise a locale string (e.g. "en", "ja", "zh-CN", "en_US.UTF-8") to a locale code.
 fn normalize(s: &str) -> Option<&'static str> {
     let s = s.trim().to_lowercase();
     if s.starts_with("ja") || s == "japanese" {
@@ -19,7 +19,7 @@ fn normalize(s: &str) -> Option<&'static str> {
     }
 }
 
-/// `--lang` 인자(우선) 또는 `LC_ALL`/`LANG` 환경변수로 로케일 초기화. 기본은 영어.
+/// Initialise the locale from the `--lang` argument (takes priority) or the `LC_ALL`/`LANG` environment variables. Defaults to English.
 pub fn init(explicit: Option<&str>) {
     let chosen = explicit
         .and_then(normalize)
@@ -37,8 +37,8 @@ pub fn init(explicit: Option<&str>) {
 mod tests {
     use rust_i18n::t;
 
-    // set_locale 은 전역 상태라 병렬 테스트에서 경쟁한다. 테스트에서는 전역을
-    // 바꾸지 않고 `t!(.., locale = "..")` 로 로케일을 명시해 격리한다.
+    // set_locale is global state and races under parallel tests.
+    // Tests use `t!(.., locale = "..")` to specify the locale per-call instead of mutating the global.
     #[test]
     fn translates_by_locale() {
         assert_eq!(t!("status.ready", locale = "en"), "Ready");
@@ -55,8 +55,8 @@ mod tests {
         );
     }
 
-    /// TUI 는 키를 런타임 변수(`t!(*k)`)로 넘기므로, 변수 키 해석이 동작하고
-    /// 모든 tui.* 키가 실제로 YAML 에 존재함을 보장한다(누락 시 키가 그대로 출력됨).
+    /// The TUI passes keys as runtime variables (`t!(*k)`), so this verifies that variable key
+    /// resolution works and that every `tui.*` key actually exists in the YAML (missing keys render as the raw key string).
     #[test]
     fn runtime_variable_key_resolves() {
         let key = "tui.tab.variables";

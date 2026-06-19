@@ -1,4 +1,4 @@
-//! GitVersion 설정: 데이터 모델, 워크플로 기본값, effective 설정, 로더.
+//! GitVersion configuration: data model, workflow defaults, effective config, loader.
 
 pub mod defaults;
 pub mod effective;

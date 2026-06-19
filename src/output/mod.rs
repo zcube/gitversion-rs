@@ -1,4 +1,4 @@
-//! 출력 변수와 포맷터.
+//! Output variables and formatters.
 
 pub mod files;
 pub mod generator;

@@ -1,6 +1,3 @@
-# lefthook 설정 — 로컬에서 CI 게이트(fmt/clippy/test)를 미리 강제한다.
-# 설치: lefthook install   (제거: lefthook uninstall)
-
 pre-commit:
   commands:
     fmt:
@@ -10,6 +7,18 @@ pre-commit:
     clippy:
       glob: "*.rs"
       run: cargo clippy --all-targets --all-features -- -D warnings
+    git-warden-diff:
+      run: git-warden diff
+
+commit-msg:
+  commands:
+    git-warden-msg:
+      run: git-warden msg {1}
+
+prepare-commit-msg:
+  commands:
+    git-warden-prepare:
+      run: git-warden prepare-msg {1}
 
 pre-push:
   commands:

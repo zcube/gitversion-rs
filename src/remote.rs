@@ -1,10 +1,12 @@
-//! 동적 원격 저장소 clone.
+//! Dynamic remote repository cloning.
 //!
-//! 원본 `GitVersion.Core/Core/GitPreparer.cs` 의 동적 저장소 동작 대응. `/url` 로
-//! 원격 저장소를 임시(또는 지정) 위치에 clone 하고 그 위에서 버전을 계산한다.
+//! Corresponds to the dynamic-repository behaviour in `GitVersion.Core/Core/GitPreparer.cs`.
+//! Clones a remote repository to a temporary (or specified) location via `--url`
+//! and computes the version from the clone.
 //!
-//! 전송: gix 의 blocking 클라이언트로 https/file 과 SSH(`ssh://` 및 scp-like
-//! `git@host:path`)를 지원한다. SSH 는 시스템 `ssh` 명령(키·에이전트)을 사용한다.
+//! Transport: uses gix's blocking client. Supports https/file and SSH
+//! (`ssh://` and scp-style `git@host:path`). SSH authentication relies on the
+//! system `ssh` command (key files and agent).
 
 use anyhow::{bail, Context, Result};
 use rust_i18n::t;
@@ -12,7 +14,7 @@ use sha1::{Digest, Sha1};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 
-/// 동적 clone 옵션.
+/// Options for a dynamic clone.
 pub struct DynamicRepoOptions {
     pub url: String,
     pub branch: Option<String>,
@@ -22,15 +24,15 @@ pub struct DynamicRepoOptions {
     pub location: Option<PathBuf>,
 }
 
-/// 원격 저장소를 clone(또는 재사용)하고 대상 브랜치/커밋을 체크아웃한 뒤, 그
-/// 작업 트리 경로를 반환한다.
+/// Clone a remote repository (always fresh) and check out the target branch/commit,
+/// then return the path to the working tree.
 pub fn prepare(opts: &DynamicRepoOptions) -> Result<PathBuf> {
     if opts.branch.is_none() {
         bail!("{}", t!("remote.branch_required"));
     }
     let branch = opts.branch.as_deref().unwrap();
 
-    // clone 대상 경로: <location|%tmp%>/<url-hash>.
+    // Clone destination: <location|%tmp%>/<url-hash>.
     let base = opts.location.clone().unwrap_or_else(std::env::temp_dir);
     let mut hasher = Sha1::new();
     hasher.update(opts.url.as_bytes());
@@ -41,14 +43,14 @@ pub fn prepare(opts: &DynamicRepoOptions) -> Result<PathBuf> {
         .collect();
     let dest = base.join(format!("gitversion-dynamic-{hash}"));
 
-    // 항상 깨끗한 상태에서 clone(정확성 우선).
+    // Always clone fresh (correctness over performance).
     if dest.exists() {
         std::fs::remove_dir_all(&dest)
             .with_context(|| t!("remote.remove_failed", path = dest.display()))?;
     }
     std::fs::create_dir_all(&dest)?;
 
-    // 인증 정보가 있으면 https URL 에 주입.
+    // Inject credentials into the https URL if provided.
     let url = inject_credentials(
         &opts.url,
         opts.username.as_deref(),
@@ -78,7 +80,7 @@ pub fn prepare(opts: &DynamicRepoOptions) -> Result<PathBuf> {
         .main_worktree(gix::progress::Discard, &should_interrupt)
         .with_context(|| t!("remote.checkout_failed").to_string())?;
 
-    // 특정 커밋(/c) 지정 시 HEAD 를 그 커밋으로 detach.
+    // If a specific commit (/c) is given, detach HEAD to that commit.
     if let Some(commit) = &opts.commit {
         detach_head_to_commit(&dest, commit)?;
     }
@@ -86,10 +88,10 @@ pub fn prepare(opts: &DynamicRepoOptions) -> Result<PathBuf> {
     Ok(dest)
 }
 
-/// 인증 정보를 URL 에 반영.
-/// - https: `user[:pass]@` 주입
-/// - ssh(`ssh://host`): 사용자가 URL 에 없으면 `user@` 주입(SSH 는 키/에이전트 인증)
-/// - scp-like(`git@host:path`) 등 이미 사용자가 포함된 형태는 그대로.
+/// Inject credentials into the URL.
+/// - https: prepend `user[:pass]@`
+/// - ssh (`ssh://host`): prepend `user@` if no user is already present (SSH uses key/agent auth)
+/// - scp-style (`git@host:path`) or URLs that already contain a user are returned unchanged.
 fn inject_credentials(url: &str, user: Option<&str>, pass: Option<&str>) -> String {
     let Some(user) = user.filter(|u| !u.is_empty()) else {
         return url.to_string();
@@ -102,7 +104,7 @@ fn inject_credentials(url: &str, user: Option<&str>, pass: Option<&str>) -> Stri
         return format!("https://{cred}@{rest}");
     }
     if let Some(rest) = url.strip_prefix("ssh://") {
-        // 이미 user@ 가 있으면 그대로.
+        // Leave unchanged if user@ is already present.
         let host_part = rest.split('/').next().unwrap_or(rest);
         if !host_part.contains('@') {
             return format!("ssh://{user}@{rest}");
@@ -111,7 +113,7 @@ fn inject_credentials(url: &str, user: Option<&str>, pass: Option<&str>) -> Stri
     url.to_string()
 }
 
-/// clone 된 저장소의 HEAD 를 지정 커밋으로 detach(.git/HEAD 에 sha 기록).
+/// Detach HEAD of the cloned repository to the specified commit (writes the SHA to `.git/HEAD`).
 fn detach_head_to_commit(dest: &std::path::Path, commit: &str) -> Result<()> {
     let repo = gix::open(dest).with_context(|| t!("remote.open_failed").to_string())?;
     let id = repo
@@ -147,7 +149,7 @@ mod tests {
             inject_credentials("ssh://host/r.git", Some("git"), None),
             "ssh://git@host/r.git"
         );
-        // 이미 user@ 가 있으면 그대로.
+        // Already has user@ — leave unchanged.
         assert_eq!(
             inject_credentials("ssh://git@host/r.git", Some("other"), None),
             "ssh://git@host/r.git"

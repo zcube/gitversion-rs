@@ -1,13 +1,14 @@
-//! 빌드에이전트(CI) 통합.
+//! Build agent (CI) integrations.
 //!
-//! 원본 `GitVersion.BuildAgents` 의 각 에이전트를 옮긴다. 환경변수로 현재 CI 를
-//! 감지하고, 변수/빌드번호를 해당 CI 의 형식으로 출력한다. `update_build_number`
-//! 가 false 면 빌드번호 설정을 생략한다(원본 `BuildAgentBase.WriteIntegration`).
+//! Ports each agent from the original `GitVersion.BuildAgents`. Detects the current CI
+//! from environment variables and outputs variables / build numbers in the format expected
+//! by that CI. When `update_build_number` is false the build-number line is omitted
+//! (mirrors the original `BuildAgentBase.WriteIntegration` behaviour).
 
 use crate::output::VersionVariables;
 use std::env;
 
-/// TeamCity/MyGet service message 값 이스케이프.
+/// Escape a value for TeamCity/MyGet service messages.
 fn escape_value(v: &str) -> String {
     v.replace('|', "||")
         .replace('\'', "|'")
@@ -17,26 +18,26 @@ fn escape_value(v: &str) -> String {
         .replace('\n', "|n")
 }
 
-/// 빌드에이전트 공통 인터페이스.
+/// Common interface for build agents.
 pub trait BuildAgent {
-    /// 원본 클래스명(GetType().Name)과 동일.
+    /// Agent name matching the original class name (`GetType().Name`).
     fn name(&self) -> &'static str;
 
-    /// 빌드번호 설정 출력(대부분 FullSemVer). 없는 CI 는 빈 문자열.
+    /// Returns the build-number line (typically FullSemVer). Returns an empty string for CIs that don't support it.
     fn set_build_number(&self, vars: &VersionVariables) -> String {
         vars.full_sem_ver.clone()
     }
 
-    /// 단일 변수 출력 라인들.
+    /// Returns the output lines for a single variable.
     fn set_output_variable(&self, name: &str, value: &str) -> Vec<String>;
 
-    /// 전체 통합 출력(로그 라인 포함).
+    /// Returns the full integration output (including log lines).
     fn write_integration(&self, vars: &VersionVariables, update_build_number: bool) -> Vec<String> {
         base_integration(self, vars, update_build_number)
     }
 }
 
-/// 기본 WriteIntegration 동작(원본 BuildAgentBase).
+/// Default WriteIntegration behaviour (mirrors the original `BuildAgentBase`).
 fn base_integration(
     agent: &(impl BuildAgent + ?Sized),
     vars: &VersionVariables,
@@ -45,8 +46,8 @@ fn base_integration(
     let mut out = Vec::new();
     if update_build_number {
         out.push(format!("Set Build Number for '{}'.", agent.name()));
-        // set_build_number 가 빈 문자열인 에이전트(BuildKite, SpaceAutomation 등)는
-        // 빌드넘버 명령 라인을 출력하지 않는다(원본 동작).
+        // Agents whose set_build_number returns an empty string (BuildKite, SpaceAutomation, etc.)
+        // do not emit a build-number line (matches the original behaviour).
         let bn = agent.set_build_number(vars);
         if !bn.is_empty() {
             out.push(bn);
@@ -59,7 +60,7 @@ fn base_integration(
     out
 }
 
-// ─────────────────────────── 에이전트 구현 ───────────────────────────
+// ─────────────────────────── Agent implementations ───────────────────────────
 
 /// TeamCity: `##teamcity[...]` service message.
 struct TeamCity;
@@ -109,7 +110,7 @@ impl BuildAgent for AzurePipelines {
         "AzurePipelines"
     }
     fn set_build_number(&self, vars: &VersionVariables) -> String {
-        // BUILD_BUILDNUMBER 가 없으면 FullSemVer(+0 접미사 제거).
+        // If BUILD_BUILDNUMBER is absent, fall back to FullSemVer (with the "+0" suffix stripped).
         match env::var("BUILD_BUILDNUMBER") {
             Ok(bn) if !bn.trim().is_empty() => {
                 let replaced = replace_azure_vars(&bn, vars);
@@ -172,7 +173,7 @@ impl BuildAgent for EnvRun {
     }
 }
 
-/// `GitVersion_{name}={value}` 형식 공통(TravisCI, Drone, GitLabCi, Jenkins, CodeBuild).
+/// Shared `GitVersion_{name}={value}` format used by TravisCI, Drone, GitLabCi, Jenkins, and CodeBuild.
 fn key_value_line(name: &str, value: &str) -> Vec<String> {
     vec![format!("GitVersion_{name}={value}")]
 }
@@ -197,7 +198,7 @@ impl BuildAgent for Drone {
     }
 }
 
-/// gitversion.properties 파일에 변수 기록(GitLabCi, Jenkins, CodeBuild 공통).
+/// Write variables to a `gitversion.properties` file (shared by GitLabCi, Jenkins, and CodeBuild).
 fn write_properties_file(vars: &VersionVariables) {
     let lines: Vec<String> = vars
         .to_map()
@@ -255,7 +256,7 @@ impl BuildAgent for CodeBuild {
     }
 }
 
-/// BitBucket Pipelines: 대문자 키. properties(Bash)/ps1(Powershell) 파일과 상세 안내 출력.
+/// BitBucket Pipelines: uppercase keys. Writes a properties (Bash) and ps1 (PowerShell) file, plus guidance lines.
 struct BitBucketPipelines;
 impl BuildAgent for BitBucketPipelines {
     fn name(&self) -> &'static str {
@@ -274,7 +275,7 @@ impl BuildAgent for BitBucketPipelines {
             .map(|(k, v)| format!("export GITVERSION_{}={v}", k.to_uppercase()))
             .collect();
         let _ = std::fs::write(pf, exports.join("\n") + "\n");
-        // 원본 BitBucketPipelines.WriteIntegration 의 안내 라인(Bash/Powershell).
+        // Guidance lines from the original BitBucketPipelines.WriteIntegration (Bash/PowerShell).
         out.push(format!("Outputting variables to '{pf}' for Bash,"));
         out.push(format!("and to '{ps1}' for Powershell ... "));
         out.push(
@@ -297,7 +298,7 @@ impl BuildAgent for BitBucketPipelines {
     }
 }
 
-/// GitHub Actions: 변수는 $GITHUB_ENV 파일에 기록, stdout 에는 로그만.
+/// GitHub Actions: writes variables to the `$GITHUB_ENV` file; stdout carries log lines only.
 struct GitHubActions;
 impl BuildAgent for GitHubActions {
     fn name(&self) -> &'static str {
@@ -336,7 +337,7 @@ impl BuildAgent for GitHubActions {
     }
 }
 
-/// 출력 함수가 없는 CI(BuildKite, SpaceAutomation): 로그 라인만.
+/// CIs without an output mechanism (BuildKite, SpaceAutomation): emit log lines only.
 struct BuildKite;
 impl BuildAgent for BuildKite {
     fn name(&self) -> &'static str {
@@ -363,7 +364,7 @@ impl BuildAgent for SpaceAutomation {
     }
 }
 
-/// AppVeyor: 실제로는 REST API 호출. 오프라인에서는 로그 라인만 출력.
+/// AppVeyor: uses REST API calls in practice. Offline, only log lines are emitted.
 struct AppVeyor;
 impl BuildAgent for AppVeyor {
     fn name(&self) -> &'static str {
@@ -380,10 +381,10 @@ impl BuildAgent for AppVeyor {
 }
 
 impl AppVeyor {
-    /// 원본 AppVeyor 는 stdout 명령이 아니라 REST API(PUT api/build,
-    /// POST api/build/variables)로 동작하므로 buildserver stdout golden 으로는
-    /// 비교할 수 없다. 대신 원본이 보내는 요청 body(JSON) 형식을 그대로 만들어
-    /// 단위 테스트로 검증한다(실제 전송은 환경 의존이라 하지 않는다).
+    /// The original AppVeyor integration uses REST API calls (PUT api/build,
+    /// POST api/build/variables) rather than stdout commands, so it cannot be compared
+    /// against a build-server stdout golden file. Instead, the request body (JSON) format
+    /// is replicated here and verified by unit tests (actual transmission is environment-dependent).
     #[cfg(test)]
     fn build_number_body(vars: &VersionVariables, build_number: &str) -> String {
         format!(
@@ -398,7 +399,7 @@ impl AppVeyor {
     }
 }
 
-/// 에이전트 이름(GetType().Name)으로 인스턴스 생성. 테스트/명시 선택용.
+/// Instantiate an agent by name (matching the original `GetType().Name`). Used for tests and explicit selection.
 pub fn by_name(name: &str) -> Option<Box<dyn BuildAgent>> {
     let agent: Box<dyn BuildAgent> = match name {
         "TeamCity" => Box::new(TeamCity),
@@ -421,7 +422,7 @@ pub fn by_name(name: &str) -> Option<Box<dyn BuildAgent>> {
     Some(agent)
 }
 
-/// 환경변수로 현재 빌드에이전트 감지. 원본 등록 순서와 유사.
+/// Detect the current build agent from environment variables. Order follows the original registration order.
 pub fn detect() -> Option<Box<dyn BuildAgent>> {
     let has = |k: &str| env::var(k).map(|v| !v.is_empty()).unwrap_or(false);
 
@@ -476,7 +477,7 @@ mod tests {
 
     #[test]
     fn appveyor_http_body_matches_dotnet() {
-        // 원본 AppVeyor 의 PUT api/build / POST api/build/variables 요청 body 형식.
+        // Request body format for the original AppVeyor PUT api/build / POST api/build/variables.
         let vars = VersionVariables {
             full_sem_ver: "1.2.3-beta.1".into(),
             ..Default::default()

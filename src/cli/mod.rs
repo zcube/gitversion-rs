@@ -1,6 +1,6 @@
-//! clap 기반 명령줄 인터페이스.
+//! clap-based command-line interface.
 //!
-//! 원본 `GitVersion.App/ArgumentParser.cs` 의 주요 옵션을 옮긴다.
+//! Ports the main options from the original `GitVersion.App/ArgumentParser.cs`.
 
 use crate::config::{
     DeploymentMode, GitVersionConfiguration, IncrementStrategy, SemanticVersionFormat,
@@ -9,17 +9,17 @@ use clap::{CommandFactory, Parser, ValueEnum};
 use rust_i18n::t;
 use std::path::PathBuf;
 
-/// 출력 형식.
+/// Output format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum OutputFormat {
     Json,
-    /// 원본 `/output file`: JSON 을 `--outputfile` 로 기록(JSON 과 동일 렌더).
+    /// Corresponds to the original `/output file`: writes JSON to `--outputfile` (same rendering as Json).
     File,
     DotEnv,
     BuildServer,
 }
 
-/// 로그 상세도. 원본 `Verbosity`.
+/// Log verbosity level. Corresponds to the original `Verbosity`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum Verbosity {
     Quiet,
@@ -30,7 +30,7 @@ pub enum Verbosity {
 }
 
 impl Verbosity {
-    /// log 크레이트 레벨 필터로 변환.
+    /// Convert to a `log` crate level filter.
     pub fn to_level(self) -> log::LevelFilter {
         match self {
             Verbosity::Quiet => log::LevelFilter::Error,
@@ -42,9 +42,9 @@ impl Verbosity {
     }
 }
 
-// 헬프/about 문자열은 영어를 소스 기본값으로 두고, 런타임에 `localized_command()` 가
-// 로케일에 맞춰 `cli.about`/`cli.help.<id>` 키로 덮어쓴다. 구조체 doc(`///`)은
-// long_about 으로 쓰여 about 오버라이드를 가리므로 일반 주석(`//`)으로 둔다.
+// Help/about strings default to English in source; `localized_command()` overrides them at
+// runtime using `cli.about` / `cli.help.<id>` keys. Struct doc comments (`///`) become
+// `long_about` which shadows the `about` override, so plain comments (`//`) are used here.
 #[derive(Debug, Parser)]
 #[command(
     name = "gitversion-rs",
@@ -60,8 +60,8 @@ pub struct Cli {
     #[arg(long = "targetpath", value_name = "DIR")]
     pub target_path: Option<PathBuf>,
 
-    // nofetch/nonormalize/allowshallow 는 원본 CLI 호환을 위해 인식하지만, 이 포트는
-    // fetch/normalize 를 하지 않으므로 동작상 무효과(no-op)다.
+    // nofetch/nonormalize/allowshallow are accepted for CLI compatibility with the original,
+    // but have no effect in this port because fetch/normalize are not performed.
     /// Disable fetch (no-op: this port does not fetch).
     #[arg(long)]
     pub nofetch: bool,
@@ -182,9 +182,10 @@ pub struct Cli {
     pub tui: bool,
 }
 
-/// 현재 로케일에 맞춰 about/각 인자 help 를 `t!` 로 덮어쓴 clap Command 를 만든다.
-/// `cli.about`, `cli.help.<arg_id>` 키가 있으면 해석값으로 교체하고, 없으면(=키 그대로
-/// 반환) 영어 소스 doc 문자열을 유지한다. 파싱 전에 로케일을 정해두고 호출해야 한다.
+/// Build a clap Command with `about` and per-argument `help` overridden by `t!` for the current locale.
+/// If a `cli.about` or `cli.help.<arg_id>` key resolves to a translated string, it replaces the
+/// English source doc; if the key is returned as-is (no translation), the English source doc is kept.
+/// Must be called after the locale is set (before argument parsing).
 pub fn localized_command() -> clap::Command {
     Cli::command()
         .about(t!("cli.about").to_string())
@@ -199,7 +200,7 @@ pub fn localized_command() -> clap::Command {
         })
 }
 
-/// `key=value` 오버라이드를 설정에 적용.
+/// Apply `key=value` overrideconfig entries to the configuration.
 pub fn apply_overrides(config: &mut GitVersionConfiguration, overrides: &[String]) {
     for raw in overrides {
         let Some((key, value)) = raw.split_once('=') else {
