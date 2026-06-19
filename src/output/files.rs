@@ -396,19 +396,47 @@ fn update_package_json(content: &str, version: &str) -> Result<Option<String>> {
     Ok(Some(out))
 }
 
-/// Update the `[package]` version in Cargo.toml (format-preserving).
+/// Update the version in Cargo.toml (format-preserving).
+///
+/// Handles both plain packages and Cargo workspaces:
+/// - `[package]` with a string `version` is updated.
+/// - `[workspace.package]` with a string `version` (the inherited version source) is updated.
+/// - A member that inherits via `version.workspace = true` is left untouched (its `version`
+///   is not a string), so workspace inheritance is preserved rather than overwritten.
+///
+/// Returns `None` when no string version field is present (nothing to update).
 fn update_cargo_toml(content: &str, version: &str) -> Result<Option<String>> {
     let mut doc = content
         .parse::<toml_edit::DocumentMut>()
         .with_context(|| t!("file.cargo_parse_failed").to_string())?;
-    let Some(pkg) = doc.get_mut("package").and_then(|p| p.as_table_mut()) else {
-        return Ok(None);
+
+    // Update `version` in `table` only when it is currently a plain string. This skips
+    // `version.workspace = true` (an inline table), preserving inheritance.
+    let update_string_version = |table: &mut toml_edit::Table| -> bool {
+        if table.get("version").and_then(|v| v.as_str()).is_some() {
+            table["version"] = toml_edit::value(version);
+            true
+        } else {
+            false
+        }
     };
-    if !pkg.contains_key("version") {
-        return Ok(None);
+
+    let mut changed = false;
+    // [package] version = "..."
+    if let Some(pkg) = doc.get_mut("package").and_then(|p| p.as_table_mut()) {
+        changed |= update_string_version(pkg);
     }
-    pkg["version"] = toml_edit::value(version);
-    Ok(Some(doc.to_string()))
+    // [workspace.package] version = "..." (the source of truth for inheriting members).
+    if let Some(ws_pkg) = doc
+        .get_mut("workspace")
+        .and_then(|w| w.as_table_mut())
+        .and_then(|w| w.get_mut("package"))
+        .and_then(|p| p.as_table_mut())
+    {
+        changed |= update_string_version(ws_pkg);
+    }
+
+    Ok(if changed { Some(doc.to_string()) } else { None })
 }
 
 /// Update the `[project]` or `[tool.poetry]` version in pyproject.toml (format-preserving).
@@ -515,6 +543,87 @@ mod tests {
         assert!(out.contains("version = \"1.0.1-1\""));
         assert!(out.contains("# comment"));
         assert!(out.contains("# inline"));
+    }
+
+    #[test]
+    fn package_json_without_version_is_skipped() {
+        // No top-level "version" → nothing to update (e.g. an npm workspace root).
+        let src =
+            "{\n  \"name\": \"root\",\n  \"private\": true,\n  \"workspaces\": [\"packages/*\"]\n}";
+        assert!(update_package_json(src, "1.2.3").unwrap().is_none());
+    }
+
+    #[test]
+    fn package_json_preserves_other_fields_and_format() {
+        let src = "{\n  \"name\": \"x\",\n  \"version\": \"0.0.0\",\n  \"scripts\": {\n    \"build\": \"tsc\"\n  },\n  \"dependencies\": {\n    \"left-pad\": \"^1.0.0\"\n  }\n}";
+        let out = update_package_json(src, "2.5.0").unwrap().unwrap();
+        assert!(out.contains("\"version\": \"2.5.0\""));
+        // Nested objects and their values are preserved.
+        assert!(out.contains("\"build\": \"tsc\""));
+        assert!(out.contains("\"left-pad\": \"^1.0.0\""));
+        // npm conventions: 2-space indent and a trailing newline.
+        assert!(out.contains("\n  \"name\""));
+        assert!(out.ends_with("}\n"));
+    }
+
+    #[test]
+    fn pyproject_both_sections_updated() {
+        // Both PEP 621 [project] and [tool.poetry] present → both bumped.
+        let src =
+            "[project]\nname = \"x\"\nversion = \"0.0.0\"\n\n[tool.poetry]\nversion = \"0.0.0\"\n";
+        let out = update_pyproject_toml(src, "1.2.3").unwrap().unwrap();
+        assert_eq!(out.matches("version = \"1.2.3\"").count(), 2);
+    }
+
+    #[test]
+    fn pyproject_without_version_is_skipped() {
+        // Only build-system metadata, no version anywhere → None.
+        let src =
+            "[build-system]\nrequires = [\"hatchling\"]\nbuild-backend = \"hatchling.build\"\n";
+        assert!(update_pyproject_toml(src, "1.2.3").unwrap().is_none());
+    }
+
+    #[test]
+    fn pyproject_dynamic_version_is_skipped() {
+        // PEP 621 dynamic version (computed by the build backend) has no static `version`
+        // key, so it must be left untouched.
+        let src = "[project]\nname = \"x\"\ndynamic = [\"version\"]\n";
+        assert!(update_pyproject_toml(src, "1.2.3").unwrap().is_none());
+    }
+
+    #[test]
+    fn pyproject_preserves_comments() {
+        let src = "# project metadata\n[project]\nname = \"x\"  # the name\nversion = \"0.0.0\"\n";
+        let out = update_pyproject_toml(src, "9.0.1").unwrap().unwrap();
+        assert!(out.contains("version = \"9.0.1\""));
+        assert!(out.contains("# project metadata"));
+        assert!(out.contains("# the name"));
+    }
+
+    #[test]
+    fn cargo_toml_workspace_root_updates_workspace_package() {
+        // Workspace root: the inherited version lives under [workspace.package].
+        let src = "[workspace]\nmembers = [\"crates/*\"]\n\n[workspace.package]\nversion = \"0.0.1\"\nedition = \"2021\"\n";
+        let out = update_cargo_toml(src, "1.2.3").unwrap().unwrap();
+        assert!(out.contains("version = \"1.2.3\""));
+        // Unrelated keys are preserved.
+        assert!(out.contains("edition = \"2021\""));
+        assert!(out.contains("members = [\"crates/*\"]"));
+    }
+
+    #[test]
+    fn cargo_toml_inheriting_member_is_untouched() {
+        // A member that inherits via `version.workspace = true` must NOT be rewritten.
+        let src = "[package]\nname = \"member\"\nversion.workspace = true\n";
+        assert!(update_cargo_toml(src, "1.2.3").unwrap().is_none());
+    }
+
+    #[test]
+    fn cargo_toml_root_package_and_workspace_both_updated() {
+        // A root crate that is both a package and a workspace: update both string versions.
+        let src = "[package]\nname = \"root\"\nversion = \"0.0.1\"\n\n[workspace.package]\nversion = \"0.0.1\"\n";
+        let out = update_cargo_toml(src, "2.0.0").unwrap().unwrap();
+        assert_eq!(out.matches("version = \"2.0.0\"").count(), 2);
     }
 
     #[test]

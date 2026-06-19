@@ -40,6 +40,21 @@ fn env_vars(vars: &VersionVariables) -> Vec<(String, String)> {
         .collect()
 }
 
+/// Standard Cargo `CARGO_PKG_VERSION*` environment variables derived from the version.
+///
+/// These mirror the names Cargo itself sets at build time, so a Rust build or script
+/// invoked from an exec hook can pick up the GitVersion-computed version using the
+/// familiar variable names (e.g. a `build.rs` reading `CARGO_PKG_VERSION`).
+fn cargo_env_vars(vars: &VersionVariables) -> Vec<(String, String)> {
+    vec![
+        ("CARGO_PKG_VERSION".into(), vars.sem_ver.clone()),
+        ("CARGO_PKG_VERSION_MAJOR".into(), vars.major.to_string()),
+        ("CARGO_PKG_VERSION_MINOR".into(), vars.minor.to_string()),
+        ("CARGO_PKG_VERSION_PATCH".into(), vars.patch.to_string()),
+        ("CARGO_PKG_VERSION_PRE".into(), vars.pre_release_tag.clone()),
+    ]
+}
+
 /// Run a command via the shell. If `capture` is true, collect stdout and return it; otherwise inherit.
 fn run_command(
     cmd: &str,
@@ -66,7 +81,8 @@ fn run_command(
         .arg(flag)
         .arg(&rendered)
         .current_dir(work_dir)
-        .envs(env_vars(vars));
+        .envs(env_vars(vars))
+        .envs(cargo_env_vars(vars));
     if capture {
         command.stdout(Stdio::piped()).stderr(Stdio::inherit());
     }
@@ -171,5 +187,23 @@ mod tests {
         assert_eq!(render("echo {Unknown}", &m), "echo {Unknown}");
         // Shell variables ($) are not affected.
         assert_eq!(render("echo $HOME {SemVer}", &m), "echo $HOME 1.2.3");
+    }
+
+    #[test]
+    fn cargo_env_vars_mirror_cargo_names() {
+        let vars = VersionVariables {
+            major: 1,
+            minor: 2,
+            patch: 3,
+            sem_ver: "1.2.3-alpha.4".into(),
+            pre_release_tag: "alpha.4".into(),
+            ..Default::default()
+        };
+        let map: BTreeMap<_, _> = cargo_env_vars(&vars).into_iter().collect();
+        assert_eq!(map["CARGO_PKG_VERSION"], "1.2.3-alpha.4");
+        assert_eq!(map["CARGO_PKG_VERSION_MAJOR"], "1");
+        assert_eq!(map["CARGO_PKG_VERSION_MINOR"], "2");
+        assert_eq!(map["CARGO_PKG_VERSION_PATCH"], "3");
+        assert_eq!(map["CARGO_PKG_VERSION_PRE"], "alpha.4");
     }
 }

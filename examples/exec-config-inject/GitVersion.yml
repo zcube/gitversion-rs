@@ -1,0 +1,31 @@
+# Example: inject the GitVersion-computed version into a Rust build via exec hooks.
+#
+# When gitversion-rs runs an exec command it exports the version into the
+# environment under TWO sets of names:
+#   - GitVersion_*            (e.g. GitVersion_SemVer, GitVersion_FullSemVer)
+#   - CARGO_PKG_VERSION*      (the standard Cargo names, e.g. CARGO_PKG_VERSION)
+#
+# Template tokens like {SemVer} / {FullSemVer} are also substituted directly into
+# the command string before it runs.
+
+workflow: GitHubFlow/v1
+tag-prefix: "[vV]?"
+next-version: 0.1.0
+
+exec:
+  # `prepare` runs after the version is computed (before publish/success).
+  # Here we stamp the version into Cargo.toml so `cargo build`/`cargo publish`
+  # compile with it, then build.
+  #
+  # NOTE: `cargo build` derives its OWN CARGO_PKG_VERSION from Cargo.toml, so to
+  # influence the inner crate's build you must stamp Cargo.toml (as below) — the
+  # inherited CARGO_PKG_VERSION env alone is not enough. The env vars are handy
+  # for scripts, Docker build-args, etc. (see the echo line). For overriding a
+  # crate's own version without touching Cargo.toml, use the library/build.rs
+  # approach in ../build_inject.rs instead.
+  prepare: |
+    set -eu
+    echo "Computed version: $CARGO_PKG_VERSION (major=$CARGO_PKG_VERSION_MAJOR, pre='$CARGO_PKG_VERSION_PRE')"
+    echo "Full SemVer (template token): {FullSemVer}"
+    sed -i.bak "s/^version = .*/version = \"$CARGO_PKG_VERSION\"/" Cargo.toml && rm -f Cargo.toml.bak
+    cargo build --release

@@ -42,13 +42,16 @@ variable.
   update project files (`--updateprojectfiles`, real XML parsing rather than regex),
   Wix version file (`--updatewixversionfile`)
 - **Package manifests**: `--updatepackagefiles` updates the version in `package.json` (Node.js),
-  `Cargo.toml` (Rust), and `pyproject.toml` (Python, PEP 621/Poetry) using format-preserving
-  parsers (serde_json/toml_edit)
+  `Cargo.toml` (Rust, incl. `[workspace.package]`), and `pyproject.toml` (Python, PEP 621/Poetry)
+  using format-preserving parsers (serde_json/toml_edit). Cargo workspace members that inherit
+  via `version.workspace = true` are left untouched
 - **External command hooks (exec)**: like semantic-release's exec plugin, run shell commands in
   lifecycle hooks (`verify`/`prepare`/`publish`/`success`/`fail`). Version variables are exposed
   as `GitVersion_*` env vars and `{Variable}`/`{env:VAR}` templates. The `version` hook modifies
   the version from the command's stdout (apply next-version, then recompute). Supports
-  `--exec`/`--exec-version`/`--dry-run`
+  `--exec`/`--exec-version`/`--dry-run`. As a Rust convenience, the computed version is also
+  exported under the standard Cargo names (`CARGO_PKG_VERSION`,
+  `CARGO_PKG_VERSION_MAJOR`/`MINOR`/`PATCH`/`PRE`) so build commands pick it up natively
 - **Result caching**: results stored at `<.git>/gitversion_cache/<key>.json`. The key is a SHA1
   of refs·HEAD·config file·overrideconfig, so it auto-invalidates when repo state changes.
   Disable with `--nocache`
@@ -129,6 +132,18 @@ gitversion-rs --lang zh
 # Compute for a specific branch
 gitversion-rs -b release/2.0.0
 ```
+
+## Examples
+
+The [`examples/`](./examples/) directory shows how to inject the computed version into a
+Rust build:
+
+- [`examples/build_inject.rs`](./examples/build_inject.rs) — use gitversion-rs **as a
+  library** from a `build.rs`, overriding `CARGO_PKG_VERSION` via `cargo:rustc-env=`.
+  Runnable: `cargo run --example build_inject`.
+- [`examples/exec-config-inject/`](./examples/exec-config-inject/) — drive the build from
+  a `GitVersion.yml` **exec hook**, with the version exported as `CARGO_PKG_VERSION*` /
+  `GitVersion_*` environment variables.
 
 ## Configuration file
 
