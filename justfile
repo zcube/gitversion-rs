@@ -2,6 +2,14 @@
 version:
     gitversion-rs -v FullSemVer
 
+# Build with CARGO_PKG_VERSION_PRE injected from gitversion-rs
+build:
+    gitversion-rs --exec "cargo build --release"
+
+# Build and install to ~/.cargo/bin with CARGO_PKG_VERSION_PRE injected
+install:
+    gitversion-rs --exec "cargo install --path . --locked"
+
 # Dry-run: show what cargo-release would do without making changes
 check level="patch":
     cargo release {{level}}
