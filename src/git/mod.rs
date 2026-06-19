@@ -1,7 +1,7 @@
-//! gix(gitoxide) 기반 순수 Rust 저장소 접근 계층.
+//! Pure-Rust repository access layer built on gix (gitoxide).
 //!
-//! 원본 `GitVersion.LibGit2Sharp` 에 대응하며, 버전 계산에 필요한
-//! 최소 그래프 연산(태그 수집, 커밋 워킹, merge-base, 미커밋 변경)을 제공한다.
+//! Corresponds to the original `GitVersion.LibGit2Sharp`, providing the minimum graph
+//! operations needed for version calculation: tag collection, commit walking, merge-base, and uncommitted changes.
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, FixedOffset, TimeZone};
@@ -10,7 +10,7 @@ use rust_i18n::t;
 use std::collections::HashSet;
 use std::path::Path;
 
-/// 단일 커밋 요약.
+/// Summary of a single commit.
 #[derive(Debug, Clone)]
 pub struct CommitInfo {
     pub sha: String,
@@ -18,20 +18,20 @@ pub struct CommitInfo {
     pub message: String,
     pub when: DateTime<FixedOffset>,
     pub parent_count: usize,
-    /// 부모 커밋 SHA 목록.
+    /// List of parent commit SHAs.
     pub parents: Vec<String>,
 }
 
-/// 버전 태그 후보.
+/// A candidate version tag.
 #[derive(Debug, Clone)]
 pub struct TagInfo {
     pub name: String,
-    /// 태그가 가리키는 커밋 SHA(annotated 태그는 peel 후).
+    /// The commit SHA the tag points to (peeled for annotated tags).
     pub target_sha: String,
     pub when: DateTime<FixedOffset>,
 }
 
-/// 저장소 래퍼.
+/// Repository wrapper.
 pub struct GitRepo {
     repo: gix::Repository,
 }
@@ -46,24 +46,24 @@ fn gix_time_to_chrono(t: gix::date::Time) -> DateTime<FixedOffset> {
 }
 
 impl GitRepo {
-    /// `path` 또는 상위에서 `.git` 을 탐색해 연다.
+    /// Discover and open the repository by searching `path` and its parents for `.git`.
     pub fn discover(path: &Path) -> Result<Self> {
         let repo =
             gix::discover(path).with_context(|| t!("git.repo_not_found", path = path.display()))?;
         Ok(Self { repo })
     }
 
-    /// 저장소 작업 트리 루트.
+    /// Root of the repository working tree.
     pub fn workdir(&self) -> Option<&Path> {
         self.repo.workdir()
     }
 
-    /// `.git` 디렉터리 경로(캐시 위치 계산용).
+    /// Path to the `.git` directory (used to compute the cache location).
     pub fn git_dir(&self) -> &Path {
         self.repo.git_dir()
     }
 
-    /// HEAD 의 canonical ref 이름(detached 면 short sha).
+    /// Canonical ref name of HEAD (or the short SHA when detached).
     pub fn head_ref_name(&self) -> String {
         match self.repo.head_name() {
             Ok(Some(name)) => name.as_bstr().to_string(),
@@ -74,7 +74,7 @@ impl GitRepo {
         }
     }
 
-    /// 모든 ref 의 "이름 target_sha" 목록(정렬). 캐시 키의 refs 스냅샷용.
+    /// Sorted list of `"<name> <target_sha>"` for every ref. Used as the refs snapshot in the cache key.
     pub fn refs_snapshot(&self) -> Result<Vec<String>> {
         let mut out = Vec::new();
         if let Ok(platform) = self.repo.references() {
@@ -112,7 +112,7 @@ impl GitRepo {
         })
     }
 
-    /// HEAD 가 가리키는 커밋.
+    /// The commit that HEAD points to.
     pub fn head_commit(&self) -> Result<CommitInfo> {
         let commit = self
             .repo
@@ -121,14 +121,14 @@ impl GitRepo {
         Self::commit_info(&commit)
     }
 
-    /// 현재 체크아웃된 브랜치 이름(friendly).
+    /// Friendly name of the currently checked-out branch.
     ///
-    /// detached HEAD 면 원본 GitVersion(GitVersionContextFactory)처럼
-    /// `GetBranchesContainingCommit(...).OnlyOrDefault()` 로 결정한다: HEAD 커밋을 tip
-    /// 으로 갖는 브랜치(direct)가 있으면 그것, 없으면 HEAD 커밋을 포함(reachable)하는
-    /// 브랜치를 쓴다. 정확히 하나면 그 브랜치명, 그 외(0개·여러개)는 `(no branch)`.
-    /// (CI 가 태그를 detached 로 checkout 한 경우, HEAD 가 main tip 이 아니어도 main 으로
-    /// 인식해야 하므로 tip 일치만으로는 부족하다.)
+    /// When HEAD is detached, mirrors the original GitVersion (`GitVersionContextFactory`)
+    /// `GetBranchesContainingCommit(...).OnlyOrDefault()` logic: if a branch has HEAD as its
+    /// tip (direct match), that branch is used; otherwise the first branch that contains HEAD
+    /// as a reachable ancestor is used. Exactly one match returns its name; zero or multiple
+    /// matches return `(no branch)`. (When CI checks out a tag as detached HEAD, HEAD may not
+    /// be the tip of main, so tip-only matching is insufficient.)
     pub fn current_branch_name(&self) -> Result<String> {
         if let Some(name) = self.repo.head_name()? {
             Ok(name.shorten().to_string())
@@ -143,7 +143,7 @@ impl GitRepo {
         }
     }
 
-    /// 지정 sha 를 tip 으로 갖는 로컬 브랜치 이름 목록(shorthand).
+    /// Local branch names (shorthand) whose tip is the given SHA.
     fn local_branches_at(&self, sha: &str) -> Vec<String> {
         let mut out = Vec::new();
         if let Ok(platform) = self.repo.references() {
@@ -160,9 +160,9 @@ impl GitRepo {
         out
     }
 
-    /// 원본 `GetBranchesContainingCommit`: HEAD 커밋을 tip 으로 갖는 브랜치(direct)가
-    /// 있으면 그것, 없으면 HEAD 커밋을 포함(reachable, 브랜치 tip 의 조상)하는 로컬
-    /// 브랜치들. 로컬 브랜치만 대상으로 한다(원본도 tracked 브랜치 우선).
+    /// Mirrors the original `GetBranchesContainingCommit`: returns local branches whose tip is
+    /// HEAD (direct match); if none, returns local branches that contain HEAD as a reachable
+    /// ancestor. Only local branches are considered (matching the original's tracked-branch priority).
     fn branches_containing(&self, head_sha: &str) -> Vec<String> {
         let direct = self.local_branches_at(head_sha);
         if !direct.is_empty() {
@@ -174,7 +174,7 @@ impl GitRepo {
                 for reference in branches.flatten() {
                     if let Ok(id) = reference.clone().into_fully_peeled_id() {
                         let tip = id.to_string();
-                        // HEAD 커밋이 이 브랜치 tip 의 조상이면 브랜치가 HEAD 를 포함한다.
+                        // HEAD is an ancestor of this branch tip → the branch contains HEAD.
                         if self.is_ancestor_of(head_sha, &tip).unwrap_or(false) {
                             out.push(reference.name().shorten().to_string());
                         }
@@ -185,14 +185,14 @@ impl GitRepo {
         out
     }
 
-    /// spec(브랜치/태그/sha)을 커밋 ObjectId 로 해석.
+    /// Resolve a spec (branch/tag/SHA) to a commit ObjectId.
     fn resolve(&self, spec: &str) -> Option<ObjectId> {
         let id = self.repo.rev_parse_single(spec).ok()?;
         let commit = id.object().ok()?.try_into_commit().ok()?;
         Some(commit.id)
     }
 
-    /// 모든 태그 수집(가리키는 커밋과 함께).
+    /// Collect all tags together with the commits they point to.
     pub fn tags(&self) -> Result<Vec<TagInfo>> {
         let mut out = Vec::new();
         let platform = self.repo.references()?;
@@ -214,7 +214,7 @@ impl GitRepo {
         Ok(out)
     }
 
-    /// 로컬 + 원격 브랜치 이름 목록(shorthand).
+    /// Shorthand names of all local and remote branches.
     pub fn branch_names(&self) -> Result<Vec<String>> {
         let mut out = Vec::new();
         let platform = self.repo.references()?;
@@ -227,8 +227,8 @@ impl GitRepo {
         Ok(out)
     }
 
-    /// `from`(제외) 부터 `to`(포함) 까지 도달 가능한 커밋들을 최신순으로 반환.
-    /// `from` 이 None 이면 `to` 의 모든 조상.
+    /// Returns reachable commits from `from` (exclusive) to `to` (inclusive), newest first.
+    /// When `from` is `None`, returns all ancestors of `to`.
     pub fn commits_between(&self, from: Option<&str>, to: &str) -> Result<Vec<CommitInfo>> {
         let to_oid = self
             .resolve(to)
@@ -251,8 +251,8 @@ impl GitRepo {
         Ok(out)
     }
 
-    /// `from`(제외)부터 `to`(포함)까지 **첫 번째 부모만** 따라가며 커밋을 최신순으로
-    /// 반환(Mainline 트렁크 순회용).
+    /// Returns commits from `from` (exclusive) to `to` (inclusive) following **first parents only**,
+    /// newest first. Used for Mainline trunk traversal.
     pub fn first_parent_between(&self, from: Option<&str>, to: &str) -> Result<Vec<CommitInfo>> {
         let to_oid = self
             .resolve(to)
@@ -273,7 +273,7 @@ impl GitRepo {
         Ok(out)
     }
 
-    /// 두 커밋의 merge-base.
+    /// Merge-base of two commits.
     pub fn merge_base(&self, a: &str, b: &str) -> Result<Option<String>> {
         let (oid_a, oid_b) = match (self.resolve(a), self.resolve(b)) {
             (Some(x), Some(y)) => (x, y),
@@ -285,13 +285,13 @@ impl GitRepo {
         }
     }
 
-    /// 특정 커밋이 HEAD 에서 도달 가능한지(조상인지).
+    /// Returns true if the given commit is reachable from HEAD (i.e. is an ancestor).
     pub fn is_ancestor_of_head(&self, sha: &str) -> Result<bool> {
         let head = self.head_commit()?;
         self.is_ancestor_of(sha, &head.sha)
     }
 
-    /// `ancestor` 가 `descendant` 의 조상(또는 동일)인지.
+    /// Returns true if `ancestor` is an ancestor of (or identical to) `descendant`.
     pub fn is_ancestor_of(&self, ancestor: &str, descendant: &str) -> Result<bool> {
         let (a, d) = match (self.resolve(ancestor), self.resolve(descendant)) {
             (Some(a), Some(d)) => (a, d),
@@ -306,8 +306,8 @@ impl GitRepo {
         }
     }
 
-    /// 커밋이 첫 번째 부모 대비 변경한 파일 경로 목록.
-    /// 루트 커밋이거나 diff 를 얻을 수 없으면 빈 벡터를 반환한다.
+    /// File paths changed by a commit relative to its first parent.
+    /// Returns an empty vec for root commits or when the diff cannot be obtained.
     pub fn changed_paths_for_commit(&self, sha: &str) -> Vec<String> {
         (|| -> Option<Vec<String>> {
             let oid = self.resolve(sha)?;
@@ -321,8 +321,8 @@ impl GitRepo {
 
             let mut paths: Vec<String> = Vec::new();
             let mut platform = old_tree.changes().ok()?;
-            // track_path: location() 필드 활성화.
-            // track_rewrites(None): rename 추적 비활성화 → blob 접근 불필요.
+            // track_path: enables the location() field.
+            // track_rewrites(None): disables rename tracking → no blob access needed.
             platform.options(|o| {
                 o.track_path();
                 o.track_rewrites(None);
@@ -336,14 +336,14 @@ impl GitRepo {
         .unwrap_or_default()
     }
 
-    /// spec(브랜치/태그/sha)을 CommitInfo 로 해석.
+    /// Resolve a spec (branch/tag/SHA) to a `CommitInfo`.
     pub fn commit_info_of(&self, spec: &str) -> Option<CommitInfo> {
         let id = self.resolve(spec)?;
         let commit = self.repo.find_commit(id).ok()?;
         Self::commit_info(&commit).ok()
     }
 
-    /// 로컬 브랜치 이름 목록(shorthand).
+    /// Sorted list of shorthand local branch names.
     pub fn local_branch_names(&self) -> Result<Vec<String>> {
         let mut out = Vec::new();
         let platform = self.repo.references()?;
@@ -354,7 +354,7 @@ impl GitRepo {
         Ok(out)
     }
 
-    /// 지정 커밋(기본 HEAD)에 lightweight 태그 생성.
+    /// Create a lightweight tag on the specified commit (defaults to HEAD).
     pub fn create_tag(&self, name: &str, target_spec: Option<&str>) -> Result<()> {
         let target = match target_spec {
             Some(s) => self
@@ -373,7 +373,7 @@ impl GitRepo {
         Ok(())
     }
 
-    /// 지정 커밋(기본 HEAD)에 브랜치 ref 생성(작업 트리는 변경하지 않음).
+    /// Create a branch ref on the specified commit (defaults to HEAD). Does not touch the working tree.
     pub fn create_branch(&self, name: &str, target_spec: Option<&str>) -> Result<()> {
         let target = match target_spec {
             Some(s) => self
@@ -392,7 +392,7 @@ impl GitRepo {
         Ok(())
     }
 
-    /// 디스크 캐시 디렉터리(`<.git>/gitversion_cache`) 삭제.
+    /// Delete the on-disk cache directory (`<.git>/gitversion_cache`).
     pub fn clear_cache(&self) -> Result<usize> {
         let dir = self.git_dir().join("gitversion_cache");
         if !dir.exists() {
@@ -404,11 +404,11 @@ impl GitRepo {
         Ok(count)
     }
 
-    /// 작업 트리의 미커밋 변경 수.
+    /// Number of uncommitted changes in the working tree.
     pub fn uncommitted_changes(&self) -> Result<i64> {
-        // 원본 GitVersion 은 HEAD 트리와 (index + working dir) 의 차이를 세며,
-        // 여기에는 untracked(추가된) 파일도 포함된다. gix 의 index-worktree 상태는
-        // untracked + 수정된 추적 파일을 모두 포함하므로 그 개수를 센다.
+        // The original GitVersion counts the diff between the HEAD tree and (index + working dir),
+        // including untracked (added) files. gix's index-worktree status covers both untracked
+        // and modified tracked files, so we count that.
         let status = match self.repo.status(gix::progress::Discard) {
             Ok(s) => s,
             Err(_) => return Ok(0),
@@ -420,7 +420,7 @@ impl GitRepo {
         Ok(iter.flatten().count() as i64)
     }
 
-    /// 특정 커밋에 직접 붙은 태그들의 이름.
+    /// Names of tags directly attached to the given commit.
     pub fn tags_on_commit(&self, sha: &str) -> Result<HashSet<String>> {
         Ok(self
             .tags()?

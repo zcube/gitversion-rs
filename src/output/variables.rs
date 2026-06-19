@@ -1,13 +1,13 @@
-//! 최종 산출되는 GitVersion 출력 변수들.
+//! The final computed GitVersion output variables.
 //!
-//! 원본 `GitVersion.Output/Serializer/VersionVariablesJsonModel.cs` 와 1:1 대응.
+//! Maps 1:1 to the original `GitVersion.Output/Serializer/VersionVariablesJsonModel.cs`.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// GitVersion 이 계산해 내는 모든 출력 변수.
+/// All output variables computed by GitVersion.
 ///
-/// JSON 출력 시 원본과 동일한 키 이름(PascalCase)을 사용한다.
+/// JSON output uses the same key names as the original (PascalCase).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase", default)]
 pub struct VersionVariables {
@@ -46,7 +46,7 @@ pub struct VersionVariables {
     pub version_source_increment: String,
     pub version_source_sem_ver: String,
     pub version_source_sha: String,
-    /// Deprecated: `VersionSourceDistance` 사용 권장. 호환을 위해 유지.
+    /// Deprecated: prefer `VersionSourceDistance`. Retained for compatibility.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub commits_since_version_source: Option<i64>,
 
@@ -55,7 +55,7 @@ pub struct VersionVariables {
 }
 
 impl VersionVariables {
-    /// 변수 이름 -> 값 문자열 맵. `-showvariable` 및 환경변수 출력에 사용.
+    /// Variable name to string-value map. Used by `-showvariable` and environment-variable output.
     pub fn to_map(&self) -> BTreeMap<String, String> {
         let mut m = BTreeMap::new();
         let opt = |o: Option<i64>| o.map(|v| v.to_string()).unwrap_or_default();

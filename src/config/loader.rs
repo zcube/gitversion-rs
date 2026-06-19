@@ -1,14 +1,14 @@
-//! 설정 파일 탐색, YAML 로딩, 기본값 병합.
+//! Configuration file discovery, YAML loading, and default merging.
 //!
-//! 원본 `GitVersion.Configuration/ConfigurationFileLocator.cs`,
-//! `ConfigurationProvider.cs` 대응.
+//! Corresponds to the original `GitVersion.Configuration/ConfigurationFileLocator.cs`
+//! and `ConfigurationProvider.cs`.
 
 use super::{defaults, model::*};
 use anyhow::{Context, Result};
 use rust_i18n::t;
 use std::path::{Path, PathBuf};
 
-/// 탐색 순서대로의 설정 파일명.
+/// Configuration file names searched in order.
 const CANDIDATES: [&str; 4] = [
     "GitVersion.yml",
     "GitVersion.yaml",
@@ -16,7 +16,7 @@ const CANDIDATES: [&str; 4] = [
     ".GitVersion.yaml",
 ];
 
-/// `dir` 와 `repo_root` 에서 설정 파일을 탐색.
+/// Search for a configuration file in `dir` and `repo_root`.
 pub fn locate(dir: &Path, repo_root: Option<&Path>) -> Option<PathBuf> {
     let mut search_dirs = vec![dir.to_path_buf()];
     if let Some(root) = repo_root {
@@ -35,9 +35,9 @@ pub fn locate(dir: &Path, repo_root: Option<&Path>) -> Option<PathBuf> {
     None
 }
 
-/// 워크플로 값이 외부 파일 경로인지 판단.
+/// Returns true when the workflow value looks like a file path.
 ///
-/// `./`, `../`, `/` 로 시작하거나 `.yml`/`.yaml` 로 끝나면 파일 경로로 간주한다.
+/// Treated as a file path when it starts with `./`, `../`, or `/`, or ends with `.yml` / `.yaml`.
 fn is_workflow_file_path(s: &str) -> bool {
     s.starts_with("./")
         || s.starts_with("../")
@@ -46,9 +46,9 @@ fn is_workflow_file_path(s: &str) -> bool {
         || s.ends_with(".yaml")
 }
 
-/// 외부 워크플로 파일을 로드해 기본 설정으로 반환.
+/// Load an external workflow file and return it as the base configuration.
 ///
-/// 상대 경로는 `config_dir`(설정 파일이 있는 디렉토리) 기준으로 해석한다.
+/// Relative paths are resolved against `config_dir` (the directory containing the config file).
 fn load_workflow_file(wf_path: &str, config_dir: &Path) -> Result<GitVersionConfiguration> {
     let abs = if Path::new(wf_path).is_absolute() {
         Path::new(wf_path).to_path_buf()
@@ -61,7 +61,7 @@ fn load_workflow_file(wf_path: &str, config_dir: &Path) -> Result<GitVersionConf
         .with_context(|| t!("config.yaml_parse_failed", path = abs.display()))
 }
 
-/// 명시 경로 또는 탐색으로 설정을 로드하고 워크플로 기본값과 병합.
+/// Load configuration from an explicit path or by searching, then merge with workflow defaults.
 pub fn load(
     explicit_path: Option<&Path>,
     work_dir: &Path,
@@ -73,7 +73,7 @@ pub fn load(
     };
 
     let Some(path) = path else {
-        // 파일 없음 → GitFlow 기본값.
+        // No config file found — fall back to GitFlow defaults.
         return Ok(defaults::gitflow());
     };
 
@@ -82,7 +82,7 @@ pub fn load(
     let overrides: GitVersionConfiguration = serde_yaml::from_str(&text)
         .with_context(|| t!("config.yaml_parse_failed", path = path.display()))?;
 
-    // workflow 값이 파일 경로이면 해당 파일을 기본 설정으로 사용.
+    // When the workflow value is a file path, load that file as the base configuration.
     let config_dir = path.parent().unwrap_or(work_dir);
     let mut base = match overrides.workflow.as_deref() {
         Some(wf) if is_workflow_file_path(wf) => load_workflow_file(wf, config_dir)?,
@@ -94,10 +94,10 @@ pub fn load(
     Ok(base)
 }
 
-/// 설정 검증(원본 ConfigurationBuilderBase.ValidateConfiguration).
+/// Validate configuration (mirrors the original `ConfigurationBuilderBase.ValidateConfiguration`).
 ///
-/// 각 브랜치는 `regex` 가 있어야 하고, `source-branches` 는 설정된 브랜치만 참조해야
-/// 한다. 위반 시 에러(원본은 ConfigurationException 으로 중단).
+/// Every branch must have a `regex`, and `source-branches` may only reference configured branches.
+/// Violations return an error (the original throws `ConfigurationException`).
 pub fn validate(config: &GitVersionConfiguration) -> Result<()> {
     const HELP: &str = "\nSee https://gitversion.net/docs/reference/configuration for more info";
     for (name, bc) in &config.branches {
@@ -122,8 +122,8 @@ pub fn validate(config: &GitVersionConfiguration) -> Result<()> {
     Ok(())
 }
 
-/// `is-source-branch-for` 역매핑: 브랜치 A 가 `is-source-branch-for: [X]` 를 가지면
-/// 대상 X 의 `source-branches` 에 A 를 추가한다(원본 ApplySourceBranchesSourceBranch).
+/// Reverse-map `is-source-branch-for`: if branch A declares `is-source-branch-for: [X]`,
+/// A is added to X's `source-branches` (mirrors the original `ApplySourceBranchesSourceBranch`).
 pub fn apply_source_branch_mappings(config: &mut GitVersionConfiguration) {
     let mappings: Vec<(String, Vec<String>)> = config
         .branches
@@ -142,7 +142,7 @@ pub fn apply_source_branch_mappings(config: &mut GitVersionConfiguration) {
     }
 }
 
-/// override 설정을 base 위에 덮어쓴다(Some/비어있지 않은 값만).
+/// Overlay `over` onto `base` (only Some / non-empty values are applied).
 pub fn merge(base: &mut GitVersionConfiguration, over: GitVersionConfiguration) {
     macro_rules! ov {
         ($field:ident) => {
@@ -205,7 +205,7 @@ pub fn merge(base: &mut GitVersionConfiguration, over: GitVersionConfiguration) 
         base.exec.extend(over.exec);
     }
 
-    // 브랜치별 병합.
+    // Per-branch merge.
     for (key, ob) in over.branches {
         let entry = base.branches.entry(key).or_default();
         merge_branch(entry, ob);
@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn label_number_pattern_yaml_roundtrip() {
-        // label-number-pattern 은 YAML 에서 파싱되고 브랜치에 적용됨.
+        // label-number-pattern is parsed from YAML and applied to the branch.
         let c = config_from(
             "branches:\n  main:\n    regex: '^main$'\n    label-number-pattern: '[0-9]+'\n",
         );

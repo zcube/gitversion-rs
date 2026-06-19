@@ -1,7 +1,7 @@
-//! 워크플로별 내장 기본 설정.
+//! Built-in default configuration per workflow.
 //!
-//! 원본 `GitVersion.Configuration/Builders/{GitFlow,GitHubFlow,TrunkBased}ConfigurationBuilder.cs`
-//! 의 값을 그대로 옮긴다.
+//! Ports the values from the original
+//! `GitVersion.Configuration/Builders/{GitFlow,GitHubFlow,TrunkBased}ConfigurationBuilder.cs`.
 
 use super::model::*;
 use std::collections::BTreeMap;
@@ -32,7 +32,7 @@ fn prevent(
     }
 }
 
-/// 전역 기본 필드를 채운 루트 설정(브랜치 미포함).
+/// Root configuration with global default fields populated (no branch entries).
 fn global_base(mode: DeploymentMode, strategies: Vec<VersionStrategy>) -> GitVersionConfiguration {
     GitVersionConfiguration {
         assembly_versioning_scheme: Some(VersioningScheme::MajorMinorPatch),
@@ -71,7 +71,7 @@ fn branch(regex: &str) -> BranchConfiguration {
     }
 }
 
-/// 기본 버전 전략(GitFlow/GitHubFlow 공용).
+/// Default version strategies shared by GitFlow and GitHubFlow.
 fn default_strategies() -> Vec<VersionStrategy> {
     vec![
         VersionStrategy::Fallback,
@@ -83,7 +83,7 @@ fn default_strategies() -> Vec<VersionStrategy> {
     ]
 }
 
-/// GitFlow 워크플로(기본값).
+/// GitFlow workflow (the default).
 pub fn gitflow() -> GitVersionConfiguration {
     let mut c = global_base(DeploymentMode::ContinuousDelivery, default_strategies());
     let mut b: BTreeMap<String, BranchConfiguration> = BTreeMap::new();
@@ -221,7 +221,7 @@ pub fn gitflow() -> GitVersionConfiguration {
     c
 }
 
-/// GitHubFlow 워크플로.
+/// GitHubFlow workflow.
 pub fn githubflow() -> GitVersionConfiguration {
     let mut c = global_base(DeploymentMode::ContinuousDelivery, default_strategies());
     let mut b: BTreeMap<String, BranchConfiguration> = BTreeMap::new();
@@ -299,7 +299,7 @@ pub fn githubflow() -> GitVersionConfiguration {
     c
 }
 
-/// TrunkBased(Mainline) 워크플로.
+/// TrunkBased (Mainline) workflow.
 pub fn trunkbased() -> GitVersionConfiguration {
     let mut c = global_base(
         DeploymentMode::ContinuousDelivery,
@@ -377,7 +377,7 @@ pub fn trunkbased() -> GitVersionConfiguration {
     c
 }
 
-/// 워크플로 이름으로 기본 설정 선택. None 이면 GitFlow.
+/// Select default configuration by workflow name. Falls back to GitFlow when None.
 pub fn for_workflow(workflow: Option<&str>) -> GitVersionConfiguration {
     match workflow.map(|w| w.to_ascii_lowercase()) {
         Some(w) if w.starts_with("githubflow") => githubflow(),

@@ -109,11 +109,11 @@ fn fixtures_match_real_gitversion() {
         let expected_text = fs::read_to_string(dir.join("expected.json")).unwrap();
         let expected: Value = serde_json::from_str(&expected_text).unwrap();
 
-        // 우리 엔진 실행.
+        // Run our engine.
         let repo = match git::GitRepo::discover(dir) {
             Ok(r) => r,
             Err(e) => {
-                failures.push(format!("[{name}] 저장소 오픈 실패: {e}"));
+                failures.push(format!("[{name}] failed to open repo: {e}"));
                 continue;
             }
         };
@@ -122,13 +122,13 @@ fn fixtures_match_real_gitversion() {
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| dir.clone());
         let configuration = config::loader::load(None, &workdir, Some(&workdir)).unwrap();
-        // 캐시를 경유하지 않고 calculate 를 직접 호출한다(디스크 캐시는 app.rs 의
-        // load/store 래퍼에서만 동작). golden 비교는 항상 재계산으로 수행해
-        // .NET 의 /nocache 출력과 1:1 로 맞춘다.
+        // Call calculate directly without going through the cache (the disk cache
+        // is managed only by app.rs load/store wrappers). Golden comparisons always
+        // recompute to match .NET's /nocache output 1:1.
         let vars = match version::calculation::calculate(&repo, &configuration, None) {
             Ok(v) => v,
             Err(e) => {
-                failures.push(format!("[{name}] 계산 실패: {e}"));
+                failures.push(format!("[{name}] calculation failed: {e}"));
                 continue;
             }
         };
@@ -139,14 +139,14 @@ fn fixtures_match_real_gitversion() {
             let got = actual.get(*key).cloned().unwrap_or_default();
             if exp != got {
                 failures.push(format!(
-                    "[{name}] {key}: 기대(real)={exp:?} 실제(mine)={got:?}"
+                    "[{name}] {key}: expected(real)={exp:?} actual(mine)={got:?}"
                 ));
             }
         }
         checked += 1;
     }
 
-    // 정리(임시 디렉터리 제거).
+    // Cleanup (remove temp directory).
     let _ = fs::remove_dir_all(&root);
 
     if !failures.is_empty() {

@@ -1,13 +1,13 @@
-//! GitVersion 설정 데이터 모델.
+//! GitVersion configuration data model.
 //!
-//! 원본 `schemas/6.3/GitVersion.configuration.json` 및
-//! `GitVersion.Configuration/GitVersionConfiguration.cs` 와 1:1 대응한다.
-//! YAML 키는 모두 kebab-case.
+//! Maps 1:1 to the original `schemas/6.3/GitVersion.configuration.json` and
+//! `GitVersion.Configuration/GitVersionConfiguration.cs`.
+//! All YAML keys are kebab-case.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// 증분 전략. `increment` 키.
+/// Increment strategy. `increment` key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum IncrementStrategy {
     None,
@@ -17,7 +17,7 @@ pub enum IncrementStrategy {
     Inherit,
 }
 
-/// 배포 모드. `mode` 키.
+/// Deployment mode. `mode` key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeploymentMode {
     ManualDeployment,
@@ -25,7 +25,7 @@ pub enum DeploymentMode {
     ContinuousDeployment,
 }
 
-/// 커밋 메시지 기반 증분 동작. `commit-message-incrementing` 키.
+/// Commit-message-based increment behaviour. `commit-message-incrementing` key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CommitMessageIncrementMode {
     Enabled,
@@ -33,7 +33,7 @@ pub enum CommitMessageIncrementMode {
     MergeMessageOnly,
 }
 
-/// 버전 탐색 전략. `strategies` 키.
+/// Version discovery strategy. `strategies` key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VersionStrategy {
     None,
@@ -46,7 +46,7 @@ pub enum VersionStrategy {
     Mainline,
 }
 
-/// AssemblyVersion / AssemblyFileVersion 부여 스킴.
+/// Versioning scheme for AssemblyVersion / AssemblyFileVersion.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VersioningScheme {
     MajorMinorPatchTag,
@@ -56,14 +56,14 @@ pub enum VersioningScheme {
     None,
 }
 
-/// SemanticVersion 파싱 엄격도.
+/// SemanticVersion parsing strictness.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SemanticVersionFormat {
     Strict,
     Loose,
 }
 
-/// increment 방지 설정. `prevent-increment` 키.
+/// Prevent-increment configuration. `prevent-increment` key.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct PreventIncrement {
@@ -75,7 +75,7 @@ pub struct PreventIncrement {
     pub when_current_commit_tagged: Option<bool>,
 }
 
-/// 무시할 커밋 설정. `ignore` 키.
+/// Commit-ignore configuration. `ignore` key.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct IgnoreConfig {
@@ -83,13 +83,13 @@ pub struct IgnoreConfig {
     pub commits_before: Option<String>,
     #[serde(default)]
     pub sha: Vec<String>,
-    /// 이 경로 아래 파일만 변경한 커밋을 버전 계산에서 제외.
-    /// 커밋의 변경 파일 전부가 무시 경로에 속할 때만 제외된다.
+    /// Exclude commits that only touch files under these paths from version calculation.
+    /// A commit is excluded only when *all* its changed files fall under the ignored paths.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub paths: Vec<String>,
 }
 
-/// 개별 브랜치 설정. 전역 설정에서 상속받아 병합된다.
+/// Per-branch configuration. Merged with the global configuration via inheritance.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct BranchConfiguration {
@@ -121,14 +121,14 @@ pub struct BranchConfiguration {
     pub source_branches: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub is_source_branch_for: Vec<String>,
-    /// pre-release label 에서 번호를 추출하는 정규식.
-    /// 원본 `BranchConfiguration.LabelNumberPattern` 대응.
-    /// 기본 None 이면 내장 고정 패턴을 사용한다.
+    /// Regex for extracting a number from the pre-release label.
+    /// Corresponds to the original `BranchConfiguration.LabelNumberPattern`.
+    /// When None, the built-in fixed pattern is used.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label_number_pattern: Option<String>,
 }
 
-/// 루트 GitVersion 설정.
+/// Root GitVersion configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct GitVersionConfiguration {
@@ -169,7 +169,7 @@ pub struct GitVersionConfiguration {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub strategies: Vec<VersionStrategy>,
 
-    // 브랜치 단위로도 지정 가능한 전역 기본값
+    // Global defaults that can also be overridden per-branch
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub increment: Option<IncrementStrategy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -198,7 +198,7 @@ pub struct GitVersionConfiguration {
     pub source_branches: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub is_source_branch_for: Vec<String>,
-    /// 브랜치 전역 기본 `label-number-pattern`. 브랜치별 설정으로 오버라이드 가능.
+    /// Global default `label-number-pattern`. Can be overridden per branch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label_number_pattern: Option<String>,
 
@@ -209,8 +209,8 @@ pub struct GitVersionConfiguration {
     #[serde(default)]
     pub branches: BTreeMap<String, BranchConfiguration>,
 
-    /// 외부 명령 훅(semantic-release exec 유사). 훅 이름 -> 쉘 명령.
-    /// 지원 훅: verify, prepare, publish, success, fail.
+    /// External command hooks (similar to the semantic-release exec plugin). Hook name -> shell command.
+    /// Supported hooks: verify, prepare, publish, success, fail.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub exec: BTreeMap<String, String>,
 }

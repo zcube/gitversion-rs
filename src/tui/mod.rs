@@ -1,7 +1,8 @@
-//! Ratatui 기반 대화형 TUI.
+//! Ratatui-based interactive TUI.
 //!
-//! 단순 뷰어를 넘어, 계산 결과 탐색과 실제 버전에 영향을 주는 조작(태그/브랜치
-//! 생성, next-version 설정, 캐시 삭제, 동적 clone, 브랜치별 재계산)을 제공한다.
+//! Goes beyond a simple viewer to offer exploration of computed results and operations
+//! that affect the actual version (tag/branch creation, next-version override, cache
+//! clearing, dynamic clone, per-branch recomputation).
 
 use crate::config::effective::EffectiveConfiguration;
 use crate::config::{loader, GitVersionConfiguration};
@@ -25,7 +26,7 @@ use std::io;
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// 탭 제목 번역 키(렌더 시점에 t! 로 해석).
+/// Translation keys for tab titles (resolved via `t!` at render time).
 const TAB_KEYS: [&str; 5] = [
     "tui.tab.variables",
     "tui.tab.config",
@@ -34,7 +35,7 @@ const TAB_KEYS: [&str; 5] = [
     "tui.tab.actions",
 ];
 
-/// 텍스트 입력이 필요한 액션.
+/// Actions that require text input.
 #[derive(Clone, Copy, PartialEq)]
 enum InputAction {
     CreateTag,
@@ -62,9 +63,9 @@ struct App {
     repo: GitRepo,
     config: GitVersionConfiguration,
     work_dir: PathBuf,
-    /// 현재 체크아웃 브랜치(기준).
+    /// Currently checked-out branch (baseline).
     base_branch: String,
-    /// 재계산 대상 브랜치(브랜치 탭에서 선택). None 이면 base.
+    /// Branch to recompute for (selected in the Branches tab). None means the baseline branch.
     branch_override: Option<String>,
     next_version_override: Option<String>,
 
@@ -82,16 +83,16 @@ struct App {
     input_buf: String,
     status: String,
     actions: Vec<&'static str>,
-    /// 이벤트 루프가 터미널을 잠시 빠져나가 side-effect 훅을 실행하도록 요청.
+    /// Signal to the event loop to leave the terminal temporarily and run side-effect hooks.
     pending_run_hooks: bool,
-    /// 편집 중인 전역 설정 키(EditConfig 입력용).
+    /// Global config key currently being edited (for EditConfig input).
     edit_config_key: Option<String>,
-    /// TUI 에서 변경한 전역 설정(key=value). 파일 저장 시 최소 diff 로 기록.
+    /// Global config changes made via the TUI (key=value). Written as a minimal diff when saving.
     tui_overrides: std::collections::BTreeMap<String, String>,
 }
 
-/// 설정 탭에서 편집 가능한 전역 설정 키(overrideconfig 와 동일 의미).
-/// (설정 키, 힌트 번역 키). 힌트는 렌더 시점에 t! 로 해석한다.
+/// Global config keys editable in the Config tab (same meaning as overrideconfig).
+/// Tuple of (config key, hint translation key); hints are resolved via `t!` at render time.
 const EDITABLE_CONFIG: [(&str, &str); 13] = [
     ("increment", "tui.hint.increment"),
     ("mode", "tui.hint.mode"),
@@ -108,7 +109,7 @@ const EDITABLE_CONFIG: [(&str, &str); 13] = [
     ("no-bump-message", "tui.hint.regex"),
 ];
 
-/// 문자열을 YAML 스칼라(bool/int/문자열)로 변환.
+/// Convert a string to a YAML scalar (bool / int / string).
 fn yaml_scalar(v: &str) -> serde_yaml::Value {
     if let Ok(b) = v.parse::<bool>() {
         return serde_yaml::Value::Bool(b);
@@ -119,7 +120,7 @@ fn yaml_scalar(v: &str) -> serde_yaml::Value {
     serde_yaml::Value::String(v.to_string())
 }
 
-/// 전역 설정 키의 현재 값을 문자열로.
+/// Current value of a global config key as a string.
 fn global_value(config: &GitVersionConfiguration, key: &str) -> String {
     match key {
         "increment" => config
@@ -160,7 +161,7 @@ fn global_value(config: &GitVersionConfiguration, key: &str) -> String {
     }
 }
 
-/// TUI 실행. 저장소·설정을 받아 대화형으로 동작한다.
+/// Launch the TUI. Accepts a repository and configuration and runs interactively.
 pub fn run(repo: GitRepo, config: GitVersionConfiguration, work_dir: PathBuf) -> Result<()> {
     let base_branch = repo.current_branch_name().unwrap_or_default();
     let mut app = App {
@@ -182,7 +183,7 @@ pub fn run(repo: GitRepo, config: GitVersionConfiguration, work_dir: PathBuf) ->
         input: None,
         input_buf: String::new(),
         status: t!("tui.status.ready").to_string(),
-        // 액션 라벨 번역 키(렌더 시점에 t! 로 해석). 순서는 run_action 의 인덱스와 일치.
+        // Action label translation keys (resolved via `t!` at render time). Order matches run_action indices.
         actions: vec![
             "tui.action.create_tag",
             "tui.action.create_branch",
@@ -208,8 +209,8 @@ pub fn run(repo: GitRepo, config: GitVersionConfiguration, work_dir: PathBuf) ->
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // 패닉이 나도 alternate screen 을 오염시키지 않도록 훅을 잠시 교체하고,
-    // 패닉 메시지를 보관한다. catch_unwind 로 패닉을 잡아 우아하게 종료한다.
+    // Replace the panic hook temporarily so that panics do not corrupt the alternate screen;
+    // capture the message, then catch_unwind to shut down gracefully.
     let panic_msg: std::sync::Arc<std::sync::Mutex<Option<String>>> = Default::default();
     let captured = panic_msg.clone();
     let original_hook = std::panic::take_hook();
@@ -231,7 +232,7 @@ pub fn run(repo: GitRepo, config: GitVersionConfiguration, work_dir: PathBuf) ->
         event_loop(&mut terminal, &mut app)
     }));
 
-    // 무슨 일이 있어도 터미널을 복구한다.
+    // Always restore the terminal regardless of what happened.
     let _ = disable_raw_mode();
     let _ = execute!(
         terminal.backend_mut(),
@@ -249,7 +250,7 @@ pub fn run(repo: GitRepo, config: GitVersionConfiguration, work_dir: PathBuf) ->
                 .unwrap()
                 .clone()
                 .unwrap_or_else(|| t!("tui.panic.internal").to_string());
-            // 패닉을 크래시가 아니라 일반 에러로 변환(터미널은 이미 복구됨).
+            // Convert the panic to a normal error instead of a crash (terminal already restored).
             log::error!("{}", t!("tui.panic.defended", msg = msg));
             Err(anyhow::anyhow!("{}", t!("tui.panic.exit", msg = msg)))
         }
@@ -257,7 +258,7 @@ pub fn run(repo: GitRepo, config: GitVersionConfiguration, work_dir: PathBuf) ->
 }
 
 impl App {
-    /// 현재 override 를 반영한 설정으로 재계산.
+    /// Recompute with the configuration reflecting the current overrides.
     fn recompute(&mut self) {
         let mut cfg = self.config.clone();
         if let Some(nv) = &self.next_version_override {
@@ -266,7 +267,7 @@ impl App {
         match calculation::calculate(&self.repo, &cfg, self.branch_override.clone()) {
             Ok(mut v) => {
                 let mut hook_applied = false;
-                // version exec 훅이 있으면 그 출력으로 버전을 수정해 재계산(CLI 와 동일).
+                // When a version exec hook is present, use its output to override the version and recompute (mirrors CLI).
                 if let Some(cmd) = cfg.exec.get("version").cloned() {
                     if let Ok(Some(nv)) = exec::run_version_hook(&cmd, &v, &self.work_dir, false) {
                         cfg.next_version = Some(nv.clone());
@@ -292,7 +293,7 @@ impl App {
             }
             Err(e) => self.status = t!("tui.status.calc_error", error = format!("{e}")).to_string(),
         }
-        // 커밋 목록 갱신(대상 브랜치 기준).
+        // Refresh the commit list for the target branch.
         let target = self
             .branch_override
             .clone()
@@ -308,7 +309,7 @@ impl App {
         self.branches = self.repo.local_branch_names().unwrap_or_default();
     }
 
-    /// 현재 표시 중인 변수 (검색 필터 적용).
+    /// Currently displayed variables with the search filter applied.
     fn filtered_vars(&self) -> Vec<(String, String)> {
         let q = self.search.to_lowercase();
         self.vars
@@ -382,7 +383,7 @@ impl App {
                     self.config.exec.insert(name.clone(), cmd);
                     self.status = t!("tui.status.hook_set", name = name).to_string();
                 }
-                // version 훅 변경은 버전에 영향 → 재계산 후 저장.
+                // A version-hook change affects the version output → recompute then persist.
                 self.recompute();
                 self.save_config();
             }
@@ -450,7 +451,7 @@ impl App {
             1 => self.start_input(InputAction::CreateBranch),
             2 => self.start_input(InputAction::SetNextVersion),
             3 => self.start_input(InputAction::EditExecHook),
-            4 => self.pending_run_hooks = true, // 이벤트 루프가 터미널을 빠져나가 실행.
+            4 => self.pending_run_hooks = true, // Event loop exits the terminal to run.
             5 => self.save_config(),
             6 => match self.repo.clear_cache() {
                 Ok(n) => self.status = t!("tui.status.cache_cleared", count = n).to_string(),
@@ -472,7 +473,7 @@ impl App {
         }
     }
 
-    /// 변경된 전역 설정을 GitVersion.yml 에 최소 diff 로 저장(기존 파일 보존).
+    /// Save changed global config keys to GitVersion.yml as a minimal diff (existing content preserved).
     fn save_config(&mut self) {
         let path = self.work_dir.join("GitVersion.yml");
         let mut doc: serde_yaml::Mapping = std::fs::read_to_string(&path)
@@ -480,11 +481,11 @@ impl App {
             .and_then(|s| serde_yaml::from_str(&s).ok())
             .unwrap_or_default();
 
-        // 변경한 전역 키들을 스칼라로 기록.
+        // Write the changed global keys as scalars.
         for (k, v) in &self.tui_overrides {
             doc.insert(serde_yaml::Value::String(k.clone()), yaml_scalar(v));
         }
-        // exec 훅 맵.
+        // Write the exec hook map.
         if self.config.exec.is_empty() {
             doc.remove(serde_yaml::Value::String("exec".into()));
         } else {
@@ -513,7 +514,7 @@ impl App {
         }
     }
 
-    /// 전역 설정 키를 편집(overrideconfig 동일 로직) + 기록 + 재계산 + 저장.
+    /// Edit a global config key (same logic as overrideconfig), record it, recompute, and save.
     fn apply_global_edit(&mut self, key: &str, value: &str) {
         crate::cli::apply_overrides(&mut self.config, &[format!("{key}={value}")]);
         self.tui_overrides
@@ -552,7 +553,7 @@ where
             continue;
         }
 
-        // 입력 모달 우선.
+        // Input modal takes priority.
         if app.input.is_some() {
             match key.code {
                 KeyCode::Esc => {
@@ -569,7 +570,7 @@ where
             continue;
         }
 
-        // 검색 입력 모드(변수 탭).
+        // Search input mode (Variables tab).
         if app.searching {
             match key.code {
                 KeyCode::Esc => {
@@ -621,7 +622,7 @@ where
             _ => {}
         }
 
-        // side-effect 훅 실행 요청: 터미널을 잠시 빠져나가 명령 출력을 그대로 보여준다.
+        // Side-effect hook run requested: leave the terminal temporarily to show command output directly.
         if app.pending_run_hooks {
             app.pending_run_hooks = false;
             run_hooks_suspended(terminal, app)?;
@@ -629,7 +630,7 @@ where
     }
 }
 
-/// 터미널을 일시 복구해 exec side-effect 훅을 실행하고 다시 진입한다.
+/// Temporarily restore the terminal, run exec side-effect hooks, then re-enter TUI mode.
 fn run_hooks_suspended<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()>
 where
     B::Error: std::error::Error + Send + Sync + 'static,
@@ -638,7 +639,7 @@ where
         app.status = t!("tui.status.no_exec_hooks").to_string();
         return Ok(());
     }
-    // 일반 화면으로 복귀.
+    // Return to the normal screen.
     let _ = disable_raw_mode();
     let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
     println!("\n=== {} ===", t!("tui.exec_run_header"));
@@ -653,7 +654,7 @@ where
     println!("\n{}", t!("tui.press_enter_return"));
     let mut line = String::new();
     let _ = io::stdin().read_line(&mut line);
-    // TUI 재진입.
+    // Re-enter TUI mode.
     enable_raw_mode()?;
     execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
     terminal.clear()?;
@@ -683,7 +684,7 @@ impl App {
     fn on_enter(&mut self) {
         match self.tab {
             1 => {
-                // 선택한 전역 설정 키 편집(현재 값 미리 채움).
+                // Edit the selected global config key, pre-filling the current value.
                 if let Some((key, _)) = EDITABLE_CONFIG.get(self.selected) {
                     self.edit_config_key = Some((*key).to_string());
                     self.input_buf = global_value(&self.config, key);
@@ -705,7 +706,7 @@ impl App {
         }
     }
 
-    /// 입력 모달 프롬프트(EditConfig 는 키 표시).
+    /// Input modal prompt text (EditConfig shows the key name).
     fn input_prompt(&self) -> String {
         match (&self.input, &self.edit_config_key) {
             (Some(InputAction::EditConfig), Some(key)) => {
@@ -733,7 +734,7 @@ fn ui(f: &mut Frame, app: &App) {
         ])
         .split(f.area());
 
-    // 헤더.
+    // Header.
     let target = app.branch_override.as_deref().unwrap_or(&app.base_branch);
     let mut header_spans = vec![
         Span::styled(
@@ -764,7 +765,7 @@ fn ui(f: &mut Frame, app: &App) {
         chunks[0],
     );
 
-    // 탭.
+    // Tabs.
     let tabs = Tabs::new(
         TAB_KEYS
             .iter()
@@ -789,7 +790,7 @@ fn ui(f: &mut Frame, app: &App) {
         _ => render_actions(f, app, chunks[2]),
     }
 
-    // 푸터(상태 + 도움말).
+    // Footer (status + help).
     let help = match app.tab {
         0 => t!("tui.help.variables"),
         1 => t!("tui.help.config"),
@@ -807,7 +808,7 @@ fn ui(f: &mut Frame, app: &App) {
     ]);
     f.render_widget(Paragraph::new(footer), chunks[3]);
 
-    // 입력 모달.
+    // Input modal.
     if let Some(action) = &app.input {
         let _ = action;
         render_input_modal(f, &app.input_prompt(), &app.input_buf);
@@ -857,7 +858,7 @@ fn render_variables(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_config(f: &mut Frame, app: &App, area: Rect) {
-    // 위: 편집 가능한 전역 설정(선택 목록), 아래: effective 결과.
+    // Top: editable global config (selection list). Bottom: effective config result.
     let halves = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Percentage(45), Constraint::Percentage(55)])

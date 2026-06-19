@@ -1,6 +1,6 @@
-//! git 조작 API(태그/브랜치 생성, 캐시 삭제) 통합 테스트.
+//! Integration tests for the git manipulation API (tag/branch creation, cache clearing).
 //!
-//! `git` CLI 로 임시 저장소를 만든 뒤 GitRepo 로 조작을 검증한다.
+//! Creates a temporary repository via the `git` CLI and verifies operations through `GitRepo`.
 
 use std::path::Path;
 use std::process::Command;
@@ -13,14 +13,14 @@ fn git(dir: &Path, args: &[&str]) {
         .args(args)
         .env("GIT_AUTHOR_DATE", "1609459200 +0000")
         .env("GIT_COMMITTER_DATE", "1609459200 +0000")
-        // CI 러너에는 전역 git 신원이 없으므로 명시한다.
+        // Provide an explicit identity because CI runners may not have a global git config.
         .env("GIT_AUTHOR_NAME", "test")
         .env("GIT_AUTHOR_EMAIL", "test@example.com")
         .env("GIT_COMMITTER_NAME", "test")
         .env("GIT_COMMITTER_EMAIL", "test@example.com")
         .status()
-        .expect("git 실행 실패");
-    assert!(status.success(), "git {args:?} 실패");
+        .expect("failed to run git");
+    assert!(status.success(), "git {args:?} failed");
 }
 
 fn temp_repo() -> std::path::PathBuf {
@@ -32,8 +32,8 @@ fn temp_repo() -> std::path::PathBuf {
     std::fs::create_dir_all(&dir).unwrap();
     git(&dir, &["init", "-q", "-b", "main"]);
     git(&dir, &["config", "commit.gpgsign", "false"]);
-    // gix 가 브랜치 생성 시 reflog 서명용 committer 신원을 읽도록 로컬 설정.
-    // (CI 러너에는 전역 git 신원이 없다.)
+    // Set local identity so gix can read the committer when writing the reflog for branch creation.
+    // (CI runners may not have a global git identity configured.)
     git(&dir, &["config", "user.email", "test@example.com"]);
     git(&dir, &["config", "user.name", "test"]);
     git(
@@ -48,20 +48,20 @@ fn create_tag_and_branch_via_gix() {
     let dir = temp_repo();
     let repo = GitRepo::discover(&dir).unwrap();
 
-    // 태그 생성 → HEAD 에 존재.
+    // Create tag → it must appear on HEAD.
     repo.create_tag("v9.9.9", None).unwrap();
     let tags = repo.tags().unwrap();
     assert!(
         tags.iter().any(|t| t.name == "v9.9.9"),
-        "태그가 생성되지 않음: {tags:?}"
+        "tag was not created: {tags:?}"
     );
 
-    // 브랜치 생성 → 로컬 브랜치 목록에 포함.
+    // Create branch → it must appear in the local branch list.
     repo.create_branch("feature/from-tui", None).unwrap();
     let branches = repo.local_branch_names().unwrap();
     assert!(
         branches.iter().any(|b| b == "feature/from-tui"),
-        "브랜치 미생성: {branches:?}"
+        "branch was not created: {branches:?}"
     );
 
     std::fs::remove_dir_all(&dir).ok();
@@ -78,7 +78,7 @@ fn clear_cache_removes_dir() {
     let removed = repo.clear_cache().unwrap();
     assert_eq!(removed, 1);
     assert!(!cache_dir.exists());
-    // 없을 때 호출은 0.
+    // Calling again when nothing is cached returns 0.
     assert_eq!(repo.clear_cache().unwrap(), 0);
 
     std::fs::remove_dir_all(&dir).ok();

@@ -1,7 +1,7 @@
-//! SemanticVersion 데이터 모델.
+//! SemanticVersion data model.
 //!
-//! 원본 `GitVersion.Core/SemVer/SemanticVersion.cs`,
-//! `SemanticVersionPreReleaseTag.cs`, `SemanticVersionBuildMetaData.cs` 대응.
+//! Corresponds to the upstream `GitVersion.Core/SemVer/SemanticVersion.cs`,
+//! `SemanticVersionPreReleaseTag.cs`, and `SemanticVersionBuildMetaData.cs`.
 
 use chrono::{DateTime, FixedOffset};
 use std::cmp::Ordering;
@@ -9,12 +9,12 @@ use std::fmt;
 
 use super::VersionField;
 
-/// pre-release 태그. 예: `beta.1` => name="beta", number=Some(1).
+/// Pre-release tag. Example: `beta.1` => name="beta", number=Some(1).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PreReleaseTag {
     pub name: String,
     pub number: Option<i64>,
-    /// 이름이 비어 있어도 number 가 있으면 태그로 취급(promote).
+    /// Even if the name is empty, treat as a tag (promote) when a number is present.
     pub promote_tag_even_if_name_is_empty: bool,
 }
 
@@ -27,21 +27,20 @@ impl PreReleaseTag {
         }
     }
 
-    /// 의미 있는 태그가 존재하는지.
+    /// Returns true if a meaningful pre-release tag exists.
     pub fn has_tag(&self) -> bool {
         !self.name.is_empty() || (self.number.is_some() && self.promote_tag_even_if_name_is_empty)
     }
 
-    /// 원본 `SemanticVersionPreReleaseTag.Parse`. `beta.1`, `beta`, `1` 형태 지원.
+    /// Corresponds to the upstream `SemanticVersionPreReleaseTag.Parse`. Supports `beta.1`, `beta`, and `1` forms.
     ///
-    /// 입력이 비어있지 않으면 `promote_tag_even_if_name_is_empty = true` 로 설정한다.
-    /// 이로 인해 `1` 처럼 숫자만 있는 pre-release(`name=""`)도 `has_tag() = true` 가 되어
-    /// pre-release 태그로 올바르게 인식된다.
+    /// Sets `promote_tag_even_if_name_is_empty = true` for non-empty input,
+    /// so a number-only pre-release (e.g. `1`, where `name=""`) correctly returns `has_tag() = true`.
     pub fn parse(input: &str) -> Self {
         if input.trim().is_empty() {
             return Self::default();
         }
-        // name 과 trailing number 분리: 끝의 숫자(앞에 '.' 또는 없이)를 number 로.
+        // Split name and trailing number: the trailing digits (optionally preceded by '.') become the number.
         let re = regex::Regex::new(r"(?<name>.*?)\.?(?<number>\d+)?$").unwrap();
         if let Some(c) = re.captures(input) {
             let name = c.name("name").map(|m| m.as_str()).unwrap_or("").to_string();
@@ -61,7 +60,7 @@ impl PreReleaseTag {
         }
     }
 
-    /// `t` 포맷: 이름만. 기본 포맷: `name.number`.
+    /// `t` format: name only. Default format: `name.number`.
     pub fn format(&self, legacy_dash: bool) -> String {
         let _ = legacy_dash;
         match self.number {
@@ -74,7 +73,7 @@ impl PreReleaseTag {
 
 impl Ord for PreReleaseTag {
     fn cmp(&self, other: &Self) -> Ordering {
-        // 태그 없음(안정 버전) > 태그 있음(pre-release)
+        // No tag (stable) > has tag (pre-release)
         match (self.has_tag(), other.has_tag()) {
             (false, false) => Ordering::Equal,
             (false, true) => Ordering::Greater,
@@ -93,7 +92,7 @@ impl PartialOrd for PreReleaseTag {
     }
 }
 
-/// build metadata. commits-since-tag, branch, sha 등.
+/// Build metadata: commits-since-tag, branch, sha, etc.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BuildMetaData {
     pub commits_since_tag: Option<i64>,
@@ -109,23 +108,23 @@ pub struct BuildMetaData {
 }
 
 impl BuildMetaData {
-    /// 안전 문자만 남기기: `[^0-9A-Za-z-.]` => `-`.
-    /// InformationalVersion 의 Branch 부분은 점(.)을 허용한다.
-    /// 원본 .NET GitVersion 의 BuildMetaData 에서 branch 를 sanitize 할 때
-    /// 슬래시 등 특수문자는 치환하지만 점은 유지한다.
+    /// Keep only safe characters: `[^0-9A-Za-z-.]` => `-`.
+    /// The Branch part of InformationalVersion allows dots.
+    /// The upstream .NET GitVersion BuildMetaData sanitizes branches by replacing
+    /// special characters like slashes but preserving dots.
     fn sanitize(s: &str) -> String {
         let re = regex::Regex::new(r"[^0-9A-Za-z\-.]").unwrap();
         re.replace_all(s, "-").into_owned()
     }
 
-    /// 기본 포맷 `b`: commits-since-tag 만.
+    /// Short format `b`: commits-since-tag only.
     pub fn format_short(&self) -> String {
         self.commits_since_tag
             .map(|c| c.to_string())
             .unwrap_or_default()
     }
 
-    /// 완전 포맷 `f`: commits.Branch.<branch>.Sha.<sha>[.other].
+    /// Full format `f`: commits.Branch.<branch>.Sha.<sha>[.other].
     pub fn format_full(&self) -> String {
         let mut parts: Vec<String> = Vec::new();
         if let Some(c) = self.commits_since_tag {
@@ -146,7 +145,7 @@ impl BuildMetaData {
     }
 }
 
-/// 완전한 의미론적 버전.
+/// A complete semantic version.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SemanticVersion {
     pub major: i64,
@@ -166,22 +165,22 @@ impl SemanticVersion {
         }
     }
 
-    /// `Major.Minor.Patch` 만.
+    /// Returns only `Major.Minor.Patch`.
     pub fn major_minor_patch(&self) -> String {
         format!("{}.{}.{}", self.major, self.minor, self.patch)
     }
 
-    /// 버전 문자열 파싱(Loose). `tag_prefix` 정규식으로 접두어 제거 후 파싱.
-    /// 예: `v1.2.3-beta.4`, `1.2`, `1`.
+    /// Parse a version string (Loose). Strips the leading prefix matched by `tag_prefix` before parsing.
+    /// Examples: `v1.2.3-beta.4`, `1.2`, `1`.
     pub fn parse(input: &str, tag_prefix: &str) -> Option<Self> {
         Self::parse_with(input, tag_prefix, false)
     }
 
-    /// 버전 문자열 파싱. `strict` 이면 SemVer 2.0 처럼 Major.Minor.Patch 3요소를
-    /// 모두 요구한다(원본 `SemanticVersionFormat.Strict`). Loose 면 부분 버전 허용.
+    /// Parse a version string. When `strict` is true, all three components (Major.Minor.Patch) are
+    /// required, as in SemVer 2.0 (mirrors the original `SemanticVersionFormat.Strict`). Loose allows partial versions.
     pub fn parse_with(input: &str, tag_prefix: &str, strict: bool) -> Option<Self> {
         let trimmed = input.trim();
-        // tag prefix 제거
+        // Strip the tag prefix.
         let body = if tag_prefix.is_empty() {
             trimmed.to_string()
         } else {
@@ -196,8 +195,8 @@ impl SemanticVersion {
         }
     }
 
-    /// 원본 `ParseStrictRegex`: major.minor.patch 모두 필수, leading-zero 금지
-    /// (`0|[1-9]\d*`), SemVer 2.0 형식의 pre-release/build metadata.
+    /// Mirrors the original `ParseStrictRegex`: all three of major.minor.patch required, no leading zeros
+    /// (`0|[1-9]\d*`), SemVer 2.0 pre-release/build metadata.
     fn parse_strict(body: &str) -> Option<Self> {
         let re = regex::Regex::new(
             r"^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<tag>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?<meta>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$",
@@ -216,9 +215,9 @@ impl SemanticVersion {
         })
     }
 
-    /// 원본 `ParseLooseRegex`: minor/patch 생략 가능, leading-zero 허용(`\d+`),
-    /// 4번째 숫자 파트(FourthPart)는 commits-since-tag 로 해석, pre-release 태그는
-    /// `+` 직전까지 느슨하게 받는다.
+    /// Mirrors the original `ParseLooseRegex`: minor/patch are optional, leading zeros allowed (`\d+`),
+    /// the fourth numeric part (FourthPart) is interpreted as commits-since-tag, and
+    /// pre-release tags are accepted loosely up to `+`.
     fn parse_loose(body: &str) -> Option<Self> {
         let re = regex::Regex::new(
             r"^(?<major>\d+)(\.(?<minor>\d+))?(\.(?<patch>\d+))?(\.(?<fourth>\d+))?(-(?<tag>[^+]*))?(\+(?<meta>.*))?$",
@@ -251,7 +250,7 @@ impl SemanticVersion {
         })
     }
 
-    /// 코어 버전만 비교(pre-release 무시).
+    /// Compare only the core version (ignoring pre-release).
     pub fn cmp_core(&self, other: &Self) -> Ordering {
         self.major
             .cmp(&other.major)
@@ -259,15 +258,15 @@ impl SemanticVersion {
             .then(self.patch.cmp(&other.patch))
     }
 
-    /// 지정 필드를 증분하고 label 을 적용. 원본 `SemanticVersion.Increment`.
+    /// Increment the specified field and apply the label. Mirrors the original `SemanticVersion.Increment`.
     ///
-    /// - 이미 pre-release 가 있고 force 가 아니면 코어 대신 pre-release 를 유지한다.
-    /// - `label` 이 `Some("")`(빈 문자열)이면 이름 없는, 그러나 번호를 노출하는
-    ///   promoted pre-release 를 만든다(예: `0.0.1-1`). `None` 이면 label 미적용.
+    /// - If a pre-release already exists and `force` is false, the core is not bumped; the pre-release is kept.
+    /// - `label` of `Some("")` (empty string) creates a name-less promoted pre-release that still
+    ///   exposes its number (e.g. `0.0.1-1`). `None` means no label is applied.
     pub fn increment(&self, field: VersionField, label: Option<&str>, force: bool) -> Self {
         let mut v = self.clone();
         let has_pre = self.pre_release_tag.has_tag();
-        // 이미 pre-release 가 있으면(그리고 force 아님) 코어를 올리지 않는다.
+        // Do not bump the core if a pre-release already exists (unless forced).
         let bump_core = !has_pre || force;
 
         match field {
@@ -285,18 +284,18 @@ impl SemanticVersion {
             _ => {}
         }
 
-        // 코어를 실제로 올렸다면 기존 pre-release 는 초기화된다.
+        // Bumping the core resets any existing pre-release.
         if bump_core && field != VersionField::None {
             v.pre_release_tag = PreReleaseTag::default();
         }
 
-        // label 적용.
+        // Apply the label.
         if let Some(l) = label {
             if v.pre_release_tag.has_tag() && v.pre_release_tag.name == l {
-                // 같은 label 이면 번호만 증가.
+                // Same label: bump the number only.
                 v.pre_release_tag.number = Some(v.pre_release_tag.number.unwrap_or(0) + 1);
             } else {
-                // 새 label. 이름이 비어 있으면 번호를 노출하기 위해 promote.
+                // New label. When the name is empty, promote to expose the number.
                 v.pre_release_tag = PreReleaseTag::new(l, Some(1), l.is_empty());
             }
         }
@@ -305,7 +304,7 @@ impl SemanticVersion {
 }
 
 impl fmt::Display for SemanticVersion {
-    /// `s` 포맷: Major.Minor.Patch[-pre].
+    /// `s` format: Major.Minor.Patch[-pre].
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.major_minor_patch())?;
         if self.pre_release_tag.has_tag() {
@@ -357,7 +356,7 @@ mod tests {
 
     #[test]
     fn increment_empty_label_promotes_number() {
-        // 빈 label → 이름 없는 promoted pre-release (예: 0.0.1-1).
+        // Empty label → name-less promoted pre-release (e.g. 0.0.1-1).
         let base = SemanticVersion::new(0, 0, 0);
         let v = base.increment(VersionField::Patch, Some(""), false);
         assert_eq!(v.major_minor_patch(), "0.0.1");
@@ -377,13 +376,13 @@ mod tests {
         let mut base = SemanticVersion::new(1, 1, 0);
         base.pre_release_tag = PreReleaseTag::new("alpha", Some(1), false);
         let v = base.increment(VersionField::Minor, Some("alpha"), false);
-        // 이미 pre-release 가 있으므로 코어 유지, 번호만 증가.
+        // Pre-release already exists: keep the core, bump the number only.
         assert_eq!(v.to_string(), "1.1.0-alpha.2");
     }
 
     #[test]
     fn strict_rejects_partial_version() {
-        // Strict 는 Major.Minor.Patch 3요소를 모두 요구.
+        // Strict requires all three of Major.Minor.Patch.
         assert!(SemanticVersion::parse_with("1.2", "[vV]?", true).is_none());
         assert!(SemanticVersion::parse_with("1", "[vV]?", true).is_none());
         assert!(SemanticVersion::parse_with("1.2.3", "[vV]?", true).is_some());
@@ -399,7 +398,7 @@ mod tests {
 
     #[test]
     fn strict_rejects_four_part_and_leading_zero() {
-        // Strict(원본 ParseStrictRegex): 4-part 거부, leading-zero 거부.
+        // Strict (original ParseStrictRegex): rejects 4-part and leading zeros.
         assert!(SemanticVersion::parse_with("1.2.3.4", "[vV]?", true).is_none());
         assert!(SemanticVersion::parse_with("01.02.03", "[vV]?", true).is_none());
         assert!(SemanticVersion::parse_with("1.2.3", "[vV]?", true).is_some());
@@ -407,14 +406,14 @@ mod tests {
 
     #[test]
     fn loose_accepts_four_part_and_leading_zero() {
-        // Loose(원본 ParseLooseRegex): 4번째 파트는 commits-since-tag 로 해석.
+        // Loose (original ParseLooseRegex): the fourth part is interpreted as commits-since-tag.
         let v = SemanticVersion::parse_with("1.2.3.4", "[vV]?", false).unwrap();
         assert_eq!((v.major, v.minor, v.patch), (1, 2, 3));
         assert_eq!(v.build_metadata.commits_since_tag, Some(4));
-        // leading-zero 허용: 01.02.03 → 1.2.3.
+        // Leading zeros are allowed: 01.02.03 → 1.2.3.
         let v = SemanticVersion::parse_with("01.02.03", "[vV]?", false).unwrap();
         assert_eq!((v.major, v.minor, v.patch), (1, 2, 3));
-        // 3-part 는 commits-since-tag 가 없다.
+        // 3-part versions have no commits-since-tag.
         let v = SemanticVersion::parse_with("1.2.3", "[vV]?", false).unwrap();
         assert_eq!(v.build_metadata.commits_since_tag, None);
     }
@@ -437,7 +436,7 @@ mod tests {
 
     #[test]
     fn prerelease_tag_format_number_only() {
-        // name 이 비어 있고 number 만 있는 경우 → 숫자 문자열 반환.
+        // name is empty and only number is set → returns the number as a string.
         let t = PreReleaseTag::new("", Some(3), true);
         assert_eq!(t.format(false), "3");
     }
@@ -450,7 +449,7 @@ mod tests {
 
     #[test]
     fn prerelease_tag_ordering_both_without_tag() {
-        // 둘 다 태그 없음 → Equal.
+        // Neither has a tag → Equal.
         let a = PreReleaseTag::default();
         let b = PreReleaseTag::default();
         assert_eq!(a.cmp(&b), std::cmp::Ordering::Equal);
@@ -507,7 +506,7 @@ mod tests {
             ..Default::default()
         };
         let full = meta.format_full();
-        // 빈 other_metadata 는 출력에 포함되지 않아야 함.
+        // Empty other_metadata must not appear in the output.
         assert_eq!(full, "1");
     }
 

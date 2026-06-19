@@ -1,8 +1,8 @@
-//! 버전 계산 엔진.
+//! Version calculation engine.
 //!
-//! 원본 `GitVersion.Core/VersionCalculation` 의 전략 → 증분 → 선택 →
-//! deployment mode 흐름을 옮긴다. 공통 GitFlow/GitHubFlow 시나리오를 정확히
-//! 처리하며, Mainline 은 단순화된 형태로 구현한다.
+//! Ports the strategy → increment → selection → deployment-mode pipeline from
+//! the original `GitVersion.Core/VersionCalculation`. Handles common GitFlow/GitHubFlow
+//! scenarios faithfully; Mainline is implemented in a simplified form.
 
 use crate::config::{
     effective::EffectiveConfiguration, CommitMessageIncrementMode, DeploymentMode,
@@ -17,12 +17,12 @@ use chrono::{DateTime, FixedOffset, NaiveDateTime, TimeZone};
 use regex::Regex;
 use std::collections::HashSet;
 
-/// 버전 계산에서 제외할 커밋 집합. 원본 `ignore` 설정.
+/// Set of commits excluded from version calculation. Corresponds to the original `ignore` config.
 #[derive(Debug, Clone, Default)]
 struct IgnoreSet {
     shas: HashSet<String>,
     before: Option<DateTime<FixedOffset>>,
-    /// 이 접두어 아래 파일만 변경한 커밋을 제외 (ignore.paths).
+    /// Exclude commits that only changed files under these path prefixes (ignore.paths).
     paths: Vec<String>,
 }
 
@@ -46,7 +46,7 @@ impl IgnoreSet {
         if self.shas.contains(&sha.to_lowercase()) {
             return true;
         }
-        // 전체 sha 가 아닌 접두어로 지정됐을 수도 있으므로 prefix 도 확인.
+        // The entry may be a prefix rather than the full SHA, so check prefix matches too.
         if self
             .shas
             .iter()
@@ -57,14 +57,14 @@ impl IgnoreSet {
         matches!(&self.before, Some(b) if when < b)
     }
 
-    /// 커밋의 변경 파일이 전부 무시 경로 안에 있으면 true.
+    /// Returns true when all files changed by the commit fall under ignored path prefixes.
     fn is_path_ignored(&self, repo: &crate::git::GitRepo, sha: &str) -> bool {
         if self.paths.is_empty() {
             return false;
         }
         let changed = repo.changed_paths_for_commit(sha);
-        // 변경 파일이 없는 커밋(예: --allow-empty)은 vacuous truth:
-        // 모든 파일이 무시 경로에 속하므로 무시한다(원본 .NET GitVersion 동작).
+        // Commits with no changed files (e.g. --allow-empty) satisfy vacuous truth:
+        // all (zero) files are under ignored paths, so the commit is ignored (matches .NET GitVersion).
         if changed.is_empty() {
             return true;
         }
@@ -87,7 +87,7 @@ impl IgnoreSet {
     }
 }
 
-/// `yyyy-MM-ddTHH:mm:ss`(혹은 날짜만) 형태의 ignore 날짜 파싱(UTC 가정).
+/// Parse an ignore date in `yyyy-MM-ddTHH:mm:ss` (or date-only) format, assuming UTC.
 fn parse_ignore_date(s: &str) -> Option<DateTime<FixedOffset>> {
     let s = s.trim();
     for fmt in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"] {
@@ -103,9 +103,9 @@ fn parse_ignore_date(s: &str) -> Option<DateTime<FixedOffset>> {
     None
 }
 
-/// .NET 날짜 포맷 문자열을 chrono strftime 포맷으로 변환(상용 토큰만).
+/// Convert a .NET date format string to a chrono strftime format (common tokens only).
 fn dotnet_date_format_to_strftime(fmt: &str) -> String {
-    // 긴 토큰부터 치환해야 충돌이 없다.
+    // Longer tokens must be replaced first to avoid partial matches.
     let mut out = fmt.to_string();
     for (from, to) in [
         ("yyyy", "%Y"),
@@ -125,18 +125,18 @@ fn dotnet_date_format_to_strftime(fmt: &str) -> String {
     out
 }
 
-/// 한 전략이 만들어 낸 base version 후보.
+/// A base version candidate produced by one strategy.
 #[derive(Debug, Clone)]
 struct BaseVersion {
     source: String,
     semantic_version: SemanticVersion,
     base_version_source: Option<String>,
-    /// base source 커밋의 시각(가장 최신 source 선택에 사용).
+    /// Timestamp of the base-source commit (used to pick the most recent source).
     source_when: Option<DateTime<FixedOffset>>,
     increment: VersionField,
     label: Option<String>,
     force_increment: bool,
-    /// 현재 커밋의 태그를 그대로 사용(증분/label/deployment 미적용).
+    /// Use the current commit's tag as-is (no increment / label / deployment mode applied).
     exact: bool,
 }
 
@@ -161,14 +161,14 @@ impl BaseVersion {
     }
 }
 
-/// 후보에 증분을 적용한 결과.
+/// Result of applying an increment to a candidate.
 #[derive(Debug, Clone)]
 struct NextVersion {
     incremented: SemanticVersion,
     base: BaseVersion,
 }
 
-/// IncrementStrategy → VersionField.
+/// Convert an `IncrementStrategy` to a `VersionField`.
 fn strategy_to_field(s: IncrementStrategy) -> VersionField {
     match s {
         IncrementStrategy::Major => VersionField::Major,
@@ -178,7 +178,7 @@ fn strategy_to_field(s: IncrementStrategy) -> VersionField {
     }
 }
 
-/// 단일 커밋 메시지에서 bump 필드 추출. 매칭 없으면 None.
+/// Extract the bump field from a single commit message. Returns `None` when no pattern matches.
 fn increment_from_message(msg: &str, eff: &EffectiveConfiguration) -> Option<VersionField> {
     let test = |pat: &str| {
         Regex::new(&format!("(?im){pat}"))
@@ -198,8 +198,8 @@ fn increment_from_message(msg: &str, eff: &EffectiveConfiguration) -> Option<Ver
     }
 }
 
-/// base_source(제외)~head 사이 커밋들을 보고 증분 필드 결정.
-/// 원본 `IncrementStrategyFinder.DetermineIncrementedField`.
+/// Determine the increment field from commits between `base_source` (exclusive) and `head`.
+/// Mirrors the original `IncrementStrategyFinder.DetermineIncrementedField`.
 fn determine_increment(
     repo: &GitRepo,
     base_source: Option<&str>,
@@ -247,16 +247,16 @@ fn determine_increment(
     })
 }
 
-/// 설정의 semantic-version-format 에 맞춰 버전 문자열 파싱.
+/// Parse a version string according to the configured `semantic-version-format`.
 fn parse_version(input: &str, eff: &EffectiveConfiguration) -> Option<SemanticVersion> {
     let strict = eff.semantic_version_format == SemanticVersionFormat::Strict;
     SemanticVersion::parse_with(input, &eff.tag_prefix, strict)
 }
 
-/// 설정의 정규식 값들을 미리 컴파일 검증한다. 원본 GitVersion 은 잘못된
-/// tag-prefix / *-version-bump-message 정규식을 만나면 계산을 실패시키므로,
-/// 우리도 조용히 무시하지 않고 에러를 반환해 동작을 맞춘다. (version-in-branch-pattern
-/// 은 release 브랜치에서만 사용되어 main 등에서는 검증되지 않으므로 제외.)
+/// Pre-validate all regex values in the config. The original GitVersion fails the calculation when
+/// it encounters an invalid `tag-prefix` or `*-version-bump-message` regex, so we return an error
+/// rather than silently ignoring them. (`version-in-branch-pattern` is excluded because it is only
+/// used on release branches and would not be validated on main etc.)
 fn validate_config_regexes(eff: &EffectiveConfiguration) -> Result<()> {
     let check = |label: &str, pat: &str| -> Result<()> {
         Regex::new(pat)
@@ -273,11 +273,11 @@ fn validate_config_regexes(eff: &EffectiveConfiguration) -> Result<()> {
     Ok(())
 }
 
-/// 메시지/브랜치명에서 버전 토큰 추출(원본 ReferenceNameExtensions).
+/// Extract a version token from a message or branch name (mirrors the original `ReferenceNameExtensions`).
 ///
-/// 원본은 브랜치명을 separator 로 split 한 각 part 에 `^{pattern}` 을 매칭한다.
-/// separator 는 `/` 를 포함하거나 `-` 를 포함하지 않으면 `/`, 아니면 `-`.
-/// 추출된 토큰은 설정의 semantic-version-format(Strict/Loose)에 맞춰 파싱한다.
+/// The original splits the branch name by a separator and matches `^{pattern}` against each part.
+/// The separator is `/` when the text contains `/` or no `-`; otherwise `-`.
+/// The extracted token is parsed according to the configured `semantic-version-format` (Strict/Loose).
 fn extract_version(text: &str, eff: &EffectiveConfiguration) -> Option<SemanticVersion> {
     let pattern = format!(
         "(?i)^{}",
@@ -306,9 +306,9 @@ fn extract_version(text: &str, eff: &EffectiveConfiguration) -> Option<SemanticV
     None
 }
 
-/// Inherit 증분을 git 조상 기반으로 해석. 현재 브랜치가 분기된 source 브랜치
-/// (merge-base 가 가장 최신인 것)를 찾아 그 브랜치의 증분을 반환. 상속 대상이
-/// 아니거나 후보가 없으면 None(기존 해석 유지).
+/// Resolve an `Inherit` increment via git ancestry. Finds the source branch that the current
+/// branch diverged from most recently (latest merge-base) and returns its increment.
+/// Returns `None` when inheritance is not applicable or no candidate is found (caller keeps existing resolution).
 fn resolve_inherit_via_git(
     repo: &GitRepo,
     config: &GitVersionConfiguration,
@@ -339,7 +339,7 @@ fn resolve_inherit_via_git(
             continue;
         };
 
-        // 이 source 설정에 매칭되는 실제 저장소 브랜치들.
+        // Actual repository branches that match this source config entry.
         for rb in &repo_branches {
             if rb == branch_name {
                 continue;
@@ -351,10 +351,11 @@ fn resolve_inherit_via_git(
             let Some(mb) = repo.merge_base(branch_name, rb)? else {
                 continue;
             };
-            // merge-base 가 루트에서 멀수록(=깊을수록) 최근에 분기한 것.
+            // A deeper merge-base (farther from the root) means a more recent divergence point.
             let depth = repo.commits_between(None, &mb)?.len() as i64;
-            // source 브랜치의 effective increment 를 재귀 해석한다(원본처럼 Inherit 면
-            // 그 부모까지). 임의 Patch fallback 대신 못 풀면 None 으로 귀결.
+            // Resolve the source branch's effective increment recursively (mirrors the original:
+            // Inherit walks further up to its parents). Unresolvable cases yield None rather than
+            // an arbitrary Patch fallback.
             let inc = crate::config::effective::resolve_increment(config, src_bc, 0);
             if best.map(|(d, _)| depth > d).unwrap_or(true) {
                 best = Some((depth, inc));
@@ -364,8 +365,8 @@ fn resolve_inherit_via_git(
     Ok(best.map(|(_, inc)| inc))
 }
 
-/// 내장 merge 메시지 포맷(원본 MergeMessage.cs). 각 포맷은 SourceBranch 를 추출하며,
-/// 거기서 version-in-branch 패턴으로 버전을 얻는다.
+/// Built-in merge message formats (mirrors the original `MergeMessage.cs`). Each format extracts
+/// `SourceBranch`, from which the version is obtained via the `version-in-branch` pattern.
 const BUILTIN_MERGE_FORMATS: &[&str] = &[
     // Default
     r"^Merge (branch|tag) '(?<SourceBranch>[^']*)'(?: into (?<TargetBranch>[^\s]*))*",
@@ -373,8 +374,8 @@ const BUILTIN_MERGE_FORMATS: &[&str] = &[
     r"^Finish (?<SourceBranch>[^\s]*)(?: into (?<TargetBranch>[^\s]*))*",
     // BitBucketPull
     r"^Merge pull request #(?<PullRequestNumber>\d+) (from|in) (?<Source>.*) from (?<SourceBranch>[^\s]*) to (?<TargetBranch>[^\s]*)",
-    // BitBucketPullv7 (멀티라인: "Pull request #N\n\nMerge in X from Y to Z").
-    // (?s) 전역 적용이므로 첫 줄/Source 는 [^\r\n] 으로 한정해 .NET 동작과 맞춘다.
+    // BitBucketPullv7 (multiline: "Pull request #N\n\nMerge in X from Y to Z").
+    // (?s) applies globally, so the first line/Source is restricted to [^\r\n] to match .NET behaviour.
     r"^Pull request #(?<PullRequestNumber>\d+)[^\r\n]*\r?\n\r?\nMerge in (?<Source>[^\r\n]*) from (?<SourceBranch>[^\s]*) to (?<TargetBranch>[^\s]*)",
     // BitBucketCloudPull
     r"^Merged in (?<SourceBranch>[^\s]*) \(pull request #(?<PullRequestNumber>\d+)\)",
@@ -386,8 +387,8 @@ const BUILTIN_MERGE_FORMATS: &[&str] = &[
     r"^Merge pull request (?<PullRequestNumber>\d+) from (?<SourceBranch>[^\s]*) into (?<TargetBranch>[^\s]*)",
 ];
 
-/// merge 메시지를 파싱해 (병합된 브랜치명, 추출된 버전)을 반환. 사용자 정의
-/// `merge-message-formats` 와 8종 내장 포맷을 시도한다.
+/// Parse a merge message and return `(merged branch name, extracted version)`.
+/// Tries the user-defined `merge-message-formats` first, then the 8 built-in formats.
 fn parse_merge_message(
     message: &str,
     eff: &EffectiveConfiguration,
@@ -396,7 +397,7 @@ fn parse_merge_message(
         parse_version(sb, eff).or_else(|| extract_version(sb, eff))
     };
 
-    // 사용자 정의 포맷 우선, 이어서 8종 내장 포맷.
+    // User-defined formats first, then the 8 built-in formats.
     let custom = eff.merge_message_formats.values().map(|s| s.as_str());
     for pattern in custom.chain(BUILTIN_MERGE_FORMATS.iter().copied()) {
         let Ok(re) = Regex::new(&format!("(?s){pattern}")) else {
@@ -418,17 +419,17 @@ fn parse_merge_message(
         if let Some(v) = from_branch(&branch) {
             return Some((branch, v));
         }
-        return None; // 포맷은 맞지만 버전 없음.
+        return None; // Format matched but no version found.
     }
     None
 }
 
-/// 병합 커밋 메시지에서 병합된 브랜치명을 추출해 그 설정 증분을 반환.
+/// Extract the merged branch name from a merge commit message and return its configured increment.
 ///
-/// Mainline 트렁크 walk 에서 merge 커밋의 증분 floor 를 결정할 때 사용한다.
-/// 병합된 브랜치가 Minor 설정(예: TrunkBased feature)이면 Patch 기본값 대신
-/// Minor 로 올려준다. Inherit/None 은 효과 없음으로 None 반환.
-/// 병합된 브랜치에 `prevent_increment.when_branch_merged = true` 이면 None.
+/// Used during Mainline trunk walk to determine the increment floor for a merge commit.
+/// When the merged branch is configured as Minor (e.g. a TrunkBased feature), Minor is used
+/// instead of the default Patch. `Inherit`/`None` have no effect and return `None`.
+/// Returns `None` when `prevent_increment.when_branch_merged = true` on the merged branch.
 fn merge_branch_increment(config: &GitVersionConfiguration, message: &str) -> Option<VersionField> {
     for pattern in BUILTIN_MERGE_FORMATS {
         let Ok(re) = Regex::new(&format!("(?s){pattern}")) else {
@@ -442,8 +443,8 @@ fn merge_branch_increment(config: &GitVersionConfiguration, message: &str) -> Op
         };
         let branch = sb.as_str();
         let (_, bc) = crate::config::effective::find_branch_config(config, branch)?;
-        // when_branch_merged=true 이면 이 병합 커밋은 일체 증분하지 않음.
-        // Some(VersionField::None) 은 trunk_default 도 차단하는 강제 no-op 신호.
+        // when_branch_merged=true → this merge commit must not increment at all.
+        // Some(VersionField::None) is a forced no-op signal that also blocks trunk_default.
         if bc
             .prevent_increment
             .as_ref()
@@ -464,7 +465,7 @@ fn merge_branch_increment(config: &GitVersionConfiguration, message: &str) -> Op
     None
 }
 
-/// 브랜치명이 release 브랜치 설정(is-release-branch)에 매칭되는지.
+/// Returns true if the branch name matches a branch config with `is-release-branch = true`.
 fn is_release_branch(config: &GitVersionConfiguration, branch_name: &str) -> bool {
     let short = branch_name.rsplit('/').next().unwrap_or(branch_name);
     config.branches.values().any(|bc| {
@@ -478,14 +479,14 @@ fn is_release_branch(config: &GitVersionConfiguration, branch_name: &str) -> boo
     })
 }
 
-/// 전체 계산 진입점. 최종 출력 변수를 만든다.
+/// Main calculation entry point. Produces the final output variables.
 pub fn calculate(
     repo: &GitRepo,
     config: &GitVersionConfiguration,
     branch_override: Option<String>,
 ) -> Result<VersionVariables> {
-    // branch override 가 실제 ref 면 그 브랜치 tip 을 head 로 사용(해당 브랜치 기준
-    // 재계산). 아니면 현재 HEAD.
+    // If branch_override is an actual ref, use its tip as HEAD (recalculate for that branch);
+    // otherwise use the current HEAD.
     let (head, branch_name) = match &branch_override {
         Some(b) => {
             let head = repo
@@ -497,17 +498,17 @@ pub fn calculate(
         None => (repo.head_commit()?, repo.current_branch_name()?),
     };
     let mut eff = EffectiveConfiguration::resolve(config, &branch_name);
-    // 잘못된 정규식 설정은 원본처럼 계산 에러로 처리한다(조용히 무시하지 않음).
+    // Invalid regex config causes a calculation error just like the original (not silently ignored).
     validate_config_regexes(&eff)?;
     let ignore = IgnoreSet::from_config(config);
 
-    // Mainline 전략이 활성화되어 있으면 per-commit 누적 방식으로 계산.
+    // When the Mainline strategy is active, use the per-commit accumulation approach.
     if config.strategies.contains(&VersionStrategy::Mainline) {
         return mainline_calculate(repo, config, &eff, &branch_name, &head, &ignore);
     }
 
-    // Inherit 증분: 실제 git 조상을 따라 현재 브랜치가 분기된 source 브랜치를
-    // 찾아 그 브랜치의 증분을 상속한다(설정상 첫 source 가 아니라).
+    // Inherit increment: walk actual git ancestors to find the source branch the current branch
+    // diverged from, then inherit its increment (not necessarily the first configured source).
     if let Some(inc) = resolve_inherit_via_git(repo, config, &branch_name)? {
         eff.increment = inc;
     }
@@ -529,16 +530,16 @@ pub fn calculate(
     for strat in &strategies {
         match strat {
             VersionStrategy::ConfiguredNextVersion => {
-                // 원본 ConfiguredNextVersionVersionStrategy: next-version 이 비었으면
-                // 스킵, 있으면 SemanticVersion.Parse(실패 시 throw). 즉 현재 format
-                // 으로 파싱 안 되는 next-version 은 전체 계산을 실패시킨다.
+                // Mirrors the original ConfiguredNextVersionVersionStrategy: skip when
+                // next-version is empty; otherwise call SemanticVersion.Parse (throws on failure).
+                // A next-version that cannot be parsed with the current format fails the whole calculation.
                 if let Some(nv) = &eff.next_version {
                     if !nv.is_empty() {
                         let v = parse_version(nv, &eff).ok_or_else(|| {
                             anyhow::anyhow!("Failed to parse {nv} into a Semantic Version")
                         })?;
-                        // pre-release label 이 있으면 현재 브랜치 label 과 일치해야 함.
-                        // (.NET IsMatchForBranchSpecificLabel 동작)
+                        // When a pre-release label is present, it must match the current branch label.
+                        // (Mirrors .NET IsMatchForBranchSpecificLabel behaviour.)
                         let label_ok =
                             !v.pre_release_tag.has_tag() || v.pre_release_tag.name == eff.label;
                         if label_ok {
@@ -577,7 +578,7 @@ pub fn calculate(
                 }
             }
             VersionStrategy::MergeMessage => {
-                // track-merge-message 가 false 면 merge 메시지를 버전으로 해석하지 않음.
+                // When track-merge-message is false, merge messages are not used as version sources.
                 if eff.track_merge_message {
                     gather_merge_messages(repo, config, &eff, &head, &ignore, &mut candidates)?;
                 }
@@ -600,15 +601,16 @@ pub fn calculate(
     }
 
     if candidates.is_empty() {
-        // 원본 NextVersionCalculator.CalculateNextVersion: 후보가 하나도 없으면
-        // 계산 실패. 임의 fallback(0.0.0)을 넣지 않는다. 기본 전략에는 Fallback 이
-        // 포함되어 이 경우는 strategies 에서 Fallback 을 명시 제외했을 때만 발생.
+        // Mirrors the original NextVersionCalculator.CalculateNextVersion: when no candidates
+        // are found, fail the calculation rather than inserting an arbitrary fallback (0.0.0).
+        // The default strategy list includes Fallback, so this path only occurs when Fallback
+        // is explicitly excluded from `strategies`.
         return Err(anyhow::anyhow!(
             "No base versions determined on the current branch."
         ));
     }
 
-    // 각 후보에 증분 적용.
+    // Apply increments to each candidate.
     let next: Vec<NextVersion> = candidates
         .into_iter()
         .map(|b| {
@@ -625,8 +627,8 @@ pub fn calculate(
         })
         .collect();
 
-    // 최고 IncrementedVersion 후보 선택.
-    // 동률인 경우 .NET 과 마찬가지로 앞선(먼저 수집된) 후보 우선(TaggedCommit > VersionInBranchName).
+    // Select the candidate with the highest IncrementedVersion.
+    // Ties are broken in favour of the earlier candidate (mirroring .NET: TaggedCommit > VersionInBranchName).
     let max_idx = next.iter().enumerate().fold(0usize, |acc, (i, n)| {
         if n.incremented.cmp(&next[acc].incremented) == std::cmp::Ordering::Greater {
             i
@@ -635,9 +637,9 @@ pub fn calculate(
         }
     });
 
-    // base version source 는 "source 를 가진 후보 중 가장 최신" 에서 가져온다
-    // (원본 NextVersionCalculator 의 LatestBaseVersionSource 규칙).
-    // VSSV 는 선택된(max) 후보의 base semantic_version 에서 가져온다.
+    // The base version source comes from the most recent candidate that has a source
+    // (mirrors the original NextVersionCalculator LatestBaseVersionSource rule).
+    // VSSV is taken from the base semantic_version of the selected (max) candidate.
     let latest_source = next
         .iter()
         .filter(|n| n.base.base_version_source.is_some())
@@ -647,7 +649,7 @@ pub fn calculate(
         .or_else(|| next[max_idx].base.base_version_source.clone());
 
     let chosen = next.into_iter().nth(max_idx).unwrap();
-    // VSSV = 선택된 base version 의 semantic_version (증분 전)
+    // VSSV = semantic_version of the chosen base version (before increment).
     let source_semver = chosen.base.semantic_version.clone();
 
     let mut final_semver = apply_deployment_mode(
@@ -659,9 +661,9 @@ pub fn calculate(
         base_source.as_deref(),
         &ignore,
     )?;
-    // AlternativeSemanticVersion 조정: 브랜치에 label 불일치 태그가 있고 그 코어가 더 높으면
-    // 최종 버전의 major.minor.patch 를 그 태그 코어로 교체한다.
-    // (.NET NextVersionCalculator.Calculate() alternativeSemanticVersion 동작)
+    // AlternativeSemanticVersion adjustment: when a tag with a mismatched label exists on the branch
+    // and its core is higher, replace the final version's major.minor.patch with that tag's core.
+    // (Mirrors the .NET NextVersionCalculator.Calculate() alternativeSemanticVersion logic.)
     if let Some(alt) = tag_alternatives.iter().max_by(|a, b| a.cmp_core(b)) {
         if alt.cmp_core(&final_semver) == std::cmp::Ordering::Greater {
             final_semver.major = alt.major;
@@ -673,12 +675,12 @@ pub fn calculate(
     Ok(variables)
 }
 
-/// Mainline 전략: base(최고 태그 또는 0.0.0)부터 각 커밋의 증분을 누적한다.
+/// Mainline strategy: accumulate increments for each commit starting from the highest tag (or 0.0.0).
 ///
-/// 각 커밋은 메시지 기반 증분(major/minor/patch)이 기본 증분보다 높으면 그것을,
-/// 아니면 기본 증분을 적용한다(`+semver:none` 도 기본 증분으로 처리). 원본
-/// MainlineVersionStrategy 의 핵심 동작을 옮긴 것으로, ContinuousDeployment 처럼
-/// pre-release 없이 단조 증가하는 버전을 만든다.
+/// Each commit uses the message-based increment (major/minor/patch) when it is higher than the
+/// default; otherwise the default increment is applied (`+semver:none` is treated as the default).
+/// Ports the core behaviour of the original `MainlineVersionStrategy`, producing a monotonically
+/// increasing version without pre-releases, similar to ContinuousDeployment.
 fn mainline_calculate(
     repo: &GitRepo,
     config: &GitVersionConfiguration,
@@ -687,7 +689,7 @@ fn mainline_calculate(
     head: &CommitInfo,
     ignore: &IgnoreSet,
 ) -> Result<VersionVariables> {
-    // 도달 가능한 모든 태그를 sha -> 코어 버전 맵으로(같은 커밋에 여러 태그면 최고).
+    // Build a sha → core version map of all reachable tags (highest wins when a commit has multiple tags).
     let mut tags_by_sha: std::collections::HashMap<String, SemanticVersion> =
         std::collections::HashMap::new();
     for tag in repo.tags()? {
@@ -709,9 +711,9 @@ fn mainline_calculate(
 
     let default = strategy_to_field(eff.increment);
 
-    // 비-트렁크 브랜치(feature/hotfix 등)는 source 브랜치의 merge-base 까지만 트렁크
-    // 증분을 적용하고, feature 증분은 1회만 적용한다. source 브랜치 ref 를 찾지 못하면
-    // 기존 트렁크 walk 로 fallback.
+    // Non-trunk branches (feature, hotfix, etc.) apply trunk increments only up to the merge-base
+    // with the source branch, then apply the feature increment once. Falls back to the full trunk
+    // walk when the source branch ref cannot be resolved.
     let merge_base_sha: Option<String> = if !eff.is_main_branch && !eff.source_branches.is_empty() {
         let src = &eff.source_branches[0];
         if let Some(src_info) = repo.commit_info_of(src) {
@@ -723,8 +725,8 @@ fn mainline_calculate(
         None
     };
 
-    // 트렁크 부분 walk: merge-base 까지(브랜치) 또는 HEAD 까지(트렁크).
-    // 브랜치인 경우에는 source 브랜치의 설정(Patch 증분 등)으로 walk 한다.
+    // Trunk walk: up to the merge-base (branch) or HEAD (trunk).
+    // For branches, walk using the source branch config (e.g. Patch increment).
     let trunk_target = merge_base_sha.as_deref().unwrap_or(&head.sha);
     let trunk_eff_buf;
     let trunk_eff: &EffectiveConfiguration = if merge_base_sha.is_some() {
@@ -740,11 +742,11 @@ fn mainline_calculate(
 
     let mut version = SemanticVersion::new(0, 0, 0);
     let mut highest_tag = SemanticVersion::new(0, 0, 0);
-    // VSSV 계산용: 마지막 커밋 처리 전의 trunk 버전
+    // For VSSV: track the trunk version before each commit is processed.
     let mut prev_trunk_version = SemanticVersion::new(0, 0, 0);
     for c in &trunk {
         prev_trunk_version = version.clone();
-        // 이 step 이 도입한 커밋들. merge 면 병합된 브랜치(두 번째 부모 계열), 아니면 자신.
+        // Commits introduced by this step: for a merge, those from the second-parent side; otherwise the commit itself.
         let introduced: Vec<CommitInfo> = if c.parents.len() >= 2 {
             ignore.filter(
                 repo,
@@ -754,7 +756,7 @@ fn mainline_calculate(
             vec![c.clone()]
         };
 
-        // 도입 커밋(및 merge 커밋 자신)에 붙은 가장 높은 태그 코어.
+        // Highest tag core among the introduced commits (and the merge commit itself).
         let mut step_tag: Option<SemanticVersion> = None;
         for sha in introduced
             .iter()
@@ -772,14 +774,14 @@ fn mainline_calculate(
             if core_gt(&tv, &highest_tag) {
                 highest_tag = tv.clone();
             }
-            // 현재 버전 이상인 태그는 그 코어로 확정(증분하지 않음).
+            // A tag that is at least as high as the current version fixes that version (no increment).
             if !core_gt(&version, &tv) {
                 version = tv;
                 continue;
             }
         }
 
-        // 태그가 없거나 더 낮으면 증분(도입 커밋 메시지 consolidate, 바닥은 기본 증분).
+        // No tag (or tag lower than current) → increment. Consolidate messages; default is the floor.
         let mut field = trunk_default;
         for ic in &introduced {
             if let Some(f) = increment_from_message(&ic.message, trunk_eff) {
@@ -788,9 +790,9 @@ fn mainline_calculate(
                 }
             }
         }
-        // 병합 커밋이면 병합된 브랜치의 설정 증분도 floor 로 적용.
-        // (예: TrunkBased feature = Minor → main Patch 보다 높으면 Minor 적용)
-        // Some(None) 은 when_branch_merged=true 신호: trunk_default 포함 일체 차단.
+        // For merge commits, also apply the merged branch's configured increment as a floor.
+        // (e.g. TrunkBased feature = Minor → if Minor > Patch, use Minor.)
+        // Some(VersionField::None) signals when_branch_merged=true: blocks everything including trunk_default.
         if c.parents.len() >= 2 {
             match merge_branch_increment(config, &c.message) {
                 Some(VersionField::None) => {
@@ -804,16 +806,16 @@ fn mainline_calculate(
         }
         version = version.increment(field, None, true);
     }
-    // VSSV 계산용: trunk walk 이후 버전 (feature increment 전에 저장해야 함)
+    // For VSSV: trunk version after the walk and before any feature increment.
     let trunk_version_end = version.clone();
 
-    // distance / source_sha 계산.
+    // Compute distance and source_sha.
     let (mut version, source_sha, distance) = if let Some(ref mb_sha) = merge_base_sha {
-        // 브랜치: 브랜치 부분(merge-base 이후)의 커밋만 distance 로 센다.
+        // Branch: count only the commits in the branch portion (after the merge-base) as distance.
         let feature_commits = ignore.filter(repo, repo.commits_between(Some(mb_sha), &head.sha)?);
         let head_is_tagged = tags_by_sha.contains_key(&head.sha);
 
-        // 브랜치 부분에 태그가 있는지 확인(HEAD 포함).
+        // Check whether the branch portion (including HEAD) has a tag.
         let feature_tag = feature_commits
             .iter()
             .filter_map(|c| {
@@ -824,9 +826,9 @@ fn mainline_calculate(
             .reduce(|(sa, a), (sb, b)| if core_gt(&b, &a) { (sb, b) } else { (sa, a) });
 
         if let Some((ft_sha, ft)) = feature_tag {
-            // 브랜치에 태그 존재: 태그를 version source 로 사용.
+            // Tag exists on the branch: use it as the version source.
             if head_is_tagged && !eff.prevent_increment_when_current_commit_tagged {
-                // HEAD 가 태그이고 prevent-increment=false → 1회 추가 증분, distance=0.
+                // HEAD is tagged and prevent-increment=false → one additional increment, distance=0.
                 let v = ft.increment(default, None, true);
                 (v, Some(head.sha.clone()), 0i64)
             } else {
@@ -834,36 +836,36 @@ fn mainline_calculate(
                 (ft, Some(ft_sha), d)
             }
         } else {
-            // 브랜치에 태그 없음: trunk 버전 + 브랜치 증분 1회, distance = 브랜치 커밋 수.
+            // No tag on the branch: trunk version + one branch increment, distance = number of branch commits.
             let v = version.increment(default, None, true);
             let d = feature_commits.len() as i64;
             (v, Some(mb_sha.clone()), d)
         }
     } else {
-        // 트렁크: HEAD 태그 처리(when-current-commit-tagged: false).
+        // Trunk: handle HEAD tag (when-current-commit-tagged: false).
         let head_is_tagged = tags_by_sha.contains_key(&head.sha);
         if head_is_tagged && !eff.prevent_increment_when_current_commit_tagged {
             let v = version.increment(default, None, true);
             (v, Some(head.sha.clone()), 0i64)
         } else {
-            // Mainline 의 version source 는 head 의 첫 번째 부모(직전 트렁크 상태).
+            // The Mainline version source is HEAD's first parent (the previous trunk state).
             let s = head.parents.first().cloned();
             let d = repo.commits_between(s.as_deref(), &head.sha)?.len() as i64;
             (version, s, d)
         }
     };
 
-    // deployment mode 별 pre-release / build metadata.
+    // Set pre-release / build metadata according to the deployment mode.
     let label = eff.label.as_str();
     let mut commits_since_tag = None;
     version.pre_release_tag = match eff.deployment_mode {
-        // 코어 버전만(pre-release 제거).
+        // Core version only (no pre-release).
         DeploymentMode::ContinuousDeployment => PreReleaseTag::default(),
-        // pre-release 번호 = distance.
+        // Pre-release number = distance.
         DeploymentMode::ContinuousDelivery => {
             PreReleaseTag::new(label, Some(distance), label.is_empty())
         }
-        // pre-release 번호 = 1, build metadata = distance.
+        // Pre-release number = 1, build metadata = distance.
         DeploymentMode::ManualDeployment => {
             commits_since_tag = Some(distance);
             PreReleaseTag::new(label, Some(1), label.is_empty())
@@ -882,10 +884,11 @@ fn mainline_calculate(
         other_metadata: None,
     };
 
-    // VersionSourceSemVer 계산:
-    // source_sha 커밋에 태그가 있으면 그 코어 버전, 없으면 trunk 해당 시점 버전 + "-1".
-    // 브랜치: trunk_version_end = feature increment 전 trunk walk 직후 버전.
-    // 트렁크: prev_trunk_version = HEAD 처리 직전 버전.
+    // Compute VersionSourceSemVer:
+    // When source_sha has a tag, use that tag's core version; otherwise use the trunk version
+    // at that point suffixed with "-1".
+    // Branch: trunk_version_end = trunk version after the walk, before the feature increment.
+    // Trunk: prev_trunk_version = trunk version immediately before HEAD was processed.
     let version_at_source = if merge_base_sha.is_some() {
         trunk_version_end
     } else {
@@ -907,24 +910,24 @@ fn mainline_calculate(
     build_variables(eff, branch_name, head, &version, &source_semver)
 }
 
-/// 브랜치 label 매칭 여부 확인.
+/// Check whether a version matches the branch label.
 ///
-/// .NET `SemanticVersion.IsMatchForBranchSpecificLabel`:
+/// Mirrors .NET `SemanticVersion.IsMatchForBranchSpecificLabel`:
 /// `(Name.Length == 0 && Number is null) || IsLabeledWith(value)`
 fn is_match_for_branch_label(version: &SemanticVersion, label: &str) -> bool {
     let pre = &version.pre_release_tag;
-    // 릴리스 버전 (name="" and number=None): 항상 매칭
+    // Release version (name="" and number=None): always matches.
     if pre.name.is_empty() && pre.number.is_none() {
         return true;
     }
-    // pre-release 있음: name이 label과 일치해야 함 (has_tag() && name == label)
+    // Has a pre-release: name must match the label (has_tag() && name == label).
     pre.has_tag() && pre.name == label
 }
 
-/// HEAD 에서 도달 가능한 버전 태그를 후보로 수집.
+/// Collect version tags reachable from HEAD into candidates.
 ///
-/// `alternatives`: AlternativeSemanticVersion 조정에 쓸 전체 파싱된 태그 버전.
-/// 브랜치 label 과 일치하지 않는 태그는 `out` 에 넣지 않고 `alternatives` 에만 넣는다.
+/// `alternatives`: all parsed tag versions, used for AlternativeSemanticVersion adjustment.
+/// Tags whose label does not match the branch label are added only to `alternatives`, not to `out`.
 fn gather_tagged(
     repo: &GitRepo,
     eff: &EffectiveConfiguration,
@@ -949,19 +952,19 @@ fn gather_tagged(
         let Some(version) = parse_version(&tag.name, eff) else {
             continue;
         };
-        // AlternativeSemanticVersion 조정용 전체 태그 버전 수집 (label 매칭 무관)
+        // Collect all tag versions for AlternativeSemanticVersion adjustment (regardless of label).
         alternatives.push(version.clone());
-        // 브랜치 label 과 일치하지 않는 태그는 후보에서 제외
+        // Tags that don't match the branch label are excluded from candidates.
         if !is_match_for_branch_label(&version, &eff.label) {
             continue;
         }
         let is_current = tag.target_sha == head.sha;
         let exact = is_current && eff.prevent_increment_when_current_commit_tagged;
-        // named pre-release 태그(예: 1.0.0-beta.1)는 아직 "릴리스" 가 아니므로
-        // 버전 source 로 삼지 않는다. 코어를 올리지 않고, 커밋 수는 태그 커밋을
-        // 포함해 그 이전부터 센다(원본 TaggedCommitVersionStrategy 동작).
-        // 단, 숫자만으로 된 pre-release(예: 1.0.0-1)는 CD 스타일 체크포인트이므로
-        // 버전 source 로 사용한다.
+        // Named pre-release tags (e.g. 1.0.0-beta.1) are not yet "releases" and are not used
+        // as a version source. The core is not bumped; commit count starts from before the tag
+        // commit (inclusive), matching the original TaggedCommitVersionStrategy behaviour.
+        // Exception: numeric-only pre-releases (e.g. 1.0.0-1) are CD-style checkpoints and
+        // are used as a version source.
         let has_pre = version.pre_release_tag.has_tag();
         let is_numeric_only_pre = has_pre && version.pre_release_tag.name.is_empty();
         let use_as_source = exact || !has_pre || is_numeric_only_pre;
@@ -994,10 +997,10 @@ fn gather_tagged(
     Ok(())
 }
 
-/// merge 커밋 메시지에서 버전을 추출.
+/// Extract a version from merge commit messages.
 ///
-/// 원본 MergeMessageVersionStrategy 와 동일하게, 병합된 브랜치가 release 브랜치인
-/// 경우에만 그 버전을 사용한다.
+/// Mirrors the original `MergeMessageVersionStrategy`: only uses the version when the merged
+/// branch is a release branch.
 fn gather_merge_messages(
     repo: &GitRepo,
     config: &GitVersionConfiguration,
@@ -1006,7 +1009,7 @@ fn gather_merge_messages(
     ignore: &IgnoreSet,
     out: &mut Vec<BaseVersion>,
 ) -> Result<()> {
-    // 원본 MergeMessageVersionStrategy.GetBaseVersions 는 최대 5개 후보만 반환한다.
+    // The original MergeMessageVersionStrategy.GetBaseVersions returns at most 5 candidates.
     let mut count = 0usize;
     for c in ignore.filter(repo, repo.commits_between(None, &head.sha)?) {
         if count >= 5 {
@@ -1015,12 +1018,12 @@ fn gather_merge_messages(
         let Some((merged_branch, v)) = parse_merge_message(&c.message, eff) else {
             continue;
         };
-        // 병합된 브랜치가 release 브랜치가 아니면 버전을 사용하지 않는다.
+        // Do not use the version when the merged branch is not a release branch.
         if !is_release_branch(config, &merged_branch) {
             continue;
         }
-        // merge 커밋의 base source 는 두 부모의 merge-base. 그래야 병합으로 들어온
-        // 커밋들이 버전 소스 이후 커밋 수에 정확히 반영된다.
+        // The base source for a merge commit is the merge-base of its two parents,
+        // so that commits introduced by the merge are accurately counted after the version source.
         let base_src = if c.parents.len() >= 2 {
             repo.merge_base(&c.parents[0], &c.parents[1])?
                 .unwrap_or_else(|| c.sha.clone())
@@ -1046,7 +1049,7 @@ fn gather_merge_messages(
     Ok(())
 }
 
-/// release 브랜치를 추적(develop 등에서). merge-base 기준 후보 생성.
+/// Track release branches (e.g. from develop). Generates candidates based on the merge-base.
 fn gather_track_release(
     repo: &GitRepo,
     config: &GitVersionConfiguration,
@@ -1091,7 +1094,7 @@ fn gather_track_release(
     Ok(())
 }
 
-/// deployment mode 별 최종 버전(+빌드 메타데이터) 산출.
+/// Produce the final version (including build metadata) according to the deployment mode.
 fn apply_deployment_mode(
     repo: &GitRepo,
     eff: &EffectiveConfiguration,
@@ -1121,14 +1124,14 @@ fn apply_deployment_mode(
         version_source_sha: base_src.map(|s| s.to_string()),
         version_source_distance: commits,
         uncommitted_changes: uncommitted,
-        // 원본에서 최종 BaseVersion.Increment 는 증분 소비 후 None 으로 기록된다
-        // (관측된 모든 시나리오에서 VersionSourceIncrement == None).
+        // In the original, the final BaseVersion.Increment is recorded as None after the increment is consumed
+        // (VersionSourceIncrement == None in all observed scenarios).
         version_source_increment: VersionField::None,
         other_metadata: None,
     };
 
     if chosen.base.exact {
-        // 현재 커밋이 태그 → 그대로. 빌드 메타데이터 누적 없음.
+        // Current commit is tagged → use as-is. No build metadata accumulation.
         meta.commits_since_tag = None;
         sv.build_metadata = meta;
         return Ok(sv);
@@ -1136,7 +1139,7 @@ fn apply_deployment_mode(
 
     match eff.deployment_mode {
         DeploymentMode::ManualDeployment => {
-            // 코어/태그 유지, 빌드 메타데이터(짧은 형태)를 FullSemVer 에 노출.
+            // Keep core/tag; expose build metadata (short form) in FullSemVer.
         }
         DeploymentMode::ContinuousDelivery => {
             if sv.pre_release_tag.has_tag() {
@@ -1155,7 +1158,7 @@ fn apply_deployment_mode(
     Ok(sv)
 }
 
-/// 최종 출력 변수 구성.
+/// Build the final output variables.
 fn build_variables(
     eff: &EffectiveConfiguration,
     branch_name: &str,
@@ -1185,14 +1188,14 @@ fn build_variables(
     let commits = sv.build_metadata.version_source_distance;
     let full_build_meta = sv.build_metadata.format_full();
 
-    // FullSemVer 는 짧은 빌드 메타데이터(커밋 수)만 사용: 예) 1.0.1-1+2.
+    // FullSemVer uses only the short build metadata (commit count), e.g. 1.0.1-1+2.
     let full_sem_ver = match sv.build_metadata.commits_since_tag {
         Some(n) => format!("{sem_ver}+{n}"),
         None => sem_ver.clone(),
     };
 
-    // WeightedPreReleaseNumber: 번호가 있으면 번호+pre-release-weight,
-    // 없으면(안정 릴리스) tag-pre-release-weight. 원본 SemanticVersionFormatValues.
+    // WeightedPreReleaseNumber: number + pre-release-weight when a number exists;
+    // tag-pre-release-weight for stable releases. Mirrors the original SemanticVersionFormatValues.
     let weighted = Some(match pre_number {
         Some(n) => n + eff.pre_release_weight,
         None => eff.tag_pre_release_weight,
@@ -1200,7 +1203,7 @@ fn build_variables(
 
     let assembly_sem_ver = assembly_version(sv, eff.assembly_versioning_scheme);
     let assembly_sem_file_ver = assembly_version(sv, eff.assembly_file_versioning_scheme);
-    // InformationalVersion 은 전체 빌드 메타데이터(branch/sha 포함)를 사용.
+    // InformationalVersion uses the full build metadata (includes branch/sha).
     let informational = if full_build_meta.is_empty() {
         sem_ver.clone()
     } else {
@@ -1254,8 +1257,8 @@ fn build_variables(
         uncommitted_changes: sv.build_metadata.uncommitted_changes,
     };
 
-    // assembly-*-format / assembly-informational-format 커스텀 포맷 적용.
-    // 포맷은 위에서 계산된 변수들을 참조하므로 여기서 후처리한다.
+    // Apply custom assembly-*-format / assembly-informational-format.
+    // These reference the variables computed above, so they are post-processed here.
     let ctx = vars.to_map();
     if let Some(fmt) = &eff.assembly_versioning_format {
         vars.assembly_sem_ver = render_template(fmt, &ctx)?;
@@ -1263,17 +1266,16 @@ fn build_variables(
     if let Some(fmt) = &eff.assembly_file_versioning_format {
         vars.assembly_sem_file_ver = render_template(fmt, &ctx)?;
     }
-    // informational-format 의 기본값 `{InformationalVersion}` 은 원래 값을 그대로
-    // 재현하므로 항상 적용해도 안전하다.
+    // The default informational-format `{InformationalVersion}` reproduces the original value,
+    // so it is always safe to apply.
     vars.informational_version = render_template(&eff.assembly_informational_format, &ctx)?;
 
     Ok(vars)
 }
 
-/// `{Variable}` 및 `{env:VAR}` 토큰을 변수 맵으로 치환.
-/// `{Variable}`/`{env:VAR}` 토큰을 변수 맵으로 치환. 원본 GitVersion 은 알 수 없는
-/// 토큰을 만나면 포맷 확장에 실패(에러)하므로, 여기서도 ctx 에 없고 `env:` 도 아닌
-/// 토큰이 있으면 Err 를 반환한다.
+/// Substitute `{Variable}` and `{env:VAR}` tokens using the variable map.
+/// The original GitVersion fails format expansion on unknown tokens, so this function also
+/// returns `Err` for any token that is neither in `ctx` nor an `env:` reference.
 fn render_template(fmt: &str, ctx: &std::collections::BTreeMap<String, String>) -> Result<String> {
     let re = Regex::new(r"\{(?<t>[A-Za-z0-9_:]+)\}").unwrap();
     let mut unknown: Option<String> = None;
@@ -1300,7 +1302,7 @@ fn render_template(fmt: &str, ctx: &std::collections::BTreeMap<String, String>) 
     }
 }
 
-/// AssemblyVersion 스킴 적용.
+/// Apply the assembly versioning scheme.
 fn assembly_version(sv: &SemanticVersion, scheme: VersioningScheme) -> String {
     let pre = sv.pre_release_tag.number.unwrap_or(0);
     match scheme {
@@ -1328,18 +1330,18 @@ mod tests {
 
     #[test]
     fn validate_config_regexes_rejects_bad_patterns() {
-        // 기본 설정은 통과.
+        // Default config passes.
         let eff = default_eff();
         assert!(validate_config_regexes(&eff).is_ok());
-        // 잘못된 tag-prefix 정규식은 에러(원본 동작).
+        // Invalid tag-prefix regex is an error (matches original behaviour).
         let mut bad_prefix = default_eff();
         bad_prefix.tag_prefix = "(unclosed".to_string();
         assert!(validate_config_regexes(&bad_prefix).is_err());
-        // 잘못된 bump-message 정규식도 에러.
+        // Invalid bump-message regex is also an error.
         let mut bad_bump = default_eff();
         bad_bump.major_bump_message = "[invalid".to_string();
         assert!(validate_config_regexes(&bad_bump).is_err());
-        // commit-message-incrementing=Disabled 면 bump-message 는 검증하지 않는다.
+        // When commit-message-incrementing=Disabled, bump-messages are not validated.
         let mut disabled = default_eff();
         disabled.major_bump_message = "[invalid".to_string();
         disabled.commit_message_incrementing = CommitMessageIncrementMode::Disabled;
@@ -1350,41 +1352,41 @@ mod tests {
     fn render_template_errors_on_unknown_token() {
         let mut ctx = std::collections::BTreeMap::new();
         ctx.insert("Major".to_string(), "1".to_string());
-        // 알려진 토큰은 치환된다.
+        // Known tokens are substituted.
         assert_eq!(render_template("v{Major}", &ctx).unwrap(), "v1");
-        // env: 토큰은 환경변수(없으면 빈 문자열).
+        // env: tokens resolve from environment variables (empty string when absent).
         assert!(render_template("{env:GV_NO_SUCH_VAR}", &ctx).is_ok());
-        // 알 수 없는 토큰은 원본처럼 에러(원본 GitVersion 동작).
+        // Unknown tokens return an error, matching the original GitVersion behaviour.
         assert!(render_template("{Bogus}", &ctx).is_err());
     }
 
     #[test]
     fn parse_ignore_date_formats() {
-        // datetime 형식
+        // datetime format
         let dt = parse_ignore_date("2021-06-15T12:00:00").unwrap();
         assert!(dt.to_rfc3339().starts_with("2021-06-15"));
-        // 날짜만
+        // date only
         let dt2 = parse_ignore_date("2021-06-15").unwrap();
         assert!(dt2.to_rfc3339().starts_with("2021-06-15"));
-        // 공백 구분자
+        // space separator
         let dt3 = parse_ignore_date("2021-06-15 12:00:00").unwrap();
         assert!(dt3.to_rfc3339().starts_with("2021-06-15"));
-        // 잘못된 형식
+        // invalid format
         assert!(parse_ignore_date("not-a-date").is_none());
     }
 
     #[test]
     fn ignore_set_sha_prefix_match() {
-        // 7글자 이상 접두어로 매칭
+        // Prefix of 7+ characters matches.
         let full_sha = "abcdef1234567890abcdef1234567890abcdef12";
-        let prefix = "abcdef1"; // 7글자
+        let prefix = "abcdef1"; // 7 chars
         let mut set = IgnoreSet::default();
         set.shas.insert(prefix.to_lowercase());
         let when = chrono::Utc::now().fixed_offset();
         assert!(set.is_ignored(full_sha, &when));
-        // 6글자 접두어는 무시됨
+        // A 6-character prefix does not match.
         let mut set2 = IgnoreSet::default();
-        set2.shas.insert("abcdef".to_lowercase()); // 6글자 → 매칭 안 됨
+        set2.shas.insert("abcdef".to_lowercase()); // 6 chars → no match
         assert!(!set2.is_ignored(full_sha, &when));
     }
 
@@ -1395,9 +1397,9 @@ mod tests {
             before: Some(parse_ignore_date("2021-01-01").unwrap()),
             ..Default::default()
         };
-        // past(2020) < before(2021) → 무시됨
+        // past(2020) < before(2021) → ignored
         assert!(set.is_ignored("anysha", &past));
-        // future(2022) >= before → 무시 안 됨
+        // future(2022) >= before → not ignored
         let future = parse_ignore_date("2022-01-01").unwrap();
         assert!(!set.is_ignored("anysha", &future));
     }
@@ -1453,7 +1455,7 @@ mod tests {
             increment_from_message("+semver: skip", &eff),
             Some(VersionField::None)
         );
-        // 매칭 없음
+        // No match
         assert_eq!(increment_from_message("ordinary commit", &eff), None);
     }
 
@@ -1487,9 +1489,10 @@ mod tests {
             parent_count: 0,
             parents: vec![],
         }];
-        // GitRepo 없이 동작 확인(shas/before/paths 비어 있으면 repo 호출 없음)
-        // 실제 repo 객체 없이 호출 불가 → 빈 filter 는 shortcircuit 됨을 간접 확인.
+        // When shas/before/paths are all empty, filter returns input unchanged without calling GitRepo.
+        // Since we cannot construct a real repo object here, we verify this indirectly: an empty
+        // filter short-circuits without touching the commit list.
         assert!(set.shas.is_empty() && set.before.is_none() && set.paths.is_empty());
-        let _ = commits; // 컴파일 확인용
+        let _ = commits; // compile-check only
     }
 }

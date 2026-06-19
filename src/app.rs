@@ -203,15 +203,14 @@ fn run() -> Result<()> {
         );
     }
 
-    // 출력 형식.
+    // Output format rendering.
     let mut rendered = String::new();
     for (i, fmt) in args.output.iter().enumerate() {
         if i > 0 {
             rendered.push('\n');
         }
         match fmt {
-            // File 은 원본 `/output file` 대응: JSON 과 동일하게 렌더하고 emit 이
-            // --outputfile 로 파일에 기록한다.
+            // `File` mirrors the original `/output file`: rendered as JSON, then written to --outputfile by `emit`.
             OutputFormat::Json | OutputFormat::File => {
                 rendered.push_str(&output::generator::to_json(&variables)?)
             }
@@ -229,7 +228,7 @@ fn run() -> Result<()> {
     emit(&args, rendered)
 }
 
-/// 결과를 파일 또는 stdout 으로 출력.
+/// Write the result to a file or to stdout.
 fn emit(args: &Cli, content: String) -> Result<()> {
     if let Some(path) = &args.output_file {
         let mut f = std::fs::File::create(path)

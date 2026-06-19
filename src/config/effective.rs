@@ -1,13 +1,14 @@
-//! 특정 브랜치에 적용될 최종(effective) 설정 해석.
+//! Resolution of the final (effective) configuration applied to a specific branch.
 //!
-//! 원본 `GitVersion.Core/Configuration/EffectiveConfiguration.cs` 와
-//! `EffectiveBranchConfigurationFinder.cs` 의 상속/병합 규칙을 단순화해 구현.
+//! Simplified port of the inheritance/merge rules from the original
+//! `GitVersion.Core/Configuration/EffectiveConfiguration.cs` and
+//! `EffectiveBranchConfigurationFinder.cs`.
 
 use super::model::*;
 use regex::Regex;
 
-/// 브랜치명에 매칭되는 브랜치 설정 키와 그 설정을 반환.
-/// 구체적인 브랜치를 우선하고, 매칭이 없으면 `unknown` 을 사용한다.
+/// Return the branch-config key and its configuration that match `branch_name`.
+/// Concrete (non-`unknown`) branches take priority; falls back to `unknown` when nothing else matches.
 pub fn find_branch_config<'a>(
     config: &'a GitVersionConfiguration,
     branch_name: &str,
@@ -33,8 +34,8 @@ pub fn find_branch_config<'a>(
     unknown
 }
 
-/// next-version 정규화. 원본 `GitVersionConfiguration.NextVersion` setter 는 값이
-/// 정수면 `"{major}.0"` 으로 보정한다(예: "1" 은 "1.0", "2" 는 "2.0"). 그 외는 그대로.
+/// Normalise next-version. The original `GitVersionConfiguration.NextVersion` setter
+/// coerces plain integers to `"{major}.0"` (e.g. "1" becomes "1.0", "2" becomes "2.0"); all other values are kept as-is.
 fn normalize_next_version(value: &str) -> String {
     match value.trim().parse::<i64>() {
         Ok(major) => format!("{major}.0"),
@@ -42,14 +43,14 @@ fn normalize_next_version(value: &str) -> String {
     }
 }
 
-/// label 의 `{token}` 을 치환. 원본 `GetBranchSpecificLabel` + `BuildLabelPlaceholders`
-/// + `StringFormatWith` 동작을 옮긴다:
-/// - placeholder 는 브랜치 정규식의 **named capture** 뿐이며, 각 값에 SanitizeName
-///   (`[^a-zA-Z0-9-]` → `-`)을 적용한다(BuildLabelPlaceholders).
-/// - placeholder 에 없는 토큰은 **치환하지 않고 literal 로 유지**한다(FormatWith).
-///   따라서 named capture 가 없는 정규식(예: 사용자 정의 `^custom/`)에서 `{BranchName}`
-///   은 그대로 남는다(원본과 동일). 브랜치 마지막 세그먼트로의 fallback 은 하지 않는다.
-/// - 최종 label 전체에 대한 추가 sanitize 는 하지 않는다(원본도 하지 않음).
+/// Substitute `{token}` placeholders in a label. Ports `GetBranchSpecificLabel` +
+/// `BuildLabelPlaceholders` + `StringFormatWith` from the original:
+/// - Placeholders come exclusively from **named captures** in the branch regex; each captured
+///   value is passed through SanitizeName (`[^a-zA-Z0-9-]` → `-`) (BuildLabelPlaceholders).
+/// - Tokens absent from the placeholder map are **left as-is** (FormatWith). Therefore
+///   `{BranchName}` stays literal for a regex without named captures (e.g. a custom `^custom/`) —
+///   matching the original. No fallback to the last branch-name segment is performed.
+/// - No additional sanitisation is applied to the final label (the original does not do it either).
 fn resolve_label(label: &str, regex_src: &Option<String>, branch_name: &str) -> String {
     let sanitize = |s: &str| {
         Regex::new(r"[^a-zA-Z0-9-]")
@@ -58,7 +59,7 @@ fn resolve_label(label: &str, regex_src: &Option<String>, branch_name: &str) -> 
             .into_owned()
     };
 
-    // BuildLabelPlaceholders: 정규식이 비었거나 브랜치명이 비면 placeholder 없음.
+    // BuildLabelPlaceholders: no placeholders when the regex or branch name is empty.
     let mut captures: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     if let Some(src) = regex_src {
         if !src.trim().is_empty() && !branch_name.is_empty() {
@@ -79,12 +80,12 @@ fn resolve_label(label: &str, regex_src: &Option<String>, branch_name: &str) -> 
         .replace_all(label, |c: &regex::Captures| {
             let whole = c[0].to_string();
             let inner = c[1].trim();
-            // `?? "fallback"` 분리.
+            // Split `?? "fallback"`.
             let (expr, fallback) = match inner.split_once("??") {
                 Some((l, r)) => (l.trim(), Some(r.trim().trim_matches('"').to_string())),
                 None => (inner, None),
             };
-            // `:format` 지정자 분리(이름만 사용).
+            // Strip `:format` specifier (only the name is used).
             let name = expr.split(':').next().unwrap_or(expr).trim();
             let resolved = if let Some(var) = expr.strip_prefix("env:") {
                 let var = var.split("??").next().unwrap_or(var).trim();
@@ -92,15 +93,16 @@ fn resolve_label(label: &str, regex_src: &Option<String>, branch_name: &str) -> 
             } else {
                 captures.get(name).cloned()
             };
-            // 치환 실패 + 명시 fallback 없음 → 원본 토큰을 literal 로 유지.
+            // Resolution failure with no explicit fallback — keep the original token as a literal.
             resolved.or(fallback).unwrap_or(whole)
         })
         .into_owned()
 }
 
-/// label 미지정 시 source-branches 부모에서 상속(원본 `BranchConfiguration.Inherit`
-/// 의 `Label = Label ?? parent.Label`). 자기 label 이 있으면 그대로, 없으면 source
-/// 부모를 순회하며 첫 정의된 label 을 사용. 모두 없으면 None(전역 fallback 으로).
+/// Inherit label from source-branch parents when none is set locally (mirrors the original
+/// `BranchConfiguration.Inherit` rule: `Label = Label ?? parent.Label`). Uses the branch's
+/// own label when defined; otherwise walks source parents and returns the first defined label.
+/// Returns None when no label is found (the caller then uses the global fallback).
 fn inherit_label(
     config: &GitVersionConfiguration,
     bc: &BranchConfiguration,
@@ -122,7 +124,7 @@ fn inherit_label(
     None
 }
 
-/// Increment == Inherit 를 source-branch 를 따라 해석.
+/// Resolve an `Inherit` increment by walking the source-branch chain.
 pub(crate) fn resolve_increment(
     config: &GitVersionConfiguration,
     bc: &BranchConfiguration,
@@ -135,9 +137,10 @@ pub(crate) fn resolve_increment(
     if own != IncrementStrategy::Inherit {
         return own;
     }
-    // 원본 EffectiveBranchConfigurationFinder: Inherit 는 source-branches 부모에서
-    // 해석한다. 끝까지 못 풀면 Inherit 가 남고, 이후 ToVersionField 단계에서 None
-    // (증분 없음)이 된다. 임의 Patch fallback 을 넣지 않고 None 으로 귀결시킨다.
+    // Per the original EffectiveBranchConfigurationFinder: Inherit is resolved by walking
+    // source-branch parents. If still unresolved, it would remain Inherit and become None
+    // (no increment) in the ToVersionField step. We resolve to None rather than adding an
+    // arbitrary Patch fallback.
     if depth > 8 {
         return IncrementStrategy::None;
     }
@@ -152,7 +155,7 @@ pub(crate) fn resolve_increment(
     IncrementStrategy::None
 }
 
-/// 브랜치에 적용되는 모든 설정값을 평탄화한 구조.
+/// All configuration values flattened to those effective for a given branch.
 #[derive(Debug, Clone)]
 pub struct EffectiveConfiguration {
     pub branch_key: String,
@@ -187,12 +190,12 @@ pub struct EffectiveConfiguration {
     pub assembly_file_versioning_format: Option<String>,
     pub merge_message_formats: std::collections::BTreeMap<String, String>,
     pub source_branches: Vec<String>,
-    /// pre-release label 에서 번호를 추출하는 정규식.
+    /// Regex for extracting a number from the pre-release label.
     pub label_number_pattern: String,
 }
 
 impl EffectiveConfiguration {
-    /// 전역 설정 + 매칭된 브랜치 설정을 병합해 effective 설정 생성.
+    /// Merge the global configuration with the matched branch configuration to produce the effective configuration.
     pub fn resolve(config: &GitVersionConfiguration, branch_name: &str) -> Self {
         let matched = find_branch_config(config, branch_name);
         let (branch_key, bc): (String, BranchConfiguration) = match matched {
@@ -200,7 +203,7 @@ impl EffectiveConfiguration {
             None => ("unknown".into(), BranchConfiguration::default()),
         };
 
-        // null-coalescing: branch 값 우선, 없으면 global.
+        // null-coalescing: branch value takes priority, falls back to global.
         let pi_branch = bc.prevent_increment.clone().unwrap_or_default();
         let pi_global = config.prevent_increment.clone().unwrap_or_default();
         let coalesce_bool = |b: Option<bool>, g: Option<bool>| b.or(g).unwrap_or(false);
@@ -325,9 +328,9 @@ mod tests {
     #[test]
     fn find_branch_config_no_match_returns_unknown() {
         let cfg = defaults::gitflow();
-        // "totally-unknown"은 어느 패턴에도 매칭되지 않아야 함 → unknown 반환.
+        // "totally-unknown" should not match any pattern, so the "unknown" entry is returned.
         let result = find_branch_config(&cfg, "totally-unknown-xyz-branch");
-        // unknown 키가 있으면 그것을 반환, 없으면 None.
+        // If the "unknown" key exists, it is returned; otherwise None.
         if let Some((key, _)) = result {
             assert_eq!(key, "unknown");
         }
@@ -336,7 +339,7 @@ mod tests {
     #[test]
     fn find_branch_config_short_name_matching() {
         let cfg = defaults::gitflow();
-        // "refs/heads/develop" 처럼 긴 이름도 short("develop")로 매칭됨.
+        // Long names such as "refs/heads/develop" should also match via the short form ("develop").
         let result = find_branch_config(&cfg, "refs/heads/develop");
         assert!(result.is_some());
         let (key, _) = result.unwrap();
@@ -345,7 +348,7 @@ mod tests {
 
     #[test]
     fn normalize_next_version_pads_integer() {
-        // 원본 setter: 정수는 "{major}.0" 으로 보정, 그 외는 그대로.
+        // Original setter: integers are coerced to "{major}.0", everything else is kept as-is.
         assert_eq!(normalize_next_version("1"), "1.0");
         assert_eq!(normalize_next_version("2"), "2.0");
         assert_eq!(normalize_next_version("1.0"), "1.0");
@@ -356,18 +359,18 @@ mod tests {
     #[test]
     fn resolve_label_branch_name_capture() {
         let cfg = defaults::gitflow();
-        // feature/my-feat → label 에 {BranchName} 캡처가 "my-feat"로 치환됨.
+        // feature/my-feat → the {BranchName} capture is substituted with "my-feat".
         let eff = EffectiveConfiguration::resolve(&cfg, "feature/my-feat");
         assert_eq!(eff.label, "my-feat");
     }
 
     #[test]
     fn resolve_label_unmatched_token_stays_literal() {
-        // named capture 가 없는 정규식: {BranchName} 은 치환되지 않고 literal 로 유지
-        // (원본 FormatWith: placeholder 없는 토큰은 그대로). 세그먼트 fallback 안 함.
+        // Regex without named captures: {BranchName} is not substituted and stays as a literal
+        // (original FormatWith: tokens with no matching placeholder are kept). No segment fallback.
         let r = resolve_label("{BranchName}", &Some("^custom/".into()), "custom/x");
         assert_eq!(r, "{BranchName}");
-        // named capture 가 있으면 치환 + SanitizeName.
+        // With named captures, substitution + SanitizeName is applied.
         let r = resolve_label(
             "{BranchName}",
             &Some(r"^features?[/-](?<BranchName>.+)".into()),
@@ -379,7 +382,7 @@ mod tests {
     #[test]
     fn resolve_label_slash_dot_sanitized() {
         let cfg = defaults::gitflow();
-        // feature/my.feature → BranchName = "my.feature" → label = "my-feature"(. → -).
+        // feature/my.feature → BranchName = "my.feature" → label = "my-feature" ("." → "-").
         let eff = EffectiveConfiguration::resolve(&cfg, "feature/my.feature");
         assert_eq!(eff.label, "my-feature");
     }
@@ -387,7 +390,7 @@ mod tests {
     #[test]
     fn resolve_increment_inherit_falls_back_to_patch() {
         let cfg = defaults::gitflow();
-        // develop 은 Inherit 이므로 source 브랜치(main)의 Patch 를 상속.
+        // develop is Inherit, so it inherits Patch from its source branch (main).
         let eff = EffectiveConfiguration::resolve(&cfg, "develop");
         assert_eq!(eff.increment, crate::config::IncrementStrategy::Minor);
     }
