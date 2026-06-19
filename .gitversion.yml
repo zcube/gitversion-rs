@@ -1,0 +1,26 @@
+workflow: GitHubFlow/v1
+
+mode: ManualDeployment
+
+major-version-bump-message: '^(.*!|.*BREAKING CHANGE:.*)$'
+minor-version-bump-message: '^feat(\(.*\))?:'
+patch-version-bump-message: '^(fix|perf)(\(.*\))?:'
+
+branches:
+  main:
+    label: ''
+    mode: ManualDeployment
+    increment: Patch
+
+  feature:
+    label: '{BranchName}'
+    mode: ManualDeployment
+    increment: Inherit
+
+  pull-request:
+    label: PullRequest{Number}
+    mode: ManualDeployment
+    increment: Inherit
+
+ignore:
+  sha: []

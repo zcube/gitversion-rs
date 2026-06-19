@@ -49,57 +49,58 @@ cargo clippy --all-targets -- -D warnings   # lint (keep zero warnings)
 
 ## Versioning and releases
 
-This project computes its own version with itself (dogfooding).
+### Version management
 
-- **The single source of truth for the version is the git tag (`v*`)** plus `GitVersion.yml`.
-- `Cargo.toml`'s `version` is a **placeholder**. Do not bump it by hand. The release build
-  **overwrites it automatically** with the value gitversion-rs computes, so the distributed
-  binary's `--version` reports the real release version.
-- Untagged dev builds derive a pre-release like `0.1.0-<distance>` from `GitVersion.yml`'s
-  `next-version` (currently 0.1.0).
+- **Source of truth: `Cargo.toml`** — managed by `cargo-release`. Do not bump by hand.
+- **Version policy: `.gitversion.yml`** — `ManualDeployment` mode (GitHubFlow/v1). Versions are
+  set explicitly by the developer; gitversion-rs computes metadata (PreReleaseTag,
+  InformationalVersion) from git history.
+- **Bump rules** (used by `cargo-release` to infer the level from the commit log):
+  - `feat:` → minor
+  - `fix:` / `perf:` → patch
+  - `!` suffix or `BREAKING CHANGE:` → major
+
+### Justfile commands
+
+```bash
+just version        # show current FullSemVer (gitversion-rs)
+just check          # dry-run: see what cargo-release would do (patch)
+just check minor    # dry-run for a minor bump
+just bump           # bump patch: updates Cargo.toml, commits, tags, pushes
+just bump minor     # bump minor
+just bump major     # bump major
+just publish        # publish to crates.io (run after bump)
+```
 
 ### Release procedure
 
-1. Make sure `main` is green (CI passing).
-2. Decide the next release version. Optionally check the candidate with gitversion-rs:
+1. Ensure `main` is green.
+2. Bump the version and push:
    ```bash
-   cargo run -q -- -v SemVer        # current (pre-tag) version
+   just bump minor   # or patch / major
    ```
-3. Create an **annotated tag** on the release commit and push it (the tag is the version source):
+   This runs `cargo release minor --execute` which:
+   - Updates `version` in `Cargo.toml`
+   - Commits `"chore: release 0.2.0"`
+   - Creates annotated tag `v0.2.0`
+   - Pushes commit + tag to origin
+3. The tag push triggers `.github/workflows/release-draft.yml`:
+   - Builds 6 cross-compiled targets (version read directly from `Cargo.toml` via `CARGO_PKG_VERSION`)
+   - Generates changelog with git-cliff, signs artifacts with cosign
+   - Creates a GitHub draft release
+4. Trigger `.github/workflows/release-publish.yml` (manual dispatch, input: tag):
    ```bash
-   git tag -a v0.1.0 -m "release: v0.1.0"
-   git push origin v0.1.0
+   just publish      # or trigger via GitHub UI
    ```
-4. The tag push triggers `.github/workflows/release.yml`:
-   - **version job**: builds and runs gitversion-rs at the tagged commit to compute `SemVer`
-     (with the tag present, `v0.1.0 -> 0.1.0`).
-   - **build job** (6 targets: Linux x86_64/aarch64/musl, macOS x86_64/aarch64, Windows x86_64):
-     injects the computed version into `Cargo.toml`, builds, and uploads the archive (the four
-     READMEs + LICENSE included) to the GitHub Release.
-5. Result: per-platform binaries are attached to the GitHub Release, and each binary's
-   `gitversion-rs --version` reports the tag version.
-   - **checksums job**: generates `checksums.txt` (SHA256 of all binaries), keyless-signs it with
-     cosign (Sigstore, via GitHub Actions OIDC — no key/secret needed) producing
-     `checksums.txt.sigstore.json`, uploads both, and writes verification instructions into the
-     release notes. Verify with `sha256sum -c` and `cosign verify-blob`.
-6. **Homebrew tap auto-update**: after the build, the `homebrew` job computes the assets' SHA256
-   and overwrites `Formula/gitversion-rs.rb` in `zcube/homebrew-tap` with the new version, then
-   commits and pushes.
-   - Required secret: **`HOMEBREW_TAP_TOKEN`** — a PAT (or fine-grained token) with contents:write
-     on `zcube/homebrew-tap`. Add it to the gitversion-rs repository Secrets.
-   - If the secret is absent, this job is silently skipped (the release itself is unaffected).
-   - Pre-releases (version containing `-`, e.g. `0.1.0-rc.1`) do not update the tap.
-   - Install: `brew install zcube/tap/gitversion-rs` (command: `gitversion-rs`).
-   - The package, binary, command, and formula are all unified as `gitversion-rs` (to avoid
-     clashing with the official .NET GitVersion `gitversion`). Release archives are named
-     `gitversion-rs-<tag>-<target>` and the inner executable is `gitversion-rs` too.
+   - Publishes to crates.io
+   - Updates the Homebrew tap formula
+   - Marks the GitHub release as published
 
-> For a manual rebuild, run the `Release` workflow via `workflow_dispatch` and provide the tag.
+### Homebrew tap
 
-### Bumping the version
-
-- To change the next cycle's baseline, update `next-version` in `GitVersion.yml`, or simply create
-  a higher `v*` tag (the tag always wins).
+- Required secret: **`HOMEBREW_TAP_TOKEN`** — PAT with `contents:write` on `zcube/homebrew-tap`.
+- Pre-releases (version containing `-`) do not update the tap.
+- Install: `brew install zcube/tap/gitversion-rs`
 
 ## Recommended pattern for consuming Rust projects
 

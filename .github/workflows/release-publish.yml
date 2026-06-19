@@ -29,20 +29,11 @@ jobs:
       - name: Fetch main branch
         run: git fetch origin +refs/heads/main:refs/heads/main 2>/dev/null || true
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Build gitversion-rs (bootstrap)
-        run: cargo build --release --bin gitversion-rs
-
-      - name: Compute version
-        run: ./target/release/gitversion-rs --output build-server
-
-      - name: Export version output
+      - name: Extract version from tag
         id: gv
-        run: echo "SemVer=${GitVersion_SemVer}" >> "$GITHUB_OUTPUT"
+        run: |
+          TAG="${{ inputs.tag }}"
+          echo "SemVer=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Publish draft release
         env:
@@ -65,24 +56,10 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Inject version into Cargo.toml
-        shell: bash
-        env:
-          GV_VERSION: ${{ needs.publish.outputs.version }}
-        run: |
-          python3 - "$GV_VERSION" <<'PY'
-          import re, sys
-          v = sys.argv[1]
-          s = open("Cargo.toml", encoding="utf-8").read()
-          s = re.sub(r'(?m)^version = "[^"]*"', f'version = "{v}"', s, count=1)
-          open("Cargo.toml", "w", encoding="utf-8").write(s)
-          print(f"Cargo.toml version set to {v}")
-          PY
-
       - name: Publish to crates.io
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish --allow-dirty
+        run: cargo publish
 
   homebrew:
     name: Update Homebrew tap

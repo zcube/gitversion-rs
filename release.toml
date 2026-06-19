@@ -1,0 +1,3 @@
+commit-message = "chore: release {{version}}"
+tag-message = "release: {{version}}"
+pre-release-commit-message = "chore: pre-release {{version}}"
