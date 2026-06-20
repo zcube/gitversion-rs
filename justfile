@@ -35,7 +35,7 @@ gh-publish:
 gh-retag:
     #!/usr/bin/env bash
     set -euo pipefail
-    VERSION=$(grep -m1 '^version = ' Cargo.toml | grep -oP '(?<=")[^"]+')
+    VERSION=$(grep -m1 '^version = ' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
     TAG="v${VERSION}"
     CRATE="gitversion-rs"
     STATUS=$(curl -s -o /dev/null -w "%{http_code}" -A "gh-retag/1.0" \
