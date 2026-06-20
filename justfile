@@ -26,9 +26,12 @@ bump level="patch":
 publish:
     cargo release publish --execute
 
-# Publish the latest GitHub draft release (make it public)
+# Trigger release-publish.yml workflow to publish draft release and push to crates.io
 gh-publish:
-    gh release edit $(git describe --tags --abbrev=0) --draft=false
+    #!/usr/bin/env bash
+    set -euo pipefail
+    VERSION=$(yq -p toml -oy '.package.version' Cargo.toml)
+    gh workflow run release-publish.yml -f tag="v${VERSION}"
 
 # Delete existing draft release + tag, re-tag HEAD, push to re-trigger CI
 # Refuses to run if the release is already published (non-draft) or on crates.io
