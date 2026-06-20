@@ -24,11 +24,18 @@ fn git(dir: &Path, args: &[&str]) {
 }
 
 fn temp_repo() -> std::path::PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    // A per-call atomic counter guarantees a unique directory even when two parallel
+    // tests in this process compute the same timestamp (macOS clock resolution is coarse,
+    // so `as_nanos()` can collide). Without it, both share one dir and the second
+    // `git init` fails copying templates onto the first's `.git/info/exclude`.
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let dir = std::env::temp_dir().join(format!("gv-gitops-{}-{nanos}", std::process::id()));
+    let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("gv-gitops-{}-{nanos}-{seq}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     git(&dir, &["init", "-q", "-b", "main"]);
     git(&dir, &["config", "commit.gpgsign", "false"]);
