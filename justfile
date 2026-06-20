@@ -25,3 +25,7 @@ bump level="patch":
 # Run after `just bump` has pushed the tag
 publish:
     cargo release publish --execute
+
+# Publish the latest GitHub draft release (make it public)
+gh-publish:
+    gh release edit $(git describe --tags --abbrev=0) --draft=false
