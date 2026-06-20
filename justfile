@@ -31,18 +31,29 @@ gh-publish:
     gh release edit $(git describe --tags --abbrev=0) --draft=false
 
 # Delete existing draft release + tag, re-tag HEAD, push to re-trigger CI
-# Refuses to run if the release is already published (non-draft)
+# Refuses to run if the release is already published (non-draft) or on crates.io
 gh-retag:
     #!/usr/bin/env bash
     set -euo pipefail
-    TAG=$(git describe --tags --abbrev=0)
-    IS_DRAFT=$(gh release view "${TAG}" --json isDraft -q '.isDraft' 2>/dev/null || echo "false")
-    if [[ "${IS_DRAFT}" != "true" ]]; then
+    VERSION=$(grep -m1 '^version = ' Cargo.toml | grep -oP '(?<=")[^"]+')
+    TAG="v${VERSION}"
+    CRATE="gitversion-rs"
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" -A "gh-retag/1.0" \
+        "https://crates.io/api/v1/crates/${CRATE}/${VERSION}")
+    if [[ "${STATUS}" == "200" ]]; then
+        echo "Error: ${CRATE} v${VERSION} is already published to crates.io. Refusing to retag."
+        exit 1
+    fi
+    IS_DRAFT=$(gh release view "${TAG}" --json isDraft -q '.isDraft' 2>/dev/null || echo "none")
+    if [[ "${IS_DRAFT}" == "false" ]]; then
         echo "Error: ${TAG} is not a draft release. Refusing to retag."
         exit 1
     fi
     echo "Re-tagging ${TAG} at HEAD"
-    gh release delete "${TAG}" --yes --cleanup-tag
-    git tag -d "${TAG}"
+    if [[ "${IS_DRAFT}" == "true" ]]; then
+        gh release delete "${TAG}" --yes --cleanup-tag
+    fi
+    git tag -d "${TAG}" 2>/dev/null || true
+    git push origin --delete "${TAG}" 2>/dev/null || true
     git tag -a "${TAG}" -m "release: ${TAG#v}"
     git push origin "${TAG}"
