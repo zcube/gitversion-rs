@@ -63,33 +63,33 @@ cargo clippy --all-targets -- -D warnings   # lint (keep zero warnings)
 ### Justfile commands
 
 ```bash
-just version        # show current FullSemVer (gitversion-rs)
-just check          # dry-run: see what cargo-release would do (patch)
-just check minor    # dry-run for a minor bump
-just bump           # bump patch: updates Cargo.toml, commits, tags, pushes (no crates.io publish)
-just bump minor     # bump minor
-just bump major     # bump major
-just publish        # publish to crates.io locally (manual fallback)
-just gh-publish     # trigger release-publish.yml: publish GitHub release + crates.io
-just gh-retag       # delete draft release/tag and re-tag HEAD to re-trigger CI
-                    # blocked if GitHub release is published or crates.io already has the version
+just version              # show current FullSemVer (gitversion-rs)
+just check                # dry-run: see what cargo-release would do (patch)
+just check minor          # dry-run for a minor bump
+just release-start        # create release branch from main, bump patch, commit, tag, push
+just release-start minor  # bump minor
+just release-start major  # bump major
+just publish              # publish to crates.io locally (manual fallback)
+just gh-publish           # trigger release-publish.yml: publish GitHub release + crates.io + FF merge release->main
+just release-retry        # reset a failed release: delete draft/tag/branch, recreate from latest main
+                          # blocked if GitHub release is published or crates.io already has the version
 ```
 
 ### Release procedure
 
 1. Ensure `main` is green.
-2. Bump the version and push:
+2. Start the release from `main`:
    ```bash
-   just bump minor   # or patch / major
+   just release-start minor   # or patch / major
    ```
-   This runs `cargo release minor --execute --no-publish` which:
+   This creates a `release` branch and runs `cargo release minor --execute --no-publish` which:
+   - Switches to the new `release` branch
    - Updates `version` in `Cargo.toml`
-   - Commits `"chore: release 0.2.0"`
-   - Creates annotated tag `v0.2.0`
+   - Commits `"chore: release 0.3.0"`
+   - Creates annotated tag `v0.3.0`
    - Pushes commit + tag to origin
 3. The tag push triggers `.github/workflows/release-draft.yml`:
-   - Builds 6 cross-compiled targets (version read directly from `Cargo.toml` via `CARGO_PKG_VERSION`)
-   - Generates changelog with git-cliff, signs artifacts with cosign
+   - Builds 6 cross-compiled targets, generates changelog with git-cliff, signs with cosign
    - Creates a GitHub **draft** release (no crates.io publish at this stage)
 4. Review the draft release, then publish:
    ```bash
@@ -99,11 +99,13 @@ just gh-retag       # delete draft release/tag and re-tag HEAD to re-trigger CI
    - Marks the GitHub release as published
    - Publishes to crates.io
    - Updates the Homebrew tap formula
+   - Fast-forward merges `release → main` and deletes the `release` branch
 5. If CI failed at step 3 (e.g. workflow file was stale on the tag):
    ```bash
-   just gh-retag     # re-tags HEAD and pushes to re-trigger release-draft.yml
+   just release-retry minor   # same level as step 2
    ```
-   Blocked if the release is already published or the version is already on crates.io.
+   Deletes the draft release, tag, and `release` branch, then recreates from the latest `main`.
+   Blocked if the release is already published or the version is on crates.io.
 
 ### Homebrew tap
 
