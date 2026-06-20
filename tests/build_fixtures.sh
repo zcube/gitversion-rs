@@ -423,7 +423,7 @@ branch custom/work; commit w1
 git -C "$CUR" tag v1.1.0
 record
 
-# ─── 긴 커밋 체인 / 다양한 깊이 / 다양한 메시지 시나리오 ──────────────────
+# ─── Long commit chain / various depths / various message scenarios ──────────────────
 
 # 태그 없이 12개 커밋: VersionSourceDistance=12 기준점
 newrepo main_long_no_tag main
