@@ -8,9 +8,17 @@ patch-version-bump-message: '^(fix|perf)(\(.*\))?:'
 
 branches:
   main:
+    label: 'dev'
+    mode: ManualDeployment
+    increment: Patch
+
+  release:
+    regex: '^release$'
     label: ''
     mode: ManualDeployment
     increment: Patch
+    prevent-increment:
+      when-current-commit-tagged: true
 
   feature:
     label: '{BranchName}'
