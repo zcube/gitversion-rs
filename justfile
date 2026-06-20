@@ -29,3 +29,14 @@ publish:
 # Publish the latest GitHub draft release (make it public)
 gh-publish:
     gh release edit $(git describe --tags --abbrev=0) --draft=false
+
+# Delete existing draft release + tag, re-tag HEAD, push to re-trigger CI
+gh-retag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TAG=$(git describe --tags --abbrev=0)
+    echo "Re-tagging ${TAG} at HEAD"
+    gh release delete "${TAG}" --yes --cleanup-tag 2>/dev/null || true
+    git tag -d "${TAG}" 2>/dev/null || true
+    git tag -a "${TAG}" -m "release: ${TAG#v}"
+    git push origin "${TAG}"
