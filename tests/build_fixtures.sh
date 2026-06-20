@@ -1248,6 +1248,23 @@ commit b
 git -C "$CUR" -c advice.detachedHead=false checkout -q "$(git -C "$CUR" rev-parse v1.0.0)"
 record
 
+# detached HEAD + GitHubFlow + commit-message minor bump: when CI checks out a commit
+# detached with no owning branch and a feat commit is present, BranchName="(no branch)"
+# normalizes to the pre-release label "-no-branch-", yielding "0.2.0--no-branch-.1"
+# (double dash). This matches upstream (not a bug) and pins git-warden's macOS CI failure.
+newrepo detached_no_branch_githubflow main
+cat > "$CUR/GitVersion.yml" <<'YAML'
+workflow: GitHubFlow/v1
+minor-version-bump-message: '^feat(\(.*\))?:'
+YAML
+tagcommit v0.1.2
+commit "feat: new thing"
+# Put a sibling branch on the same tip so two branches contain HEAD (upstream's
+# OnlyOrDefault is then ambiguous -> "(no branch)"), matching a detached CI checkout.
+git -C "$CUR" branch feature/x
+git -C "$CUR" -c advice.detachedHead=false checkout -q "$(git -C "$CUR" rev-parse HEAD)"
+record
+
 # 브랜치명 언더스코어: feature/a_b 의 label 은 "a-b"(_ 가 - 로 sanitize, 원본 SanitizeName).
 newrepo branch_underscore_label main
 tagcommit v1.0.0
